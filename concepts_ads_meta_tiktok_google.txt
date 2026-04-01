@@ -1,0 +1,382 @@
+# LRS™ KNOWLEDGE BASE — ADS CONCEPTS (META / TIKTOK / GOOGLE)
+# Version 1.2 | Paid Traffic Creative & Messaging Reference
+
+================================================================
+SECTION 1 : PRINCIPES UNIVERSELS DES PUBLICITÉS QUI CONVERTISSENT
+================================================================
+
+1.1 — LA HIÉRARCHIE DE L'ATTENTION
+────────────────────────────────────
+Dans l'ordre d'importance pour toute publicité :
+
+1. STOP (arrêter le scroll) → Hook visuel ou textuel des 3 premières secondes
+2. HOLD (maintenir l'attention) → Tension, curiosité, progression logique
+3. CONVERT (déclencher l'action) → CTA clair, offre attractive, réduction de friction
+
+Si le hook échoue, les étapes 2 et 3 ne servent à rien.
+80% des budgets publicitaires sont gaspillés sur des ads sans hook efficace.
+
+1.2 — LES 3 MOTEURS DE LA CONVERSION PUBLICITAIRE
+────────────────────────────────────────────────────
+DÉSIR : Créer l'envie du résultat ou la peur de manquer quelque chose
+CRÉDIBILITÉ : Prouver que c'est possible et réel
+URGENCE : Déclencher l'action maintenant (pas "plus tard")
+
+Toute publicité efficace active au minimum 2 de ces 3 moteurs.
+
+1.3 — ANGLES PUBLICITAIRES UNIVERSELS
+───────────────────────────────────────
+Les 8 angles qui fonctionnent le mieux en paid :
+
+1. PAIN → Douleur amplifiée + solution directe
+2. GAIN → Résultat désirable + chemin vers ce résultat
+3. FEAR → Peur de perdre quelque chose / regretter de ne pas avoir agi
+4. CURIOSITY → Secret, révélation, contre-intuitif
+5. SOCIAL PROOF → "X personnes font déjà ça"
+6. AUTHORITY → Expert/étude/résultat prouvé
+7. CONTRAST → Avant/Après, Eux vs Vous, Méthode ancienne vs Nouvelle
+8. URGENCY/SCARCITY → Rareté réelle ou temporalité
+
+================================================================
+SECTION 2 : META ADS (FACEBOOK / INSTAGRAM)
+================================================================
+
+2.1 — STRUCTURE D'UNE META AD QUI CONVERTIT
+─────────────────────────────────────────────
+FORMAT : Primary Text + Headline + Description + Creative + CTA
+
+PRIMARY TEXT (le texte principal au-dessus du visuel) :
+Structure recommandée :
+
+Ligne 1 : HOOK (question, déclaration choc, ou stat)
+→ Doit arrêter le scroll en 1.2 secondes
+→ Max 1-2 lignes avant le "Voir plus"
+
+Corps : STORY ou PROBLEM-SOLUTION
+→ Amplifier la douleur ou désirabilité
+→ Mentionner le mécanisme/solution
+→ Social proof rapide ("X clients / X€ générés")
+
+Closing : OFFRE + CTA
+→ Ce qu'on obtient clairement
+→ Urgence si applicable
+→ CTA direct ("Cliquez sur le lien" / "Obtenez [résultat] maintenant")
+
+HEADLINE (sous le visuel) :
+→ 6 mots maximum pour impact maximal
+→ Résultat ou offre principale
+→ Exemples : "Perdez 5kg sans régime" / "Votre boutique en 7 jours"
+
+2.2 — TYPES DE FORMATS META
+──────────────────────────────
+IMAGE STATIQUE :
+- Meilleur pour : offres simples, remises, produits visuels
+- Hook visuel : produit en contexte, before/after, text overlay fort
+- Règle 20% texte sur image toujours d'actualité (même si assouplie)
+
+VIDÉO (15-60 secondes) :
+- Meilleur pour : produits complexes, storytelling, démonstration
+- Sous-titres obligatoires (85% des vidéos vues sans son)
+- Premier frame = image clé (visible même si pas autoplay)
+
+CAROUSEL :
+- Meilleur pour : produits multiples, étapes d'un processus, features
+- Premier slide = hook fort
+- Dernier slide = CTA récapitulatif
+
+UGC (User Generated Content) :
+- Meilleur pour : social proof, confiance, authenticité
+- Style smartphone naturel
+- Personne réelle qui parle au téléphone
+- Performances souvent supérieures aux créations polished
+
+2.3 — HOOKS META LES PLUS EFFICACES
+─────────────────────────────────────
+Pour cold audiences :
+
+HOOK QUESTION :
+"Vous perdez encore [temps/argent] à cause de [problème] ?"
+"Saviez-vous que [stat surprenante] ?"
+"Et si vous pouviez [résultat désirable] en seulement [timeframe] ?"
+
+HOOK DÉCLARATION CHOC :
+"Ce que personne ne vous dit sur [sujet]"
+"J'ai [résultat] sans [méthode traditionnelle]"
+"[Nombre] personnes font déjà ça et vous devriez aussi"
+
+HOOK CURIOSITÉ :
+"La raison étrange pour laquelle [résultat contre-intuitif]"
+"J'ai arrêté de [chose commune] et voici ce qui s'est passé"
+"Le secret de [persona aspirationnel] pour [résultat]"
+
+HOOK PAIN DIRECT :
+"Marre de [frustration commune] ?"
+"Si vous [comportement courant], vous perdez [X] chaque jour"
+"Arrêtez de [mauvaise habitude] — il existe une meilleure façon"
+
+2.4 — META AD COPYWRITING FRAMEWORKS
+──────────────────────────────────────
+PAS (Problem-Agitation-Solution) :
+Exemple : "Votre back douloureux vous empêche de dormir ? [P]
+Chaque matin qui commence en souffrance, c'est une journée perdue. [A]
+Notre coussin orthopédique a aidé 12,000 personnes à retrouver un sommeil profond. [S]"
+
+BEFORE-AFTER-BRIDGE :
+Exemple : "Avant : 40h de travail/semaine, 3.000€/mois, vacances impossibles. [BEFORE]
+Après : 25h/semaine, 8.000€/mois, 6 semaines de vacances cette année. [AFTER]
+Ce qui a changé : [BRIDGE] → notre formation freelance"
+
+AIDA (Attention-Interest-Desire-Action) :
+Attention : Hook fort
+Interest : Détails et contexte qui créent la curiosité
+Desire : Bénéfices concrets + social proof
+Action : CTA clair + urgence
+
+================================================================
+SECTION 3 : TIKTOK ADS
+================================================================
+
+3.1 — SPÉCIFICITÉS TIKTOK VS META
+────────────────────────────────────
+TikTok est un environnement NATIF VIDEO VERTICAL.
+Les publicités qui performent ressemblent à du contenu organique.
+L'authenticité > La production quality.
+
+Différences clés :
+- Attention encore plus courte (0.5 - 1.5 secondes pour hook)
+- Audio on par défaut (≠ Facebook où audio souvent off)
+- Sous-titres : toujours inclure mais moins critiques
+- Hashtags pertinents dans le texte pour reach organique
+- Format : 9:16 obligatoire, 15-60 secondes optimal
+
+3.2 — STRUCTURE D'UNE TIKTOK AD QUI PERFORME
+──────────────────────────────────────────────
+0-1.5s : HOOK VISUEL + TEXTUEL
+  → Mouvement, surprise, ou texte overlay choc
+  → "POV:" / "Attendez la fin" / "[Chiffre] raisons de..."
+  → Commencer in medias res (pas d'intro, directement dans l'action)
+
+1.5-5s : PROBLEM ESTABLISH
+  → Confirmer qu'on comprend le viewer
+  → "Si tu [situation commune]..."
+
+5-20s : SOLUTION + PROOF
+  → Présenter le produit en action
+  → Montrer le résultat (pas juste le produit)
+  → 1-2 points de social proof rapides
+
+20-30s : OFFER + CTA
+  → "Clique sur le lien en bio" ou "Commande maintenant"
+  → Urgence si applicable
+  → Prix si achat impulsion
+
+3.3 — TIKTOK AD FORMATS
+─────────────────────────
+IN-FEED ADS (Standard) :
+- Apparaît dans le For You Page
+- 9:16, 15-60 secondes
+- Plus de succès avec style UGC/natif
+
+SPARK ADS :
+- Booste des posts organiques existants
+- Très efficace si le post a déjà de l'engagement
+- Crédibilité naturelle car likes/comments visibles
+
+TOP VIEW :
+- Premier ad visible à l'ouverture de l'app
+- Très cher mais reach maximal pour branding
+
+BRANDED HASHTAG CHALLENGE :
+- Pour les grandes marques
+- Encourage l'UGC
+- Coûteux mais impact viral possible
+
+3.4 — TIKTOK HOOKS SPÉCIFIQUES
+────────────────────────────────
+TIKTOK-NATIVE HOOKS (format courant) :
+- "POV: tu découvres enfin [résultat]"
+- "Attends... ça marche vraiment ?"
+- "Je teste [produit/méthode] pendant 30 jours, voilà ce qui s'est passé"
+- "Ce truc a changé [aspect de ma vie] pour toujours"
+- "On m'a dit que ça ne marcherait pas. Regarde ça."
+
+TEXT OVERLAY HOOKS :
+- "[Chiffre] choses que tu ne sais pas sur [sujet]"
+- "La raison pour laquelle tu [résultat négatif]"
+- "Si tu fais X, arrête MAINTENANT"
+
+TRENDING FORMATS À UTILISER :
+- "Day in my life" avec produit intégré naturellement
+- Transformation vidéo (avant/après rapide)
+- "I tried [produit] for [durée] — honest review"
+- Unboxing avec réaction authentique
+- Tutorial / Comment faire [chose utile] avec le produit
+
+3.5 — SCRIPT UGC 20-30 SECONDES (TEMPLATE)
+─────────────────────────────────────────────
+[0-2s] Hook vocal + visuel : "[Chiffre/Question/Affirmation choc]"
+[2-5s] Établir la situation : "Si tu [situation commune], tu vas adorer ça"
+[5-15s] Demo / Result : Montrer le produit en action, résultat visible
+[15-20s] Social proof rapide : "Moi qui l'utilise depuis [X] / [Nb] personnes..."
+[20-25s] Offre : "Et en ce moment [offre/promo]"
+[25-30s] CTA : "Lien en bio / Commande maintenant"
+
+================================================================
+SECTION 4 : GOOGLE ADS
+================================================================
+
+4.1 — SPÉCIFICITÉS GOOGLE ADS
+───────────────────────────────
+Google Ads capture une INTENTION ACTIVE.
+Le prospect cherche une solution → votre ad répond à ce besoin.
+Différence fondamentale avec Meta/TikTok (interruption d'intention passive).
+
+Conséquences :
+- Message match avec la requête = priorité absolue
+- Moins besoin de créer le désir (il existe déjà)
+- Plus besoin de hooks émotionnels forts
+- Nécessité d'être direct et répondre précisément à la requête
+
+4.2 — STRUCTURE D'UNE RESPONSIVE SEARCH AD (RSA)
+──────────────────────────────────────────────────
+Headlines (jusqu'à 15, 30 caractères max chacun) :
+- Inclure le keyword principal dans au moins 1-2 headlines
+- Mélanger : features, benefits, offers, urgency
+- Exemples types :
+  * [Keyword Exact] - Livraison Gratuite
+  * 30% de Réduction Aujourd'hui
+  * Garanti ou Remboursé
+  * [Nombre] Clients Satisfaits
+  * Résultats en [X] Jours
+
+Descriptions (jusqu'à 4, 90 caractères max chacune) :
+- Développer les bénéfices principaux
+- Inclure la proposition de valeur unique (USP)
+- CTA clair (Commander, Essayer, Obtenir)
+- Preuves rapides (chiffres, témoignages, certifications)
+
+4.3 — INTENT MATCHING — MESSAGE MATCH GOOGLE
+──────────────────────────────────────────────
+La recherche implique un niveau d'intention précis.
+
+INTENTION INFORMATIONNELLE ("comment perdre du poids") :
+→ Lead gen, article, landing éducative
+→ PAS de landing de vente directe
+
+INTENTION COMPARATIVE ("meilleure formation marketing vs") :
+→ Landing de comparaison
+→ Highlighting différenciateurs
+
+INTENTION COMMERCIALE ("formation marketing en ligne prix") :
+→ Landing page avec offre claire et prix visible
+→ CTA direct
+
+INTENTION TRANSACTIONNELLE ("acheter formation marketing") :
+→ Landing de vente directe
+→ Frictionless checkout
+
+4.4 — QUALITY SCORE ET MESSAGE MATCH
+──────────────────────────────────────
+Le Quality Score Google impacte le coût par clic.
+3 facteurs :
+1. Expected CTR (historique + pertinence des headlines)
+2. Ad Relevance (correspondance entre keyword et ad)
+3. Landing Page Experience (correspondance entre ad et page)
+
+Pour maximiser le Quality Score :
+→ Keyword dans la headline 1 ou 2
+→ Keyword dans la landing page headline
+→ Landing page rapide et mobile-friendly
+→ Contenu de la page aligné avec l'intention du keyword
+
+4.5 — EXTENSIONS D'ANNONCES (ASSETS)
+──────────────────────────────────────
+Toujours activer ces extensions pour maximiser le real estate :
+
+SITELINKS : 4-6 liens vers sections importantes de la page
+CALLOUTS : Points forts courts (Livraison gratuite, Garanti, Expert depuis X)
+STRUCTURED SNIPPETS : Lister features / produits / services
+CALL EXTENSION : Numéro de téléphone pour les businesses locaux
+PRICE EXTENSION : Afficher les options de prix directement
+
+================================================================
+SECTION 5 : CREATIVE TESTING FRAMEWORK
+================================================================
+
+5.1 — HIÉRARCHIE DES TESTS CRÉATIFS
+─────────────────────────────────────
+NIVEAU 1 — CONCEPT TEST (à faire en premier)
+  Tester des ANGLES complètement différents :
+  - Pain vs Gain
+  - Before/After vs Curiosity
+  - Authority vs Social Proof
+  Budget : $100-300 par concept, 3-4 jours minimum
+
+NIVEAU 2 — HOOK TEST (après avoir identifié l'angle gagnant)
+  Tester différents HOOKS sur le même angle :
+  - Hook question vs Hook affirmation
+  - Hook chiffre vs Hook persona
+  Budget : $50-150 par hook, 3 jours minimum
+
+NIVEAU 3 — OPTIMIZATION TEST (après avoir validé hook + angle)
+  Tester les éléments secondaires :
+  - CTA text
+  - Offre (prix, bundle, garantie)
+  - Social proof (type, position)
+
+5.2 — MÉTRIQUES D'ÉVALUATION DES ADS
+──────────────────────────────────────
+CTR (Click-Through Rate) :
+- Benchmark Meta cold traffic : 0.5% - 2%
+- Bon CTR : > 1.5%
+- Excellent CTR : > 3%
+
+CPM (Cost Per Mille) :
+- Indicateur de compétition de l'audience
+- High CPM + Low CTR = mauvais hook/creative
+
+CPC (Cost Per Click) :
+- CPM / CTR = CPC
+- Cible selon votre économie (CPC < 20% de votre AOV)
+
+HOOK RATE (3s video views / impressions) :
+- Benchmark : 25-40%
+- Bon : > 35%
+- Excellent : > 50%
+
+HOLD RATE (video views to 75% / 3s views) :
+- Mesure la capacité à maintenir l'attention
+- Benchmark : 15-30%
+
+CVR (Conversion Rate post-clic) :
+- CVR = Conversions / Clics
+- Indicateur de la qualité de la landing page ET du message match
+
+ROAS (Return On Ad Spend) :
+- ROAS = Revenus / Dépenses pub
+- Break-even ROAS = Prix de vente / Marge
+- Objectif : ROAS > Break-even de 1.5x à 2x pour scaling
+
+5.3 — SIGNAUX D'ALARME CRÉATIFS
+──────────────────────────────────
+AD FATIGUE SIGNS :
+- CTR qui baisse progressivement sur 7-14 jours
+- CPM qui augmente brutalement
+- Fréquence > 4-5 sur cold audiences
+- ROAS qui se dégrade sans changement des autres variables
+
+ACTION : Créer nouvelles variations de hook, pas forcément de nouveau concept
+
+MAUVAIS HOOK SIGNS :
+- Hook rate (3s) < 20%
+- CPM élevé mais CTR faible
+→ Problème de hook visuel
+
+BON HOOK / MAUVAIS CORPS :
+- Hook rate OK mais video completion rate très bas
+→ Corps de la vidéo trop long ou pas assez engageant
+
+BON AD / MAUVAISE LANDING :
+- CTR correct mais CVR très faible
+→ Message match problem ou landing page issues
+→ Analyser avec LRS Funnel Audit

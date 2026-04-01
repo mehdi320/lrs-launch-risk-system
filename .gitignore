@@ -1,0 +1,26 @@
+# Fichiers sensibles — NE JAMAIS commit sur GitHub
+.env
+.env.local
+.env.production
+
+# Streamlit secrets locaux
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

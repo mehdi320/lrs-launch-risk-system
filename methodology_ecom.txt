@@ -1,0 +1,206 @@
+# LRS™ METHODOLOGY — ECOM (Produit Physique)
+# Version 1.2 | Paid Traffic Conversion Audit Framework
+
+================================================================
+OVERVIEW
+================================================================
+
+Ce framework s'applique aux landing pages et publicités pour produits physiques vendus en ligne.
+Il est calibré pour les funnels de direct-to-consumer (DTC), one-product stores, et brand ecom.
+
+Contexte d'évaluation :
+- Trafic payant froid (cold traffic Meta / TikTok / Google Shopping)
+- Objectif : conversion en achat direct
+- Benchmark CVR moyen cold traffic ecom : 1.5% à 3.5%
+- Benchmark CVR optimisé : 3.5% à 6%+
+
+================================================================
+AXE 1 : HOOK (note /5)
+================================================================
+
+Le hook est la première chose que voit le visiteur : headline, image hero, vidéo, ou premier message de la pub.
+
+CRITÈRES DE SCORING :
+
+5/5 = Hook hyper-spécifique, tension claire, bénéfice immédiat identifiable, pattern interrupt visuel ou textuel fort.
+4/5 = Hook clair, bénéfice présent, mais manque de tension ou de spécificité.
+3/5 = Hook générique mais correct. Pas de pattern interrupt. Pas de différenciation immédiate.
+2/5 = Hook confus, produit-centrique sans bénéfice. Visiteur ne comprend pas immédiatement la valeur.
+1/5 = Hook inexistant, page commence par logo / navigation / slider sans message fort.
+0/5 = Aucun hook identifiable.
+
+FRAMEWORKS DE RÉFÉRENCE :
+
+a) La formule HOOK ECOM :
+   [Situation connue du prospect] + [résultat désirable] + [différenciateur]
+   Exemple : "Stop wasting money on skincare that doesn't absorb – here's what dermatologists actually use"
+
+b) Pain Agitation Solution (PAS) adapté ecom :
+   - Pain : douleur précise, quotidienne, humiliante ou frustrante
+   - Agitation : amplifier le coût de l'inaction
+   - Solution : le produit comme réponse directe
+
+c) Hero statement structure :
+   - Headline : résultat ou transformation (pas le produit)
+   - Subheadline : mécanisme ou preuves
+   - Hero image : produit EN ACTION ou résultat visible
+
+ERREURS FRÉQUENTES :
+- "Welcome to [brand name]" = 0 hook
+- Image produit sur fond blanc en hero = faible hook
+- Headline = nom du produit = inefficace
+- Texte générique ("premium quality") = score 1/5
+
+================================================================
+AXE 2 : OFFER (note /5)
+================================================================
+
+L'offre est ce que le client reçoit, à quel prix, avec quel risque perçu.
+
+CRITÈRES DE SCORING :
+
+5/5 = Offre stack claire (produit + bonus + garantie), prix justifié, urgence légitime, valeur perçue > prix demandé.
+4/5 = Offre claire mais stack incomplet, ou urgence manquante, ou prix non justifié.
+3/5 = Offre basique. Prix présent. Pas de stack. Pas de comparaison de valeur.
+2/5 = Offre confuse. Prix caché ou difficile à trouver. Pas de garantie visible.
+1/5 = On ne comprend pas clairement ce qu'on achète ou à quel prix.
+0/5 = Aucune offre identifiable.
+
+COMPOSANTS D'UNE OFFRE FORTE (ECOM) :
+
+1. PRODUCT CORE : Ce que c'est + ce que ça fait
+2. PRICE ANCHOR : Ancrage prix (valeur perçue vs prix demandé)
+3. BUNDLE / STACK : Bonus, kit, accessoires offerts
+4. GUARANTEE : Remboursement 30/60 jours, satisfaction garantie
+5. URGENCY / SCARCITY : Stock limité, offre temporaire (doit être crédible)
+6. SHIPPING OFFER : Livraison gratuite (levier de conversion majeur)
+7. SOCIAL PROOF ON OFFER : "X,XXX clients satisfaits" près du bouton CTA
+
+OFFER STACK TEMPLATE :
+✅ Produit principal [valeur XX€]
+✅ Bonus 1 inclus [valeur XX€]
+✅ Livraison offerte [valeur XX€]
+✅ Garantie satisfait ou remboursé 30 jours
+━━━━━━━━━━━━━━━━━━━━
+TOTAL VALEUR : XXX€ → Votre prix : XX€
+
+================================================================
+AXE 3 : TRUST (note /5)
+================================================================
+
+La confiance est ce qui réduit l'hésitation et neutralise l'objection "est-ce que je peux faire confiance à cette marque ?"
+
+CRITÈRES DE SCORING :
+
+5/5 = Reviews nombreuses (50+), photos authentiques, garantie visible, badges sécurité, media mentions, avant/après.
+4/5 = Reviews présentes mais peu nombreuses ou sans photos. Garantie visible.
+3/5 = Quelques reviews. Pas de photos client. Garantie en bas de page.
+2/5 = Très peu de social proof. Aucune guarantee visible near CTA.
+1/5 = Aucune review. Aucune garantie visible. Aucun badge.
+0/5 = Page sans aucun élément de confiance.
+
+ÉLÉMENTS DE TRUST CLASSÉS PAR IMPACT :
+
+HIGH IMPACT :
+- Avis avec photos (UGC) – le plus puissant
+- Nombre d'unités vendues ("17,400+ sold")
+- Before/After visuels
+- Garantie visible près du CTA
+
+MEDIUM IMPACT :
+- Étoiles moyennes (4.7+) + nombre total d'avis
+- Logos médias ("As seen in…")
+- Certifications / labels
+- Badges de paiement sécurisé
+
+LOW IMPACT (mais nécessaire) :
+- FAQ objections
+- Politique de retour claire
+- About page / story de marque
+
+ERREURS FRÉQUENTES :
+- Reviews génériques "Great product!" sans contexte = peu de valeur
+- Badges sécurité en bas de page seulement
+- Garantie cachée dans les CGV
+- Pas de nombre total d'avis affiché
+
+================================================================
+AXE 4 : FRICTION / MESSAGE MATCH (note /5)
+================================================================
+
+La friction désigne tout ce qui ralentit, confond, ou décourage la conversion.
+Le message match désigne la cohérence entre la promesse de la pub et la promesse de la landing.
+
+CRITÈRES DE SCORING :
+
+5/5 = Zéro friction identifiable. Message 100% cohérent avec la pub. CTA clair et répété. Parcours d'achat fluide.
+4/5 = Légère friction (navigation distracting, 1 CTA ambigu). Bon message match.
+3/5 = Friction modérée. Quelques éléments non alignés avec la pub. CTA présent mais pas optimisé.
+2/5 = Friction forte. Page générique vs promesse pub précise. Visiteur doit chercher la prochaine étape.
+1/5 = Mismatch évident. La pub promet X, la page parle de Y. Confusion totale.
+0/5 = Page impossible à convertir (navigation, pop-ups, pas de CTA clair).
+
+SOURCES DE FRICTION ECOM :
+
+a) Navigation friction :
+   - Menu header avec 15 liens
+   - Footer massif avant le fold
+   - Liens sortants vers d'autres produits
+
+b) CTA friction :
+   - Bouton "En savoir plus" au lieu de "Acheter maintenant"
+   - CTA non répété (seulement en bas de page)
+   - Couleur du bouton non contrastée
+
+c) Message match issues :
+   - Pub parle d'une promo → page n'a pas la promo
+   - Pub montre un bénéfice spécifique → page en parle pas
+   - Pub cible douleur X → page parle d'autre chose
+   - Pub a une promesse forte → headline page est générique
+
+d) Checkout friction :
+   - Obligation de créer un compte
+   - Formulaire trop long
+   - Options de paiement manquantes (PayPal, Apple Pay)
+
+================================================================
+SCORING GLOBAL — DÉCISION DE LANCEMENT
+================================================================
+
+Score Total = Somme des 4 axes (max 20)
+
+DÉCISIONS :
+
+0-9  → DO NOT LAUNCH
+       Risque élevé de burn budget. Problèmes fondamentaux à corriger.
+       ROAS attendu < 1.5. Ne pas dépenser en trafic payant.
+
+10-14 → TEST SMALL BUDGET
+        Lancer avec budget limité ($50-200/jour max).
+        Valider les hypothèses avant de scaler.
+        ROAS attendu : 1.5-2.5x. Optimisation nécessaire.
+
+15-20 → READY TO SCALE
+        Fondamentaux solides. Prêt pour scaling progressif.
+        ROAS attendu : 2.5-4x+ selon vertical.
+        Focus sur creative testing et audience expansion.
+
+RISK LEVELS :
+- Score 0-9  = HIGH RISK
+- Score 10-14 = MODERATE RISK
+- Score 15-20 = LOW RISK
+
+================================================================
+BENCHMARKS CVR ECOM PAR VERTICAL
+================================================================
+
+Beauty / Skincare : 2.5% - 5%
+Health / Wellness : 1.5% - 3.5%
+Home & Kitchen : 1% - 2.5%
+Fashion / Apparel : 1% - 3%
+Pet products : 2% - 4%
+Tech / Gadgets : 1% - 2.5%
+Fitness : 1.5% - 3.5%
+
+Ces benchmarks s'appliquent au trafic cold payant.
+Le warm retargeting peut multiplier ces chiffres par 2 à 4.
