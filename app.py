@@ -1,4 +1,4 @@
-# LRS - Launch Risk System V2.3
+# LRS - Launch Risk System V2.4
 # Paid Traffic Pre-Launch Audit Tool
 # Built with Streamlit + OpenAI
 
@@ -12,6 +12,12 @@ import time
 from html.parser import HTMLParser
 
 try:
+    from lrs_pdf_report import generate_pdf_report
+    PDF_AVAILABLE = True
+except Exception:
+    PDF_AVAILABLE = False
+
+try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
@@ -22,7 +28,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.3"
+APP_VERSION    = "2.4"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -1151,13 +1157,258 @@ def render_history():
                 st.session_state.loaded_result = entry["result"]
                 st.rerun()
 
-            txt   = export_txt(entry["result"], entry)
-            fname = "LRS_" + entry["timestamp"].replace("/", "-").replace(":", "-").replace(" ", "_") + ".txt"
-            st.download_button("Exporter .txt", data=txt.encode("utf-8"),
-                               file_name=fname, mime="text/plain", key="exp_" + str(i))
+            fname_base = "LRS_" + entry["timestamp"].replace("/","-").replace(":","-").replace(" ","_")
+            ecA, ecB = st.columns(2)
+            with ecA:
+                txt = export_txt(entry["result"], entry)
+                st.download_button("📥 .txt", data=txt.encode("utf-8"),
+                                   file_name=fname_base+".txt", mime="text/plain", key="exp_"+str(i))
+            with ecB:
+                if PDF_AVAILABLE:
+                    try:
+                        entry_meta = {**entry, "version": APP_VERSION}
+                        pdf_b = generate_pdf_report(entry["result"], entry_meta)
+                        st.download_button("📄 PDF", data=pdf_b,
+                                           file_name=fname_base+".pdf", mime="application/pdf",
+                                           key="exppdf_"+str(i))
+                    except Exception:
+                        pass
+
+# ── COMPARAISON 2 URLs ───────────────────────────────────────
+def render_comparison(api_key, model="gpt-4o-mini"):
+    st.subheader("Mode Comparaison — 2 URLs côte à côte")
+    st.caption("Auditez 2 pages en simultané pour comparer vos scores : votre page vs concurrent, avant vs après refonte, etc.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        url_a = st.text_input("URL Page A", placeholder="https://votre-page.com", key="comp_url_a")
+        label_a = st.text_input("Label A", value="Ma page", key="comp_label_a")
+    with c2:
+        url_b = st.text_input("URL Page B", placeholder="https://concurrent.com", key="comp_url_b")
+        label_b = st.text_input("Label B", value="Concurrent", key="comp_label_b")
+
+    mode_c       = st.selectbox("Mode", ["Funnel Only","Full Risk"], key="comp_mode")
+    platform_c   = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"], key="comp_plat")
+    offer_type_c = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="comp_offer")
+    brand_type_c = st.radio("Type de marque", ["Nouveau lancement","Marque etablie"], key="comp_brand", horizontal=True)
+    market_c     = ""
+
+    run_comp = st.button("⚔️ Lancer la comparaison", type="primary", use_container_width=True, key="comp_run")
+
+    if run_comp:
+        if not url_a.strip() or not url_b.strip():
+            st.error("Renseignez les deux URLs."); return
+
+        results = {}
+        for url, label, col_key in [(url_a, label_a, "A"), (url_b, label_b, "B")]:
+            with st.spinner(f"Extraction + audit {label}..."):
+                content, status, is_js = extract_page(url.strip())
+                if not content:
+                    st.error(f"Impossible d'extraire {label} : {status}"); return
+                page_type = detect_page_type(content, url.strip())
+                page_lang = detect_language(content)
+                try:
+                    res = run_audit(mode_c, platform_c, offer_type_c, content, "",
+                                   market_c, model, brand_type=brand_type_c,
+                                   page_type=page_type, page_lang=page_lang)
+                    results[col_key] = {"result": res, "label": label, "url": url,
+                                        "page_type": page_type}
+                except Exception as e:
+                    st.error(f"Erreur audit {label} : {e}"); return
+
+        if len(results) == 2:
+            st.markdown("---")
+            ra = results["A"]["result"].get("_c",{})
+            rb = results["B"]["result"].get("_c",{})
+
+            # Banner comparatif
+            col_a, col_mid, col_b = st.columns([5,1,5])
+            for col, r, info in [(col_a, ra, results["A"]), (col_b, rb, results["B"])]:
+                with col:
+                    sc = r.get("score",0)
+                    risk = r.get("risk","High")
+                    sc_hex = "#FF4444" if risk=="High" else "#FF8C00" if risk=="Moderate" else "#22c55e"
+                    winner = sc == max(ra.get("score",0), rb.get("score",0))
+                    st.markdown(
+                        f"""<div style='background:#1a1a2e;border-left:4px solid {sc_hex};
+                            border-radius:8px;padding:16px;text-align:center'>
+                          {"<div style='color:#FFD700;font-size:0.8em;font-weight:bold'>👑 MEILLEUR SCORE</div>" if winner else ""}
+                          <div style='color:#888;font-size:0.8em'>{info['label']}</div>
+                          <div style='color:{sc_hex};font-size:2.5em;font-weight:900'>{sc}<span style='font-size:0.4em;color:#555'>/20</span></div>
+                          <div style='color:{sc_hex};font-size:0.9em'>{r.get('decision','')}</div>
+                        </div>""", unsafe_allow_html=True
+                    )
+            with col_mid:
+                st.markdown("<div style='text-align:center;padding-top:40px;color:#555;font-size:1.5em'>VS</div>", unsafe_allow_html=True)
+
+            # Tableau comparatif détaillé
+            st.markdown("---")
+            st.subheader("Breakdown comparatif")
+            comp_rows = []
+            for label, key_a, key_b in [
+                ("Hook",     "hook",    "hook"),
+                ("Offer",    "offer",   "offer"),
+                ("Trust",    "trust",   "trust"),
+                ("Friction", "friction","friction"),
+                ("Total",    "score",   "score"),
+            ]:
+                va = ra.get(key_a,0); vb = rb.get(key_b,0)
+                mx = 5 if label != "Total" else 20
+                winner_a = "✅" if va > vb else ("🤝" if va == vb else "")
+                winner_b = "✅" if vb > va else ("🤝" if va == vb else "")
+                hxa = _score_color_str(va, mx)
+                hxb = _score_color_str(vb, mx)
+                comp_rows.append([
+                    f"**{label}**",
+                    f"{winner_a} **{va}/{mx}**",
+                    f"{winner_b} **{vb}/{mx}**",
+                ])
+            import pandas as pd
+            df = pd.DataFrame(comp_rows, columns=["Critère", results["A"]["label"], results["B"]["label"]])
+            st.dataframe(df, use_container_width=True, hide_index=True)
+
+            # Résumés
+            st.markdown("---")
+            ca2, cb2 = st.columns(2)
+            with ca2:
+                st.markdown(f"#### {results['A']['label']}")
+                render_results(results["A"]["result"])
+            with cb2:
+                st.markdown(f"#### {results['B']['label']}")
+                render_results(results["B"]["result"])
+
+def _score_color_str(v, mx=5):
+    r = v / mx
+    if r <= 0.45: return "#FF4444"
+    if r <= 0.65: return "#FF8C00"
+    return "#22c55e"
+
+# ── CHANGELOG ────────────────────────────────────────────────
+def render_changelog():
+    st.subheader("📋 Changelog LRS™")
+    st.caption("Historique de toutes les améliorations apportées à l'outil.")
+
+    versions = [
+        ("V2.4 — Aujourd'hui", [
+            "🆕 Export rapport PDF professionnel (branding LRS, fond sombre, 4 pages)",
+            "🆕 Mode Comparaison : auditer 2 URLs côte à côte",
+            "🆕 Mode Avant/Après : comparer un audit avec un précédent",
+            "🆕 Changelog intégré dans l'app",
+        ]),
+        ("V2.3", [
+            "🆕 Historique persistant (JSON) — survit au refresh de page",
+            "🆕 Warning pages JavaScript / contenu insuffisant",
+            "🆕 Jauge visuelle du score (bandeau coloré rouge/orange/vert)",
+            "🆕 Few-shot examples dans le prompt — scoring plus cohérent",
+            "🆕 Retry automatique OpenAI (3 tentatives avec backoff)",
+            "🆕 Détection langue de la page (FR / EN / Mixte)",
+        ]),
+        ("V2.2", [
+            "🔧 Fix détection page produit (/products/ classé en Catalogue → corrigé)",
+            "🆕 Scoring adaptatif par type de page (fiche produit ≠ landing page)",
+            "🆕 Aperçu du contenu scrapé (debug)",
+            "🆕 Priorité above-the-fold dans le scraping",
+            "🆕 Graphique d'évolution des scores dans Historique",
+            "🔧 User-Agent amélioré pour meilleure compatibilité",
+        ]),
+        ("V2.1", [
+            "🔧 Bug 1 : Scoring trop sévère pour marques établies → sélecteur Marque établie / Nouveau lancement",
+            "🔧 Bug 2 : Auto-détection du type de page (Sales, Catalogue, SaaS, Blog, Lead Gen)",
+            "🔧 Bug 3 : Recommandations granulaires — Quick Wins, Long Terme, Action Prioritaire #1 avec how_exactly",
+            "🆕 max_tokens augmenté à 4500",
+        ]),
+        ("V2.0 — Version initiale", [
+            "✅ Audit Funnel Only / Ads Only / Full Risk",
+            "✅ Scoring Hook/Offer/Trust/Friction sur 20",
+            "✅ Contexte marché personnalisé",
+            "✅ Plan d'action, Rewrite, Ad Creative",
+            "✅ Export .txt",
+            "✅ Checklist pré-lancement",
+            "✅ Historique de session",
+            "✅ Gate accès par mot de passe",
+            "✅ Deploy Streamlit Cloud",
+        ]),
+    ]
+
+    for v_title, items in versions:
+        with st.expander(v_title, expanded=(v_title.startswith("V2.4"))):
+            for item in items:
+                st.markdown(item)
 
 # ── MAIN ─────────────────────────────────────────────────────
 # ── CONTROLE D'ACCES PAR MOT DE PASSE ───────────────────────
+# ── BENCHMARK REPORT TAB ─────────────────────────────────────
+def render_benchmark_tab():
+    st.subheader("📊 Rapport Benchmark — État des Landing Pages 2025")
+
+    col_a, col_b = st.columns([3, 2])
+    with col_a:
+        st.markdown("""
+**Ce que contient le rapport (27 pages) :**
+- Scores moyens par niche (Ecom, SaaS, Lead Gen, Coaching…)
+- Top 10 erreurs de landing pages et comment les corriger
+- Anatomie d'une page parfaite (18+/20 LRS Score)
+- 6 Quick Wins applicables en moins d'1h
+- Benchmarks CVR par secteur
+- Top 5 hooks qui convertissent en 2025
+- Roadmap 30 jours pour passer de 10→18/20
+        """)
+
+    with col_b:
+        st.markdown("#### 🎁 Inclus avec votre accès LRS™")
+        st.markdown("Valeur standalone : **€27–47**")
+
+        # Charger le PDF depuis le fichier
+        benchmark_path = os.path.join(os.path.dirname(__file__), "LRS_Benchmark_Report_2025.pdf")
+        try:
+            with open(benchmark_path, "rb") as f:
+                pdf_bytes = f.read()
+            st.download_button(
+                label="⬇️ Télécharger le Rapport PDF",
+                data=pdf_bytes,
+                file_name="LRS_Benchmark_Report_2025.pdf",
+                mime="application/pdf",
+                type="primary",
+                use_container_width=True,
+            )
+            st.caption(f"PDF · {len(pdf_bytes) // 1024} Ko · Mis à jour Avril 2025")
+        except FileNotFoundError:
+            # Regénérer à la volée si fichier absent
+            try:
+                from generate_benchmark_report import generate as gen_benchmark
+                pdf_bytes = gen_benchmark()
+                st.download_button(
+                    label="⬇️ Télécharger le Rapport PDF",
+                    data=pdf_bytes,
+                    file_name="LRS_Benchmark_Report_2025.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True,
+                )
+            except Exception as e:
+                st.error(f"Rapport temporairement indisponible : {e}")
+
+    st.markdown("---")
+    st.markdown("#### 📌 Extraits du rapport")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Score moyen Ecom", "11.2 / 20", "-1.8 vs SaaS")
+        st.caption("Basé sur 200+ audits LRS")
+    with col2:
+        st.metric("Erreur #1", "Hook générique", "présente dans 78% des pages")
+        st.caption("Fix : promesse spécifique + chiffre")
+    with col3:
+        st.metric("Uplift CVR moyen", "+2.1 pts", "après quick wins")
+        st.caption("Sur pages auditées LRS ≥ 12/20")
+
+    st.markdown("---")
+    st.info(
+        "💡 **Astuce** : Lancez un audit LRS sur votre page, puis comparez votre score "
+        "aux benchmarks du rapport pour identifier vos priorités immédiates."
+    )
+
+
 def check_access():
     """
     Verifie le mot de passe d'acces.
@@ -1225,7 +1476,7 @@ OPENAI_API_KEY = "sk-..."
             """)
         st.stop()
 
-    tab1, tab2, tab3 = st.tabs(["Audit", "Checklist Pre-Lancement", "Historique"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Audit", "Comparaison", "Checklist Pre-Lancement", "Historique", "Benchmark 2025", "Changelog"])
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
@@ -1361,21 +1612,88 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                     save_history(result, meta)
                     st.session_state.loaded_result = None
                     render_results(result)
+
+                    # ── Mode Avant/Après ──────────────────────────────
+                    history = st.session_state.audit_history
+                    if len(history) >= 2:
+                        with st.expander("📊 Comparer avec un audit précédent (Avant/Après)", expanded=False):
+                            prev_options = {
+                                f"{e['timestamp']} — {str(e.get('url','') or e.get('offer_type',''))[:40]} — {e['score']}/20": i+1
+                                for i, e in enumerate(history[1:], 0)
+                            }
+                            selected = st.selectbox("Choisir l'audit de référence", list(prev_options.keys()), key="avant_apres_sel")
+                            if selected:
+                                prev_idx = prev_options[selected]
+                                prev = history[prev_idx]
+                                cur_score = result.get("_c",{}).get("score",0)
+                                prev_score = prev.get("score",0)
+                                delta = cur_score - prev_score
+                                delta_color = "#22c55e" if delta > 0 else "#FF4444" if delta < 0 else "#888888"
+                                delta_icon  = "▲" if delta > 0 else "▼" if delta < 0 else "="
+
+                                c1,c2,c3 = st.columns(3)
+                                with c1: st.metric("Score précédent", f"{prev_score}/20")
+                                with c2: st.metric("Score actuel",    f"{cur_score}/20")
+                                with c3: st.metric("Delta",
+                                    f"{delta_icon} {abs(delta)} pts",
+                                    delta=delta, delta_color="normal")
+
+                                # Breakdown comparatif
+                                pc = prev.get("result",{}).get("_c",{})
+                                cc = result.get("_c",{})
+                                rows = []
+                                for label, pk, ck in [("Hook","hook","hook"),("Offer","offer","offer"),
+                                                       ("Trust","trust","trust"),("Friction","friction","friction")]:
+                                    pv = pc.get(pk,0); cv = cc.get(ck,0); dv = cv-pv
+                                    arrow = "▲" if dv>0 else "▼" if dv<0 else "="
+                                    color = "🟢" if dv>0 else "🔴" if dv<0 else "⚪"
+                                    rows.append(f"**{label}** : {pv}/5 → {cv}/5  {color} {arrow}{abs(dv)}")
+                                for r in rows: st.markdown(r)
+
                     st.markdown("---")
-                    txt   = export_txt(result, meta)
-                    fname = "LRS_" + ts.replace("/", "-").replace(":", "-").replace(" ", "_") + ".txt"
-                    st.download_button("📥 Exporter le rapport (.txt)", data=txt.encode("utf-8"),
-                                       file_name=fname, mime="text/plain")
+                    # ── Exports ───────────────────────────────────────
+                    meta["version"] = APP_VERSION
+                    ecol1, ecol2 = st.columns(2)
+                    fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
+
+                    with ecol1:
+                        txt = export_txt(result, meta)
+                        st.download_button("📥 Exporter (.txt)", data=txt.encode("utf-8"),
+                                           file_name=fname_base+".txt", mime="text/plain",
+                                           use_container_width=True)
+                    with ecol2:
+                        if PDF_AVAILABLE:
+                            try:
+                                pdf_bytes = generate_pdf_report(result, meta)
+                                st.download_button("📄 Exporter rapport PDF",
+                                                   data=pdf_bytes,
+                                                   file_name=fname_base+".pdf",
+                                                   mime="application/pdf",
+                                                   type="primary",
+                                                   use_container_width=True)
+                            except Exception as pdf_err:
+                                st.caption(f"PDF indisponible : {pdf_err}")
+                        else:
+                            st.caption("PDF non disponible (reportlab manquant)")
                 except ValueError as e:
                     st.error(str(e))
                 except Exception as e:
                     st.error("Erreur inattendue : " + str(e))
 
     with tab2:
-        render_checklist()
+        render_comparison(api_key)
 
     with tab3:
+        render_checklist()
+
+    with tab4:
         render_history()
+
+    with tab5:
+        render_benchmark_tab()
+
+    with tab6:
+        render_changelog()
 
 
 if __name__ == "__main__":
