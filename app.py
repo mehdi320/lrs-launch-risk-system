@@ -1,4 +1,4 @@
-# LRS - Launch Risk System V2.1
+# LRS - Launch Risk System V2.2
 # Paid Traffic Pre-Launch Audit Tool
 # Built with Streamlit + OpenAI
 
@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.1"
+APP_VERSION    = "2.2"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -85,7 +85,12 @@ def clamp(text, n=MAX_PAGE_CHARS):
     return text[:n] + "[TRONQUE]" if len(text) > n else text
 
 def extract_page(url):
-    headers = {"User-Agent": "Mozilla/5.0 Chrome/120.0.0.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
     try:
         r = requests.get(url, headers=headers, timeout=15)
         r.raise_for_status()
@@ -99,7 +104,15 @@ def extract_page(url):
 
     extracted = trafilatura.extract(html, include_links=False, include_images=False, no_fallback=False)
     if extracted and len(extracted.strip()) > 200:
-        return clamp(extracted.strip()), f"Contenu extrait ({len(extracted[:MAX_PAGE_CHARS])} caracteres)"
+        # Priorité above-the-fold : mettre les 2000 premiers caractères en tête
+        full = extracted.strip()
+        above_fold = full[:2000]
+        rest       = full[2000:]
+        prioritized = (
+            "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
+            ("\n\n=== SUITE DE LA PAGE ===\n" + rest if rest else "")
+        )
+        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)"
 
     class HP(HTMLParser):
         def __init__(self):
@@ -127,8 +140,8 @@ def extract_page(url):
 # ── DETECTION TYPE DE PAGE ────────────────────────────────────
 def detect_page_type(content: str, url: str = "") -> str:
     """
-    Analyse le contenu scrape pour identifier le type de page.
-    Retourne une classification et des signaux detectes.
+    Analyse le contenu scrape et l'URL pour identifier le type de page.
+    Retourne une classification avec niveau de confiance.
     """
     if not content:
         return "Type inconnu (page vide)"
@@ -136,55 +149,102 @@ def detect_page_type(content: str, url: str = "") -> str:
     text = content.lower()
     url_l = url.lower()
 
-    # Scores par type
+    # ── Détection prioritaire par URL (règles strictes) ──────
+    import re
+
+    # Page produit individuelle (ex: /products/nom-produit, /p/ref, /item/)
+    product_page_patterns = [
+        r"/products?/[^/]+/?$",         # /products/nom ou /product/nom
+        r"/p/[^/]+/?$",                  # /p/ref
+        r"/item/[^/]+/?$",               # /item/ref
+        r"/shop/[^/]+/[^/]+/?$",         # /shop/category/produit
+        r"/articles?/[^/]+/?$",          # /article/nom (some ecom)
+        r"[?&](product|sku|pid|ref)=",   # paramètre produit
+    ]
+    for pattern in product_page_patterns:
+        if re.search(pattern, url_l):
+            # Confirmer avec contenu (éviter les faux positifs)
+            product_confirm = ["ajouter au panier", "add to cart", "acheter", "buy",
+                               "taille", "couleur", "size", "color", "quantite", "qty",
+                               "en stock", "in stock", "livraison", "shipping", "avis", "reviews"]
+            if sum(1 for s in product_confirm if s in text) >= 2:
+                return "Page Produit Ecom (fiche produit individuelle) (confiance : haute)"
+
+    # Catalogue / collection (ex: /collections/all, /shop, /boutique)
+    catalogue_url_patterns = [r"/collections?/", r"/categor", r"/boutique/?$",
+                               r"/shop/?$", r"/store/?$", r"/magasin"]
+    for pattern in catalogue_url_patterns:
+        if re.search(pattern, url_l):
+            return "Page Catalogue Ecom (plusieurs produits) (confiance : haute)"
+
+    # Blog / article
+    blog_url_patterns = [r"/blog/", r"/articles?/", r"/posts?/", r"/actualite",
+                         r"/news/", r"/magazine/"]
+    for pattern in blog_url_patterns:
+        if re.search(pattern, url_l):
+            return "Blog / Article (confiance : haute)"
+
+    # Homepage stricte (domaine seul ou avec juste une langue)
+    url_path = re.sub(r"https?://[^/]+", "", url_l).rstrip("/")
+    if url_path in ("", "/", "/fr", "/en", "/fr/", "/en/"):
+        return "Page d'accueil / Homepage (confiance : haute)"
+
+    # ── Scoring par contenu (si URL ne suffit pas) ───────────
     scores = {
-        "Sales Page (landing page produit unique)": 0,
+        "Page Produit Ecom (fiche produit individuelle)": 0,
+        "Sales Page / Landing Page (offre unique)": 0,
         "Page Catalogue Ecom (plusieurs produits)": 0,
         "Page SaaS / Logiciel": 0,
-        "Page d'accueil (homepage)": 0,
+        "Page d'accueil / Homepage": 0,
         "Blog / Article": 0,
         "Page Lead Gen (capture email)": 0,
     }
 
-    # Signaux Sales Page
-    sales_signals = ["commander maintenant", "achetez maintenant", "buy now", "add to cart",
-                     "ajouter au panier", "100% satisfait", "garantie", "offre limitee",
-                     "bonus", "valeur totale", "ce que vous obtenez", "what you get",
-                     "rejoignez", "place limitee", "commandez", "order now", "testimonial"]
-    scores["Sales Page (landing page produit unique)"] += sum(2 for s in sales_signals if s in text)
+    # Signaux Page Produit Ecom
+    product_signals = ["ajouter au panier", "add to cart", "taille", "couleur", "size",
+                       "color", "quantite", "qty", "en stock", "rupture de stock",
+                       "livraison sous", "retours gratuits", "materiau", "composition",
+                       "guide des tailles", "size guide", "avis verifies", "note globale",
+                       "recommandent ce produit", "achetez avec"]
+    scores["Page Produit Ecom (fiche produit individuelle)"] += sum(2 for s in product_signals if s in text)
 
-    # Signaux Catalogue Ecom
-    catalogue_signals = ["voir plus", "filtrer", "trier par", "collection", "nos produits",
-                         "shop all", "categories", "livraison offerte", "nouveau", "soldes",
-                         "rupture de stock", "ajouter au panier", "add to cart"]
+    # Signaux Sales Page / Landing Page
+    sales_signals = ["commander maintenant", "achetez maintenant", "buy now", "offre limitee",
+                     "bonus", "valeur totale", "ce que vous obtenez", "what you get",
+                     "place limitee", "testimonial", "100% satisfait", "garantie remboursement",
+                     "sans risque", "prix special", "formation", "programme", "module",
+                     "resultats", "transformation", "methode", "systeme"]
+    scores["Sales Page / Landing Page (offre unique)"] += sum(2 for s in sales_signals if s in text)
+
+    # Signaux Catalogue
+    catalogue_signals = ["filtrer", "trier par", "filter by", "sort by", "nos produits",
+                         "shop all", "toute la collection", "voir tous", "categories",
+                         "nouveautes", "meilleures ventes", "best sellers", "promotions"]
     scores["Page Catalogue Ecom (plusieurs produits)"] += sum(2 for s in catalogue_signals if s in text)
-    if any(x in url_l for x in ["/collections/", "/shop", "/boutique", "/products"]):
-        scores["Page Catalogue Ecom (plusieurs produits)"] += 4
 
     # Signaux SaaS
-    saas_signals = ["essai gratuit", "free trial", "pricing", "tarifs", "plans", "fonctionnalites",
-                    "features", "integrations", "api", "dashboard", "abonnement mensuel",
-                    "per month", "par mois", "demo", "book a demo"]
+    saas_signals = ["essai gratuit", "free trial", "pricing", "tarifs", "plans",
+                    "fonctionnalites", "features", "integrations", "api", "dashboard",
+                    "abonnement", "per month", "par mois", "demo", "book a demo",
+                    "logiciel", "software", "automatiser", "automatisation"]
     scores["Page SaaS / Logiciel"] += sum(2 for s in saas_signals if s in text)
 
     # Signaux Homepage
     home_signals = ["notre mission", "qui sommes-nous", "about us", "decouvrez nos",
-                    "explore", "notre histoire", "we are", "bienvenue"]
-    scores["Page d'accueil (homepage)"] += sum(1 for s in home_signals if s in text)
-    if url_l.rstrip("/").count("/") <= 2:
-        scores["Page d'accueil (homepage)"] += 2
+                    "notre histoire", "we are", "bienvenue", "nos valeurs", "notre equipe"]
+    scores["Page d'accueil / Homepage"] += sum(1 for s in home_signals if s in text)
 
     # Signaux Blog
-    blog_signals = ["min de lecture", "minute read", "publié le", "par l'auteur", "commentaires",
-                    "partager cet article", "share this", "lire la suite", "read more", "tags:"]
+    blog_signals = ["min de lecture", "minute read", "publie le", "par l'auteur",
+                    "commentaires", "partager cet article", "share this", "lire la suite",
+                    "read more", "tags:", "categorie:", "auteur:"]
     scores["Blog / Article"] += sum(2 for s in blog_signals if s in text)
-    if any(x in url_l for x in ["/blog", "/article", "/post", "/actualite"]):
-        scores["Blog / Article"] += 4
 
     # Signaux Lead Gen
     leadgen_signals = ["entrez votre email", "enter your email", "inscrivez-vous gratuitement",
                        "telechargez", "download", "guide gratuit", "free guide", "webinar",
-                       "masterclass", "challenge", "liste d'attente", "waitlist"]
+                       "masterclass", "challenge", "liste d'attente", "waitlist",
+                       "acces immediat", "immediate access"]
     scores["Page Lead Gen (capture email)"] += sum(2 for s in leadgen_signals if s in text)
 
     # Determiner le type dominant
@@ -192,9 +252,8 @@ def detect_page_type(content: str, url: str = "") -> str:
     best_score = scores[best_type]
 
     if best_score < 2:
-        return "Type non determine avec certitude — traiter comme Sales Page standard"
+        return "Type non determine — scoring applique comme Sales Page standard"
 
-    # Confiance
     sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
     second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0
     confidence = "haute" if best_score >= 6 and best_score > second_score * 1.5 else "moderee"
@@ -329,11 +388,71 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
             "notoriete par un hook et une offre exceptionnels."
         )
 
+    # Adapter les instructions de scoring selon le type de page détecté (Bug 2 amélioré)
+    page_type_lower = page_type.lower()
+    if "produit ecom" in page_type_lower or "fiche produit" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING PAGE PRODUIT ECOM :\n"
+            "Cette page est une fiche produit standard (pas une landing page optimisée paid traffic).\n"
+            "- HOOK : Évalue le titre produit + tagline. Une page produit n'a pas de hook copywriting — "
+            "note 3/5 si le titre est clair et descriptif, 2/5 si très générique.\n"
+            "- FRICTION : La présence d'un menu navigation est normale sur une page produit, ne pas sur-pénaliser. "
+            "Évalue la clarté du parcours d'achat (bouton add to cart visible, options claires).\n"
+            "- Dans tes recommandations, propose des améliorations réalistes POUR UNE PAGE PRODUIT "
+            "(pas 'supprimer la navigation' mais 'améliorer les photos', 'renforcer les avis', etc.)."
+        )
+    elif "catalogue" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING CATALOGUE ECOM :\n"
+            "Cette page liste plusieurs produits — ce n'est PAS une landing page de conversion directe.\n"
+            "- HOOK 1-2/5 est normal (pas de promesse unique sur un catalogue).\n"
+            "- FRICTION modérée est normale (navigation = fonctionnelle sur un catalogue).\n"
+            "- Dans tes recommandations, indique clairement que pour améliorer les conversions paid traffic, "
+            "l'idéal est de créer une landing page dédiée plutôt que d'envoyer sur le catalogue."
+        )
+    elif "homepage" in page_type_lower or "accueil" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING HOMEPAGE :\n"
+            "Cette page est une page d'accueil généraliste — pas optimisée pour la conversion paid traffic.\n"
+            "- Scores bas sur Hook et Friction sont normaux et attendus.\n"
+            "- Dans tes recommandations, INSISTE sur la nécessité de créer une landing page dédiée "
+            "pour les campagnes paid traffic au lieu d'envoyer sur la homepage."
+        )
+    elif "saas" in page_type_lower or "logiciel" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING PAGE SAAS :\n"
+            "Cette page est une page SaaS/logiciel. Critères adaptés :\n"
+            "- HOOK : évalue la clarté de la proposition de valeur (ce que fait le logiciel + pour qui + résultat).\n"
+            "- OFFER : évalue la clarté du pricing, la présence d'un free trial ou démo.\n"
+            "- TRUST : logos clients, témoignages, nombre d'utilisateurs, certifications.\n"
+            "- FRICTION : formulaire d'inscription simple, CTA clair (Start free trial / Book a demo)."
+        )
+    elif "lead gen" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING LEAD GEN :\n"
+            "Cette page capture des leads (email, inscription). Critères adaptés :\n"
+            "- OFFER : évalue la valeur perçue du lead magnet (gratuit, mais doit sembler précieux).\n"
+            "- FRICTION : formulaire simple (1 seul champ email = 5/5, formulaire long = 1/5).\n"
+            "- TRUST : témoignages de personnes ayant bénéficié du contenu gratuit."
+        )
+    elif "blog" in page_type_lower or "article" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING BLOG/ARTICLE :\n"
+            "Cette page est un article de blog — pas une page de conversion directe.\n"
+            "- Les scores Hook/Offer/Trust/Friction doivent être interprétés dans le contexte éditorial.\n"
+            "- Dans tes recommandations, propose comment améliorer les CTAs dans l'article "
+            "pour capturer des leads ou diriger vers une offre."
+        )
+    else:
+        page_type_instructions = (
+            "Applique le scoring standard landing page de conversion paid traffic."
+        )
+
     system = (
         SYSTEM_PROMPT_BASE
         .replace("BRAND_CONTEXT_PLACEHOLDER", brand_context)
         .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
-        .replace("PAGE_TYPE_PLACEHOLDER", page_type)
+        .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + page_type_instructions)
         .replace("METHODOLOGY_PLACEHOLDER", methodology_context or "Non disponible.")
     )
 
@@ -868,6 +987,28 @@ def render_history():
         st.info("Aucun audit effectue dans cette session.")
         return
 
+    # ── Graphique d'évolution des scores ─────────────────────
+    if len(st.session_state.audit_history) >= 2:
+        st.markdown("#### 📈 Évolution des scores")
+        history_reversed = list(reversed(st.session_state.audit_history))
+        chart_data = []
+        for entry in history_reversed:
+            label = (entry.get("url") or entry.get("offer_type") or "Audit")
+            label = label.replace("https://", "").replace("http://", "")
+            if len(label) > 30: label = label[:27] + "..."
+            chart_data.append({
+                "Audit": label,
+                "Score /20": entry.get("score", 0),
+                "Seuil Test (10)": 10,
+                "Seuil Scale (15)": 15,
+            })
+
+        import pandas as pd
+        df = pd.DataFrame(chart_data)
+        st.line_chart(df.set_index("Audit")[["Score /20", "Seuil Test (10)", "Seuil Scale (15)"]])
+        st.caption("Seuil vert (15+) = Ready to scale | Seuil orange (10+) = Test small budget | Rouge (<10) = Do NOT launch")
+        st.markdown("---")
+
     for i, entry in enumerate(st.session_state.audit_history):
         score = entry.get("score", 0)
         dec   = entry.get("decision", "")
@@ -1054,6 +1195,10 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                 # Bug 2 : auto-detection du type de page
                 detected_page_type = detect_page_type(landing_content, landing_url.strip())
                 st.caption("🔍 Type de page detecte : **" + detected_page_type + "**")
+                # Aperçu du contenu scrapé
+                with st.expander("👁️ Aperçu du contenu extrait (debug)", expanded=False):
+                    st.caption("Ce texte est exactement ce que LRS analyse. S'il est vide ou incohérent, le score sera moins fiable.")
+                    st.text(landing_content[:1500] + ("..." if len(landing_content) > 1500 else ""))
 
             with st.spinner("Analyse LRS en cours... (10-30 secondes)"):
                 try:
