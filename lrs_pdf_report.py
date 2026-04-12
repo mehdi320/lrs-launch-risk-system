@@ -113,9 +113,23 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     # ════════════════════════════════════════════════════════
 
     # Header bar
+    client_name  = meta.get("client_name", "")
+    report_mode  = meta.get("report_mode", "")
+    if client_name and report_mode == "client":
+        title_str = f"<b>🚦 LRS™</b> — Rapport d'Audit Confidentiel"
+        sub_str   = f"Préparé pour : <b>{client_name}</b>"
+    else:
+        title_str = "<b>🚦 LRS™</b> — Launch Risk System"
+        sub_str   = ""
+
+    left_cells = [Paragraph(title_str, _s("hdr", fontSize=11, fontName="Helvetica-Bold", textColor=C_WHITE))]
+    if sub_str:
+        left_cells.append(Paragraph(sub_str, _s("hdr_sub", fontSize=9, textColor=C_ACCENT)))
+
     hdr = Table([[
-        Paragraph("<b>🚦 LRS™</b> — Launch Risk System",
-                  _s("hdr", fontSize=11, fontName="Helvetica-Bold", textColor=C_WHITE)),
+        left_cells[0] if len(left_cells) == 1 else Table(
+            [[c] for c in left_cells], colWidths=[W*0.6]
+        ),
         Paragraph(f"V{version}  |  {meta.get('timestamp','')}",
                   _s("hdrr", fontSize=8, textColor=C_GRAY, alignment=TA_RIGHT)),
     ]], colWidths=[W*0.6, W*0.4])
@@ -180,7 +194,10 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     page_type = lrs.get("page_type", meta.get("page_type","N/A"))
     if len(str(page_type)) > 55: page_type = str(page_type)[:52]+"..."
 
-    meta_rows = [
+    meta_rows = []
+    if client_name and report_mode == "client":
+        meta_rows.append(["Préparé pour", client_name])
+    meta_rows += [
         ["URL analysée", url],
         ["Mode d'audit", meta.get("mode","")],
         ["Plateforme", meta.get("platform","")],

@@ -1,4 +1,4 @@
-# LRS - Launch Risk System V2.4
+# LRS - Launch Risk System V2.5
 # Paid Traffic Pre-Launch Audit Tool
 # Built with Streamlit + OpenAI
 
@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.4"
+APP_VERSION    = "2.5"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -65,8 +65,10 @@ def get_decision(score):
     if score <= 14: return "Test small budget", "Moderate"
     return "Ready to scale", "Low"
 
-# ── HISTORIQUE PERSISTANT ────────────────────────────────────
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
+# ── PERSISTANCE ──────────────────────────────────────────────
+HISTORY_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
+PROFILES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_profiles.json")
+PROJECTS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
 
 def load_history_file():
     """Charge l'historique depuis le fichier JSON (persistant entre sessions)."""
@@ -97,13 +99,65 @@ def write_history_file(history):
     except Exception:
         pass  # Silencieux si pas de droits d'écriture (Streamlit Cloud)
 
+# ── PROFILS SAUVEGARDÉS ──────────────────────────────────────
+def load_profiles():
+    try:
+        if os.path.exists(PROFILES_FILE):
+            with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_profiles(profiles):
+    try:
+        with open(PROFILES_FILE, "w", encoding="utf-8") as f:
+            json.dump(profiles, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def save_profile(name, config):
+    profiles = load_profiles()
+    profiles[name] = config
+    save_profiles(profiles)
+
+def delete_profile(name):
+    profiles = load_profiles()
+    profiles.pop(name, None)
+    save_profiles(profiles)
+
+# ── PROJETS MULTI-PAGES ──────────────────────────────────────
+def load_projects():
+    try:
+        if os.path.exists(PROJECTS_FILE):
+            with open(PROJECTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_projects(projects):
+    try:
+        with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(projects, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
 # ── SESSION STATE ────────────────────────────────────────────
 def init_session():
     if "audit_history" not in st.session_state:
-        # Charger depuis fichier au démarrage
         st.session_state.audit_history = load_history_file()
     if "loaded_result" not in st.session_state:
         st.session_state.loaded_result = None
+    if "reaudit_url" not in st.session_state:
+        st.session_state.reaudit_url = ""
+    if "profiles" not in st.session_state:
+        st.session_state.profiles = load_profiles()
+    if "projects" not in st.session_state:
+        st.session_state.projects = load_projects()
+    if "impl_tracker" not in st.session_state:
+        # {entry_idx: {rec_id: bool}} — tracker local session (merge avec JSON)
+        st.session_state.impl_tracker = {}
 
 def save_history(result, meta):
     entry = {**meta, "score": result.get("_c", {}).get("score", 0),
@@ -1116,13 +1170,45 @@ def render_results(result):
 def render_history():
     st.subheader("Historique des Audits")
     if not st.session_state.audit_history:
-        st.info("Aucun audit effectue dans cette session.")
+        st.info("Aucun audit effectué dans cette session.")
         return
 
+    history = st.session_state.audit_history
+
+    # ── Bannière delta global ─────────────────────────────────
+    if len(history) >= 2:
+        first_score  = history[-1].get("score", 0)
+        latest_score = history[0].get("score", 0)
+        delta        = latest_score - first_score
+        delta_str    = ("+" if delta >= 0 else "") + str(delta)
+        delta_color  = "#22c55e" if delta > 0 else "#FF4444" if delta < 0 else "#888"
+        avg_score    = round(sum(e.get("score", 0) for e in history) / len(history), 1)
+        total_audits = len(history)
+
+        st.markdown(
+            f"""<div style='background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;
+                padding:18px 24px;margin-bottom:16px;display:flex;gap:32px;flex-wrap:wrap;align-items:center'>
+              <div>
+                <div style='color:#aaa;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Progression globale</div>
+                <div style='color:{delta_color};font-size:2.4em;font-weight:900;line-height:1'>{delta_str} pts</div>
+                <div style='color:#555;font-size:0.85em'>depuis votre premier audit</div>
+              </div>
+              <div>
+                <div style='color:#aaa;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Score moyen</div>
+                <div style='color:#6366f1;font-size:2em;font-weight:800'>{avg_score}<span style='font-size:0.5em;color:#555'>/20</span></div>
+              </div>
+              <div>
+                <div style='color:#aaa;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Total audits</div>
+                <div style='color:#aaa;font-size:2em;font-weight:800'>{total_audits}</div>
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
     # ── Graphique d'évolution des scores ─────────────────────
-    if len(st.session_state.audit_history) >= 2:
+    if len(history) >= 2:
         st.markdown("#### 📈 Évolution des scores")
-        history_reversed = list(reversed(st.session_state.audit_history))
+        history_reversed = list(reversed(history))
         chart_data = []
         for entry in history_reversed:
             label = (entry.get("url") or entry.get("offer_type") or "Audit")
@@ -1134,45 +1220,289 @@ def render_history():
                 "Seuil Test (10)": 10,
                 "Seuil Scale (15)": 15,
             })
-
         import pandas as pd
         df = pd.DataFrame(chart_data)
         st.line_chart(df.set_index("Audit")[["Score /20", "Seuil Test (10)", "Seuil Scale (15)"]])
-        st.caption("Seuil vert (15+) = Ready to scale | Seuil orange (10+) = Test small budget | Rouge (<10) = Do NOT launch")
+        st.caption("Vert (15+) = Ready to scale · Orange (10+) = Test small budget · Rouge (<10) = Do NOT launch")
         st.markdown("---")
 
-    for i, entry in enumerate(st.session_state.audit_history):
-        score = entry.get("score", 0)
-        dec   = entry.get("decision", "")
-        label = str(entry.get("url", "") or entry.get("offer_type", ""))[:40]
-        color = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+    for i, entry in enumerate(history):
+        score  = entry.get("score", 0)
+        dec    = entry.get("decision", "")
+        label  = str(entry.get("url", "") or entry.get("offer_type", ""))[:40]
+        color  = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+        url_entry = entry.get("url", "")
 
-        with st.expander(entry["timestamp"] + " -- " + entry["mode"] + " -- " + str(score) + "/20 -- " + label):
-            c1, c2, c3 = st.columns(3)
+        # Badge delta vs audit précédent (i+1 = plus ancien)
+        delta_badge = ""
+        if i + 1 < len(history):
+            prev_score = history[i + 1].get("score", 0)
+            d = score - prev_score
+            if d != 0:
+                dc = "#22c55e" if d > 0 else "#FF4444"
+                delta_badge = f"  <span style='color:{dc};font-size:0.85em'>({'+'if d>0 else ''}{d})</span>"
+
+        expander_title = (
+            entry["timestamp"] + " — " + entry["mode"] +
+            " — <span style='color:" + color + ";font-weight:700'>" + str(score) + "/20</span>" +
+            delta_badge + " — " + label
+        )
+
+        with st.expander(f"{entry['timestamp']} — {entry['mode']} — {score}/20 — {label}"):
+            c1, c2, c3, c4 = st.columns(4)
             with c1: st.metric("Score", str(score) + "/20")
-            with c2: st.markdown("**Decision**<br><span style='color:" + color + "'>" + dec + "</span>", unsafe_allow_html=True)
-            with c3: st.markdown("**Plateforme**<br>" + entry.get("platform", ""), unsafe_allow_html=True)
+            with c2:
+                st.markdown("**Décision**<br><span style='color:" + color + "'>" + dec + "</span>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("**Plateforme**<br>" + entry.get("platform", ""), unsafe_allow_html=True)
+            with c4:
+                if i + 1 < len(history):
+                    prev = history[i + 1].get("score", 0)
+                    d2 = score - prev
+                    dc2 = "#22c55e" if d2 > 0 else "#FF4444" if d2 < 0 else "#888"
+                    ds = ("+" if d2 >= 0 else "") + str(d2) + " pts"
+                    st.markdown("**vs précédent**<br><span style='color:" + dc2 + ";font-weight:700'>" + ds + "</span>", unsafe_allow_html=True)
 
-            if st.button("Recharger", key="reload_" + str(i)):
-                st.session_state.loaded_result = entry["result"]
-                st.rerun()
+            # ── Tracker d'implémentation ──────────────────────
+            result_entry = entry.get("result", {})
+            fp_e = result_entry.get("fix_plan", {})
+            recs = []
+            top_p = fp_e.get("top_priority_action", {})
+            if top_p and top_p.get("what"):
+                recs.append(("🎯 " + top_p.get("what", "")[:70], "top_" + str(i)))
+            for j, qw in enumerate(fp_e.get("quick_wins", [])[:4]):
+                recs.append(("⚡ " + qw.get("what", "")[:70], "qw_" + str(i) + "_" + str(j)))
+            for j, lt in enumerate(fp_e.get("long_term", [])[:3]):
+                recs.append(("🏗️ " + lt.get("what", "")[:70], "lt_" + str(i) + "_" + str(j)))
+
+            if recs:
+                st.markdown("**📋 Suivi des recommandations :**")
+                tracker_key = "impl_" + str(i)
+                if tracker_key not in st.session_state.impl_tracker:
+                    st.session_state.impl_tracker[tracker_key] = {}
+                done_count = 0
+                for rec_label, rec_id in recs:
+                    checked = st.checkbox(
+                        rec_label,
+                        value=st.session_state.impl_tracker[tracker_key].get(rec_id, False),
+                        key="impl_chk_" + rec_id,
+                    )
+                    st.session_state.impl_tracker[tracker_key][rec_id] = checked
+                    if checked: done_count += 1
+                pct_impl = int(done_count / len(recs) * 100)
+                st.progress(pct_impl / 100)
+                st.caption(f"{done_count}/{len(recs)} recommandations appliquées ({pct_impl}%)")
+                if pct_impl >= 80:
+                    st.success("🎉 Excellent ! Lancez un re-audit pour mesurer votre progression.")
+                elif pct_impl >= 40:
+                    st.info("💡 Bon départ — une fois tout appliqué, re-auditez pour valider l'impact.")
+
+            st.markdown("---")
+
+            # ── Boutons d'action ─────────────────────────────
+            btn1, btn2, btn3 = st.columns(3)
+            with btn1:
+                if st.button("🔄 Recharger résultats", key="reload_" + str(i)):
+                    st.session_state.loaded_result = entry["result"]
+                    st.rerun()
+            with btn2:
+                if url_entry and st.button("🔁 Re-auditer cette URL", key="reaudit_" + str(i)):
+                    st.session_state.reaudit_url = url_entry
+                    st.rerun()
+            with btn3:
+                pass  # placeholder
 
             fname_base = "LRS_" + entry["timestamp"].replace("/","-").replace(":","-").replace(" ","_")
-            ecA, ecB = st.columns(2)
+            ecA, ecB, ecC = st.columns(3)
             with ecA:
                 txt = export_txt(entry["result"], entry)
                 st.download_button("📥 .txt", data=txt.encode("utf-8"),
-                                   file_name=fname_base+".txt", mime="text/plain", key="exp_"+str(i))
+                                   file_name=fname_base+".txt", mime="text/plain",
+                                   key="exp_"+str(i))
             with ecB:
                 if PDF_AVAILABLE:
                     try:
                         entry_meta = {**entry, "version": APP_VERSION}
                         pdf_b = generate_pdf_report(entry["result"], entry_meta)
-                        st.download_button("📄 PDF", data=pdf_b,
+                        st.download_button("📄 PDF Audit", data=pdf_b,
                                            file_name=fname_base+".pdf", mime="application/pdf",
                                            key="exppdf_"+str(i))
                     except Exception:
                         pass
+            with ecC:
+                if PDF_AVAILABLE:
+                    try:
+                        client_name = st.text_input("Nom client (optionnel)", key="client_" + str(i),
+                                                     placeholder="Ex: Startup XYZ", label_visibility="collapsed")
+                        entry_meta_c = {**entry, "version": APP_VERSION,
+                                        "client_name": client_name or "",
+                                        "report_mode": "client"}
+                        pdf_c = generate_pdf_report(entry["result"], entry_meta_c)
+                        st.download_button("👔 Rapport Client", data=pdf_c,
+                                           file_name=fname_base+"_client.pdf", mime="application/pdf",
+                                           key="exppdf_client_"+str(i))
+                    except Exception:
+                        pass
+
+# ── PROJETS MULTI-PAGES ──────────────────────────────────────
+def render_projects(api_key):
+    st.subheader("🗂️ Projets Multi-Pages")
+    st.caption("Groupez plusieurs URLs d'un même funnel sous un projet. Obtenez un score global et identifiez le maillon faible.")
+
+    projects = st.session_state.projects
+
+    # ── Créer un nouveau projet ───────────────────────────────
+    with st.expander("➕ Créer un nouveau projet", expanded=(len(projects) == 0)):
+        proj_name = st.text_input("Nom du projet", placeholder="Ex: Funnel Produit X / Client Startup Y", key="new_proj_name")
+        proj_notes = st.text_area("Notes (optionnel)", placeholder="Contexte, objectifs, budget...", key="new_proj_notes", height=70)
+
+        st.markdown("**URLs du funnel (une par ligne) :**")
+        proj_urls_raw = st.text_area(
+            "URLs",
+            placeholder="https://ma-pub.com\nhttps://ma-landing.com\nhttps://ma-page-commande.com",
+            key="new_proj_urls", height=100, label_visibility="collapsed"
+        )
+
+        col_save, col_ = st.columns([1, 3])
+        with col_save:
+            if st.button("💾 Créer le projet", type="primary", key="create_proj"):
+                if not proj_name.strip():
+                    st.error("Donnez un nom au projet.")
+                else:
+                    urls_list = [u.strip() for u in proj_urls_raw.strip().splitlines() if u.strip()]
+                    if not urls_list:
+                        st.error("Ajoutez au moins une URL.")
+                    else:
+                        new_proj = {
+                            "name": proj_name.strip(),
+                            "notes": proj_notes.strip(),
+                            "urls": urls_list,
+                            "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                            "audits": {},  # url → {score, decision, timestamp}
+                        }
+                        projects[proj_name.strip()] = new_proj
+                        save_projects(projects)
+                        st.session_state.projects = projects
+                        st.success(f"Projet '{proj_name}' créé avec {len(urls_list)} URLs !")
+                        st.rerun()
+
+    if not projects:
+        st.info("Aucun projet créé. Créez votre premier projet ci-dessus.")
+        return
+
+    st.markdown("---")
+
+    # ── Liste des projets ─────────────────────────────────────
+    for proj_key, proj in list(projects.items()):
+        audits   = proj.get("audits", {})
+        urls     = proj.get("urls", [])
+        n_done   = len([u for u in urls if u in audits])
+        avg_sc   = round(sum(audits[u]["score"] for u in urls if u in audits) / n_done, 1) if n_done > 0 else None
+        proj_color = "#22c55e" if (avg_sc or 0) >= 15 else "#FF8C00" if (avg_sc or 0) >= 10 else "#FF4444"
+
+        expander_label = (
+            f"🗂️ {proj['name']}  —  {n_done}/{len(urls)} audités"
+            + (f"  —  Moy {avg_sc}/20" if avg_sc is not None else "  —  Non audité")
+        )
+
+        with st.expander(expander_label, expanded=(n_done < len(urls))):
+            if proj.get("notes"):
+                st.caption(proj["notes"])
+
+            # Score global + maillon faible
+            if n_done > 0:
+                scores_list = [(u, audits[u]["score"]) for u in urls if u in audits]
+                weakest = min(scores_list, key=lambda x: x[1])
+                strongest = max(scores_list, key=lambda x: x[1])
+
+                mc1, mc2, mc3 = st.columns(3)
+                with mc1:
+                    st.metric("Score moyen", f"{avg_sc}/20")
+                with mc2:
+                    wk_short = weakest[0].replace("https://","")[:30]
+                    st.metric("🔴 Maillon faible", f"{weakest[1]}/20", delta=wk_short, delta_color="inverse")
+                with mc3:
+                    st_short = strongest[0].replace("https://","")[:30]
+                    st.metric("🟢 Meilleur", f"{strongest[1]}/20", delta=st_short)
+
+                # Barre de progression des URLs
+                st.markdown("**Progression des pages :**")
+                for u in urls:
+                    u_short = u.replace("https://","").replace("http://","")[:50]
+                    if u in audits:
+                        sc = audits[u]["score"]
+                        col = "#22c55e" if sc >= 15 else "#FF8C00" if sc >= 10 else "#FF4444"
+                        st.markdown(
+                            f"<div style='display:flex;align-items:center;gap:12px;margin:4px 0'>"
+                            f"<span style='color:#aaa;font-size:0.85em;min-width:200px'>{u_short}</span>"
+                            f"<span style='color:{col};font-weight:700'>{sc}/20</span>"
+                            f"<span style='color:#555;font-size:0.8em'>{audits[u].get('decision','')}</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f"<div style='display:flex;align-items:center;gap:12px;margin:4px 0'>"
+                            f"<span style='color:#555;font-size:0.85em;min-width:200px'>{u_short}</span>"
+                            f"<span style='color:#555'>— non audité</span>"
+                            f"</div>",
+                            unsafe_allow_html=True
+                        )
+
+                st.markdown("")
+
+            # ── Bouton Auditer tout le projet ─────────────────
+            audit_opts_col, del_col = st.columns([3, 1])
+            with audit_opts_col:
+                proj_mode   = st.selectbox("Mode", ["Funnel Only", "Full Risk"], key="pm_" + proj_key)
+                proj_plat   = st.selectbox("Plateforme", ["Meta", "TikTok", "Google", "Mixed"], key="pp_" + proj_key)
+                proj_offer  = st.selectbox("Offre", ["Digital product", "Ecom (produit physique)"], key="po_" + proj_key)
+                proj_brand  = st.radio("Marque", ["Nouveau lancement", "Marque etablie"], key="pb_" + proj_key, horizontal=True)
+
+                urls_to_audit = [u for u in urls if u not in audits]
+                btn_label = (f"▶️ Auditer les {len(urls_to_audit)} pages restantes"
+                             if urls_to_audit else "🔁 Re-auditer toutes les pages")
+
+                if st.button(btn_label, key="run_proj_" + proj_key, type="primary"):
+                    targets = urls_to_audit if urls_to_audit else urls
+                    progress_bar = st.progress(0)
+                    for idx_u, u in enumerate(targets):
+                        with st.spinner(f"Auditing {u.replace('https://','')[:40]}..."):
+                            content, status, is_js = extract_page(u)
+                            if not content:
+                                st.warning(f"Impossible d'extraire {u}: {status}")
+                                continue
+                            pt  = detect_page_type(content, u)
+                            pl  = detect_language(content)
+                            try:
+                                res = run_audit(proj_mode, proj_plat, proj_offer, content, "",
+                                               "", "gpt-4o-mini", brand_type=proj_brand,
+                                               page_type=pt, page_lang=pl)
+                                c_r = res.get("_c", {})
+                                projects[proj_key]["audits"][u] = {
+                                    "score": c_r.get("score", 0),
+                                    "decision": c_r.get("decision", ""),
+                                    "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                                }
+                                save_projects(projects)
+                                st.session_state.projects = projects
+                                meta_p = {"url": u, "mode": proj_mode, "platform": proj_plat,
+                                          "offer_type": proj_offer, "brand_type": proj_brand,
+                                          "page_type": pt, "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}
+                                save_history(res, meta_p)
+                            except Exception as e2:
+                                st.error(f"Erreur audit {u}: {e2}")
+                        progress_bar.progress((idx_u + 1) / len(targets))
+                    st.success("Projet audité ! Consultez les résultats dans l'Historique.")
+                    st.rerun()
+
+            with del_col:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🗑️ Supprimer", key="del_proj_" + proj_key):
+                    del projects[proj_key]
+                    save_projects(projects)
+                    st.session_state.projects = projects
+                    st.rerun()
 
 # ── COMPARAISON 2 URLs ───────────────────────────────────────
 def render_comparison(api_key, model="gpt-4o-mini"):
@@ -1289,11 +1619,20 @@ def render_changelog():
     st.caption("Historique de toutes les améliorations apportées à l'outil.")
 
     versions = [
-        ("V2.4 — Aujourd'hui", [
+        ("V2.5 — Aujourd'hui", [
+            "🆕 Profils d'audit sauvegardés (charger / sauvegarder vos paramètres habituels)",
+            "🆕 Delta de score : progression globale depuis le premier audit visible dans l'Historique",
+            "🆕 Tracker d'implémentation des recommandations (checkboxes + barre de progression)",
+            "🆕 Bouton Re-audit : URL pré-remplie automatiquement depuis l'Historique",
+            "🆕 Projets multi-pages : groupez un funnel complet et auditez tout en 1 clic",
+            "🆕 Rapport Client PDF : export branding client avec nom du destinataire",
+        ]),
+        ("V2.4", [
             "🆕 Export rapport PDF professionnel (branding LRS, fond sombre, 4 pages)",
             "🆕 Mode Comparaison : auditer 2 URLs côte à côte",
             "🆕 Mode Avant/Après : comparer un audit avec un précédent",
             "🆕 Changelog intégré dans l'app",
+            "🆕 Benchmark Report 2025 (PDF téléchargeable — valeur €27-47)",
         ]),
         ("V2.3", [
             "🆕 Historique persistant (JSON) — survit au refresh de page",
@@ -1476,16 +1815,40 @@ OPENAI_API_KEY = "sk-..."
             """)
         st.stop()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Audit", "Comparaison", "Checklist Pre-Lancement", "Historique", "Benchmark 2025", "Changelog"])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Audit", "Comparaison", "Projets", "Checklist Pre-Lancement", "Historique", "Benchmark 2025", "Changelog"])
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
 
         with col_l:
             st.subheader("Configuration")
-            mode       = st.selectbox("Mode d'audit", ["Funnel Only", "Ads Only", "Full Risk"])
-            platform   = st.selectbox("Plateforme", ["Meta", "TikTok", "Google", "Mixed", "N/A"])
-            offer_type = st.selectbox("Type d'offre", ["Digital product", "Ecom (produit physique)"])
+
+            # ── Profils sauvegardés ───────────────────────────
+            profiles = st.session_state.profiles
+            profile_names = list(profiles.keys())
+            if profile_names:
+                prof_col1, prof_col2 = st.columns([3, 1])
+                with prof_col1:
+                    sel_profile = st.selectbox("📂 Charger un profil", ["— Nouveau —"] + profile_names, key="sel_profile")
+                with prof_col2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if sel_profile != "— Nouveau —" and st.button("🗑️", key="del_prof"):
+                        delete_profile(sel_profile)
+                        st.session_state.profiles = load_profiles()
+                        st.rerun()
+                loaded_prof = profiles.get(sel_profile, {}) if sel_profile != "— Nouveau —" else {}
+            else:
+                loaded_prof = {}
+
+            def pval(key, default):
+                return loaded_prof.get(key, default)
+
+            mode       = st.selectbox("Mode d'audit", ["Funnel Only", "Ads Only", "Full Risk"],
+                                       index=["Funnel Only","Ads Only","Full Risk"].index(pval("mode","Funnel Only")))
+            platform   = st.selectbox("Plateforme", ["Meta", "TikTok", "Google", "Mixed", "N/A"],
+                                       index=["Meta","TikTok","Google","Mixed","N/A"].index(pval("platform","Meta")))
+            offer_type = st.selectbox("Type d'offre", ["Digital product", "Ecom (produit physique)"],
+                                       index=["Digital product","Ecom (produit physique)"].index(pval("offer_type","Digital product")))
             model      = st.selectbox(
                 "Modele OpenAI",
                 ["gpt-4o-mini", "gpt-4o"],
@@ -1494,11 +1857,11 @@ OPENAI_API_KEY = "sk-..."
 
             st.markdown("---")
             st.markdown("**Contexte Marche** (ameliore la precision)")
-            price       = st.text_input("Prix du produit",  placeholder="Ex: 47 euros")
-            target      = st.text_input("Cible / Persona",  placeholder="Ex: adultes 25-45 ans, insomnies")
-            test_budget = st.text_input("Budget test",      placeholder="Ex: 300 euros/semaine")
-            niche       = st.text_input("Niche / Marche",   placeholder="Ex: wellness, mindset")
-            competitors = st.text_input("Concurrents",      placeholder="Ex: Calm, Headspace")
+            price       = st.text_input("Prix du produit",  value=pval("price",""),  placeholder="Ex: 47 euros")
+            target      = st.text_input("Cible / Persona",  value=pval("target",""), placeholder="Ex: adultes 25-45 ans, insomnies")
+            test_budget = st.text_input("Budget test",      value=pval("budget",""), placeholder="Ex: 300 euros/semaine")
+            niche       = st.text_input("Niche / Marche",   value=pval("niche",""),  placeholder="Ex: wellness, mindset")
+            competitors = st.text_input("Concurrents",      value=pval("competitors",""), placeholder="Ex: Calm, Headspace")
 
             market_context = "\n".join([
                 "Prix : "        + (price       or "Non renseigne"),
@@ -1508,10 +1871,29 @@ OPENAI_API_KEY = "sk-..."
                 "Concurrents : " + (competitors or "Non renseigne"),
             ])
 
+            # Sauvegarder ce profil
+            with st.expander("💾 Sauvegarder ce profil", expanded=False):
+                new_prof_name = st.text_input("Nom du profil", placeholder="Ex: Client SaaS B2B / Ecom Beauté", key="save_prof_name")
+                if st.button("Sauvegarder", key="btn_save_prof"):
+                    if new_prof_name.strip():
+                        save_profile(new_prof_name.strip(), {
+                            "mode": mode, "platform": platform, "offer_type": offer_type,
+                            "price": price, "target": target, "budget": test_budget,
+                            "niche": niche, "competitors": competitors,
+                            "brand_type": pval("brand_type", "Nouveau lancement"),
+                        })
+                        st.session_state.profiles = load_profiles()
+                        st.success(f"Profil '{new_prof_name}' sauvegardé !")
+                    else:
+                        st.error("Donnez un nom au profil.")
+
             st.markdown("---")
+            bt_opts = ["Nouveau lancement", "Marque etablie"]
+            bt_idx  = bt_opts.index(pval("brand_type", "Nouveau lancement")) if pval("brand_type","Nouveau lancement") in bt_opts else 0
             brand_type = st.radio(
                 "Type de marque",
-                ["Nouveau lancement", "Marque etablie"],
+                bt_opts,
+                index=bt_idx,
                 help="**Marque etablie** = marque avec notoriete existante (ex: Gymshark, Nike, Sephora). "
                      "Le scoring Trust sera adapte pour tenir compte de la reputation de marque.\n\n"
                      "**Nouveau lancement** = scoring strict 100% base sur les elements de la page.",
@@ -1521,8 +1903,16 @@ OPENAI_API_KEY = "sk-..."
             st.markdown("---")
             landing_url     = ""
             landing_content = ""
+
+            # Pre-remplir URL depuis re-audit
+            default_url = st.session_state.get("reaudit_url", "")
+            if default_url:
+                st.info(f"🔁 Re-audit : URL pré-remplie depuis l'historique")
+
             if mode in ("Funnel Only", "Full Risk"):
-                landing_url = st.text_input("URL Landing Page", placeholder="https://exemple.com/page")
+                landing_url = st.text_input("URL Landing Page",
+                                             value=default_url,
+                                             placeholder="https://exemple.com/page")
 
             ad_text = ""
             if mode in ("Ads Only", "Full Risk"):
@@ -1611,6 +2001,9 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                             "brand_type": brand_type, "page_type": detected_page_type}
                     save_history(result, meta)
                     st.session_state.loaded_result = None
+                    # Réinitialiser re-audit URL après utilisation
+                    if st.session_state.get("reaudit_url"):
+                        st.session_state.reaudit_url = ""
                     render_results(result)
 
                     # ── Mode Avant/Après ──────────────────────────────
@@ -1653,19 +2046,19 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                     st.markdown("---")
                     # ── Exports ───────────────────────────────────────
                     meta["version"] = APP_VERSION
-                    ecol1, ecol2 = st.columns(2)
                     fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
 
+                    ecol1, ecol2, ecol3 = st.columns(3)
                     with ecol1:
                         txt = export_txt(result, meta)
-                        st.download_button("📥 Exporter (.txt)", data=txt.encode("utf-8"),
+                        st.download_button("📥 Export .txt", data=txt.encode("utf-8"),
                                            file_name=fname_base+".txt", mime="text/plain",
                                            use_container_width=True)
                     with ecol2:
                         if PDF_AVAILABLE:
                             try:
                                 pdf_bytes = generate_pdf_report(result, meta)
-                                st.download_button("📄 Exporter rapport PDF",
+                                st.download_button("📄 Rapport PDF",
                                                    data=pdf_bytes,
                                                    file_name=fname_base+".pdf",
                                                    mime="application/pdf",
@@ -1675,6 +2068,28 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                                 st.caption(f"PDF indisponible : {pdf_err}")
                         else:
                             st.caption("PDF non disponible (reportlab manquant)")
+                    with ecol3:
+                        if PDF_AVAILABLE:
+                            with st.expander("👔 Rapport Client"):
+                                client_name_tab1 = st.text_input(
+                                    "Nom du client",
+                                    placeholder="Ex: Startup XYZ",
+                                    key="client_name_tab1"
+                                )
+                                if st.button("Générer rapport client", key="gen_client_pdf"):
+                                    try:
+                                        meta_c = {**meta, "client_name": client_name_tab1 or "",
+                                                  "report_mode": "client"}
+                                        pdf_c = generate_pdf_report(result, meta_c)
+                                        st.download_button(
+                                            "⬇️ Télécharger",
+                                            data=pdf_c,
+                                            file_name=fname_base+"_client.pdf",
+                                            mime="application/pdf",
+                                            key="dl_client_pdf",
+                                        )
+                                    except Exception as ce:
+                                        st.error(f"Erreur PDF client : {ce}")
                 except ValueError as e:
                     st.error(str(e))
                 except Exception as e:
@@ -1684,15 +2099,18 @@ Remplissez le contexte marche pour des recommandations personnalisees.
         render_comparison(api_key)
 
     with tab3:
-        render_checklist()
+        render_projects(api_key)
 
     with tab4:
-        render_history()
+        render_checklist()
 
     with tab5:
-        render_benchmark_tab()
+        render_history()
 
     with tab6:
+        render_benchmark_tab()
+
+    with tab7:
         render_changelog()
 
 
