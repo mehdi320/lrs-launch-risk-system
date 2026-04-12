@@ -124,33 +124,129 @@ def extract_page(url):
 
     return html[:2000], "Extraction faible."
 
+# ── DETECTION TYPE DE PAGE ────────────────────────────────────
+def detect_page_type(content: str, url: str = "") -> str:
+    """
+    Analyse le contenu scrape pour identifier le type de page.
+    Retourne une classification et des signaux detectes.
+    """
+    if not content:
+        return "Type inconnu (page vide)"
+
+    text = content.lower()
+    url_l = url.lower()
+
+    # Scores par type
+    scores = {
+        "Sales Page (landing page produit unique)": 0,
+        "Page Catalogue Ecom (plusieurs produits)": 0,
+        "Page SaaS / Logiciel": 0,
+        "Page d'accueil (homepage)": 0,
+        "Blog / Article": 0,
+        "Page Lead Gen (capture email)": 0,
+    }
+
+    # Signaux Sales Page
+    sales_signals = ["commander maintenant", "achetez maintenant", "buy now", "add to cart",
+                     "ajouter au panier", "100% satisfait", "garantie", "offre limitee",
+                     "bonus", "valeur totale", "ce que vous obtenez", "what you get",
+                     "rejoignez", "place limitee", "commandez", "order now", "testimonial"]
+    scores["Sales Page (landing page produit unique)"] += sum(2 for s in sales_signals if s in text)
+
+    # Signaux Catalogue Ecom
+    catalogue_signals = ["voir plus", "filtrer", "trier par", "collection", "nos produits",
+                         "shop all", "categories", "livraison offerte", "nouveau", "soldes",
+                         "rupture de stock", "ajouter au panier", "add to cart"]
+    scores["Page Catalogue Ecom (plusieurs produits)"] += sum(2 for s in catalogue_signals if s in text)
+    if any(x in url_l for x in ["/collections/", "/shop", "/boutique", "/products"]):
+        scores["Page Catalogue Ecom (plusieurs produits)"] += 4
+
+    # Signaux SaaS
+    saas_signals = ["essai gratuit", "free trial", "pricing", "tarifs", "plans", "fonctionnalites",
+                    "features", "integrations", "api", "dashboard", "abonnement mensuel",
+                    "per month", "par mois", "demo", "book a demo"]
+    scores["Page SaaS / Logiciel"] += sum(2 for s in saas_signals if s in text)
+
+    # Signaux Homepage
+    home_signals = ["notre mission", "qui sommes-nous", "about us", "decouvrez nos",
+                    "explore", "notre histoire", "we are", "bienvenue"]
+    scores["Page d'accueil (homepage)"] += sum(1 for s in home_signals if s in text)
+    if url_l.rstrip("/").count("/") <= 2:
+        scores["Page d'accueil (homepage)"] += 2
+
+    # Signaux Blog
+    blog_signals = ["min de lecture", "minute read", "publié le", "par l'auteur", "commentaires",
+                    "partager cet article", "share this", "lire la suite", "read more", "tags:"]
+    scores["Blog / Article"] += sum(2 for s in blog_signals if s in text)
+    if any(x in url_l for x in ["/blog", "/article", "/post", "/actualite"]):
+        scores["Blog / Article"] += 4
+
+    # Signaux Lead Gen
+    leadgen_signals = ["entrez votre email", "enter your email", "inscrivez-vous gratuitement",
+                       "telechargez", "download", "guide gratuit", "free guide", "webinar",
+                       "masterclass", "challenge", "liste d'attente", "waitlist"]
+    scores["Page Lead Gen (capture email)"] += sum(2 for s in leadgen_signals if s in text)
+
+    # Determiner le type dominant
+    best_type = max(scores, key=lambda k: scores[k])
+    best_score = scores[best_type]
+
+    if best_score < 2:
+        return "Type non determine avec certitude — traiter comme Sales Page standard"
+
+    # Confiance
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0
+    confidence = "haute" if best_score >= 6 and best_score > second_score * 1.5 else "moderee"
+
+    return f"{best_type} (confiance : {confidence})"
+
 # ── PROMPT SYSTEME ───────────────────────────────────────────
 SYSTEM_PROMPT_BASE = (
     "Tu es LRS - Launch Risk System V2, un auditeur paid traffic senior.\n"
     "LANGUE : Reponds TOUJOURS en francais. Tous les textes du JSON en francais.\n"
     "\n"
+    "CONTEXTE MARQUE :\n"
+    "BRAND_CONTEXT_PLACEHOLDER\n"
+    "\n"
     "CONTEXTE MARCHE :\n"
     "MARKET_CONTEXT_PLACEHOLDER\n"
+    "\n"
+    "TYPE DE PAGE DETECTE :\n"
+    "PAGE_TYPE_PLACEHOLDER\n"
     "\n"
     "METHODOLOGIE DE REFERENCE :\n"
     "METHODOLOGY_PLACEHOLDER\n"
     "\n"
-    "SCORING STRICT - note uniquement ce qui est PRESENT :\n"
+    "SCORING STRICT - note uniquement ce qui est PRESENT sur la page :\n"
     "HOOK /5 : 5=hook visceral+specifique+tension | 4=hook clair sans tension | 3=generique | 2=confus | 1=pas de hook | 0=aucun\n"
     "OFFER /5 : 5=stack+prix ancre+garantie near CTA+urgence | 4=offre claire sans stack | 3=offre basique | 2=confuse | 1=incomprehensible | 0=aucune\n"
-    "TRUST /5 : 5=50+ reviews+photos+garantie near CTA | 4=reviews sans photos | 3=reviews generiques | 2=peu de proof | 1=aucune review | 0=rien\n"
+    "TRUST /5 (adapte selon contexte marque ci-dessus) :\n"
+    "  - Marque etablie : 5=notoriete forte+preuves visibles | 4=notoriete reconnue OU preuves solides | 3=marque connue sans proof page | 2=peu de preuve + marque peu connue | 1=rien | 0=rien\n"
+    "  - Nouveau lancement : 5=50+ reviews+photos+garantie near CTA | 4=reviews sans photos | 3=reviews generiques | 2=peu de proof | 1=aucune review | 0=rien\n"
     "FRICTION /5 : 5=zero friction+CTA repete+message coherent | 4=legere friction | 3=friction moderee | 2=friction forte | 1=mismatch evident | 0=impossible\n"
     "\n"
     "DECISION : 0-9=Do NOT launch+High | 10-14=Test small budget+Moderate | 15-20=Ready to scale+Low\n"
     "\n"
     "IMPORTANT : Cite des elements REELS et PRECIS du contenu analyse. Ne jamais laisser de valeurs generiques.\n"
     "\n"
+    "Pour chaque action dans fix_plan, tu DOIS fournir :\n"
+    "- 'how_exactly' : les instructions concretes etape par etape (pas juste 'ajouter des avis' mais 'Ajouter un bloc screenshots de 6 avis clients avec prenom + resultat specifique, place directement sous le CTA')\n"
+    "- 'time_estimate' : estimation realiste du temps d'implementation\n"
+    "- Classifie chaque action : 'quick_win' (moins d'1h) ou 'long_term' (plus d'1h)\n"
+    "\n"
     "Retourne UNIQUEMENT ce JSON valide, rien d'autre :\n"
     "{\n"
-    '  "lrs": {"mode":"X","platform":"X","offer_type":"X","score_breakdown_5":{"hook":0,"offer":0,"trust":0,"friction_message_match":0}},\n'
+    '  "lrs": {"mode":"X","platform":"X","offer_type":"X","brand_type":"X","page_type":"X","score_breakdown_5":{"hook":0,"offer":0,"trust":0,"friction_message_match":0}},\n'
     '  "message_match": {"status":"N/A","score_explication":"X","mismatches":[],"fix":[]},\n'
     '  "why_this_score": {"hook_detail":"X","offer_detail":"X","trust_detail":"X","friction_detail":"X","top_3_reasons":["X","X","X"],"critical_gaps":["X"]},\n'
-    '  "fix_plan": {"priority_actions":[{"impact":"high","effort":"low","what":"X","how":"X","why":"X"}],"ab_tests":[{"hypothesis":"X","variant_a":"X","variant_b":"X","success_metric":"X"}]},\n'
+    '  "fix_plan": {\n'
+    '    "top_priority_action": {"what":"X","how_exactly":"X","time_estimate":"X","expected_impact":"X"},\n'
+    '    "quick_wins": [{"what":"X","how_exactly":"X","time_estimate":"<1h","expected_impact":"X"}],\n'
+    '    "long_term": [{"what":"X","how_exactly":"X","time_estimate":"X","expected_impact":"X"}],\n'
+    '    "priority_actions":[{"impact":"high","effort":"low","what":"X","how":"X","how_exactly":"X","why":"X","time_estimate":"X","category":"quick_win"}],\n'
+    '    "ab_tests":[{"hypothesis":"X","variant_a":"X","variant_b":"X","success_metric":"X"}]\n'
+    '  },\n'
     '  "rewrite": {"headline":"X","subheadline":"X","hero_bullets":["X","X","X"],"cta_primary":"X","cta_secondary":"X","proof_block":"X","offer_stack":["X","X"],"guarantee":"X","faq_objections":["X","X"]},\n'
     '  "ads": {"angles":[{"angle":"X","rationale":"X"}],"hooks":[{"hook":"X","platform":"Meta","type":"question"}],"variants":[{"platform":"Meta","primary_text":"X","headline":"X","cta":"X"}],"script_ugc_20s":"X"}\n'
     "}"
@@ -194,7 +290,8 @@ def build_methodology_context(mode, offer_type):
 
     return "\n\n".join(parts)
 
-def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model):
+def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+              brand_type="Nouveau lancement", page_type="Non determine"):
     if OpenAI is None:
         raise ValueError("Librairie openai non installee. Relancez : pip install openai")
 
@@ -211,16 +308,40 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     # Charger la methodologie
     methodology_context = build_methodology_context(mode, offer_type)
 
+    # Construire le contexte marque (Bug 1)
+    if brand_type == "Marque etablie":
+        brand_context = (
+            "TYPE : Marque etablie (notoriete existante, historique client, presence reseaux sociaux).\n"
+            "INSTRUCTION SCORING TRUST : Cette marque possede une notoriete qui ne s'affiche pas toujours "
+            "sur la page. Prends en compte la reputation de marque dans le score Trust. Une marque etablie "
+            "avec peu de preuves explicites sur la page peut quand meme scorer 3/5 si le contexte marque "
+            "est clair. Ne pas penaliser la trust uniquement sur l'absence de reviews si c'est une marque connue.\n"
+            "INSTRUCTION HOOK/OFFER : Les marques etablies peuvent avoir des hooks moins agressifs car "
+            "leur notoriete porte une partie du message. Evalue le hook dans ce contexte."
+        )
+    else:
+        brand_context = (
+            "TYPE : Nouveau lancement (pas de notoriete etablie, cold traffic pur).\n"
+            "INSTRUCTION SCORING TRUST : Scoring strict — un nouveau lancement doit prouver sa valeur "
+            "uniquement via les elements visibles sur la page (reviews, photos, garantie, nombre d'acheteurs). "
+            "Aucune notoriete implicite a prendre en compte.\n"
+            "INSTRUCTION HOOK/OFFER : Sois exigeant — un nouveau lancement doit compenser l'absence de "
+            "notoriete par un hook et une offre exceptionnels."
+        )
+
     system = (
         SYSTEM_PROMPT_BASE
+        .replace("BRAND_CONTEXT_PLACEHOLDER", brand_context)
         .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
+        .replace("PAGE_TYPE_PLACEHOLDER", page_type)
         .replace("METHODOLOGY_PLACEHOLDER", methodology_context or "Non disponible.")
     )
 
     # Construire le prompt utilisateur
     user_parts = [
         "AUDIT LRS -- " + mode.upper(),
-        "Plateforme : " + platform + " | Offre : " + offer_type,
+        "Plateforme : " + platform + " | Offre : " + offer_type + " | Marque : " + brand_type,
+        "Type de page detecte : " + page_type,
         "",
     ]
 
@@ -263,7 +384,7 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
                 {"role": "user",   "content": user_prompt},
             ],
             temperature=0.15,
-            max_tokens=3500,
+            max_tokens=4500,
             response_format={"type": "json_object"},
         )
     except Exception as e:
@@ -350,6 +471,7 @@ def export_txt(result, meta):
     rw  = result.get("rewrite", {})
     ads = result.get("ads", {})
 
+    lrs_meta = result.get("lrs", {})
     L = ["=" * 60,
          "LRS - LAUNCH RISK SYSTEM V" + APP_VERSION,
          "Audit du " + meta.get("timestamp", ""),
@@ -357,6 +479,8 @@ def export_txt(result, meta):
          "MODE         : " + meta.get("mode", ""),
          "PLATEFORME   : " + meta.get("platform", ""),
          "TYPE D'OFFRE : " + meta.get("offer_type", ""),
+         "TYPE MARQUE  : " + lrs_meta.get("brand_type", meta.get("brand_type", "N/A")),
+         "TYPE PAGE    : " + lrs_meta.get("page_type", meta.get("page_type", "N/A")),
          "URL          : " + meta.get("url", "N/A"),
          "", "-" * 40, "SCORE", "-" * 40,
          "Total   : " + str(c.get("score", 0)) + " / 20",
@@ -399,11 +523,39 @@ def export_txt(result, meta):
             L.append("  -> " + f)
 
     L += ["", "-" * 40, "PLAN D'ACTION", "-" * 40]
+
+    top_prio = fp.get("top_priority_action", {})
+    if top_prio and top_prio.get("what"):
+        L += [">>> ACTION PRIORITAIRE #1 <<<",
+              "  Quoi         : " + top_prio.get("what", ""),
+              "  Comment exact : " + top_prio.get("how_exactly", ""),
+              "  Impact attendu: " + top_prio.get("expected_impact", ""),
+              "  Temps estime  : " + top_prio.get("time_estimate", ""), ""]
+
+    quick_wins = fp.get("quick_wins", [])
+    if quick_wins:
+        L += ["--- QUICK WINS (moins d'1h) ---"]
+        for qw in quick_wins:
+            L += ["[QUICK WIN] " + qw.get("what", ""),
+                  "  Comment : " + qw.get("how_exactly", ""),
+                  "  Impact  : " + qw.get("expected_impact", ""),
+                  "  Temps   : " + qw.get("time_estimate", "<1h"), ""]
+
+    long_term = fp.get("long_term", [])
+    if long_term:
+        L += ["--- AMELIORATIONS LONG TERME ---"]
+        for lt in long_term:
+            L += ["[LONG TERME] " + lt.get("what", ""),
+                  "  Comment : " + lt.get("how_exactly", ""),
+                  "  Impact  : " + lt.get("expected_impact", ""),
+                  "  Temps   : " + lt.get("time_estimate", ""), ""]
+
     for a in fp.get("priority_actions", []):
         L += ["[" + a.get("impact", "").upper() + " | " + a.get("effort", "").upper() + "]",
               "  Quoi    : " + a.get("what", ""),
-              "  Comment : " + a.get("how", ""),
-              "  Pourquoi: " + a.get("why", ""), ""]
+              "  Comment : " + a.get("how_exactly", a.get("how", "")),
+              "  Pourquoi: " + a.get("why", ""),
+              "  Temps   : " + a.get("time_estimate", ""), ""]
 
     L += ["-" * 40, "REWRITE", "-" * 40]
     if rw.get("headline"):    L.append("Headline : " + rw["headline"])
@@ -510,6 +662,11 @@ def render_results(result):
     st.markdown("---")
     st.subheader("Resultat LRS")
 
+    # Infos meta depuis lrs
+    lrs_meta = result.get("lrs", {})
+    brand_type_display = lrs_meta.get("brand_type", "")
+    page_type_display  = lrs_meta.get("page_type", "")
+
     col1, col2, col3, col4 = st.columns(4)
     with col1: st.metric("Score Global", str(score) + " / 20")
     with col2:
@@ -520,6 +677,12 @@ def render_results(result):
     with col4:
         mc = MATCH_COLORS.get(ms, "#888")
         st.markdown("**Message Match**<br><span style='font-size:1.4em;color:" + mc + ";font-weight:800'>" + ms + "</span>", unsafe_allow_html=True)
+
+    if brand_type_display or page_type_display:
+        info_parts = []
+        if brand_type_display: info_parts.append("🏷️ **" + brand_type_display + "**")
+        if page_type_display:  info_parts.append("🔍 " + page_type_display)
+        st.caption("  |  ".join(info_parts))
 
     st.markdown("---")
     st.subheader("Score Breakdown")
@@ -584,19 +747,62 @@ def render_results(result):
 
     st.markdown("---")
     st.subheader("Plan d'Action Priorise")
-    for a in fp.get("priority_actions", []):
-        imp   = a.get("impact", "medium")
-        icon2 = "🔴" if imp == "high" else "🟡" if imp == "medium" else "🟢"
-        with st.expander(icon2 + " " + a.get("what", "") + " [" + imp.upper() + " | " + a.get("effort", "").upper() + "]"):
-            st.markdown("**Comment :** " + a.get("how", ""))
-            st.markdown("**Pourquoi :** " + a.get("why", ""))
+
+    # TOP PRIORITY ACTION — Bug 3
+    top_prio = fp.get("top_priority_action", {})
+    if top_prio and top_prio.get("what"):
+        st.markdown("#### 🎯 Action Prioritaire #1")
+        st.error(
+            "**" + top_prio.get("what", "") + "**\n\n"
+            "**Comment concrètement :** " + top_prio.get("how_exactly", "") + "\n\n"
+            "**Impact attendu :** " + top_prio.get("expected_impact", "") + "  |  "
+            "**Temps estimé :** " + top_prio.get("time_estimate", "")
+        )
+
+    # QUICK WINS — Bug 3
+    quick_wins = fp.get("quick_wins", [])
+    if quick_wins:
+        st.markdown("#### ⚡ Quick Wins (moins d'1h)")
+        for qw in quick_wins:
+            with st.expander("⚡ " + qw.get("what", "")):
+                st.markdown("**Comment concrètement :** " + qw.get("how_exactly", ""))
+                st.markdown("**Impact attendu :** " + qw.get("expected_impact", ""))
+                st.markdown("**Temps estimé :** `" + qw.get("time_estimate", "<1h") + "`")
+
+    # LONG TERM — Bug 3
+    long_term = fp.get("long_term", [])
+    if long_term:
+        st.markdown("#### 🏗️ Améliorations Long Terme")
+        for lt in long_term:
+            with st.expander("🏗️ " + lt.get("what", "")):
+                st.markdown("**Comment concrètement :** " + lt.get("how_exactly", ""))
+                st.markdown("**Impact attendu :** " + lt.get("expected_impact", ""))
+                st.markdown("**Temps estimé :** `" + lt.get("time_estimate", "") + "`")
+
+    # PRIORITY ACTIONS (fallback + A/B tests)
+    priority_actions = fp.get("priority_actions", [])
+    if priority_actions:
+        st.markdown("#### 📋 Toutes les Actions")
+        for a in priority_actions:
+            imp   = a.get("impact", "medium")
+            icon2 = "🔴" if imp == "high" else "🟡" if imp == "medium" else "🟢"
+            cat   = a.get("category", "")
+            cat_label = " ⚡" if cat == "quick_win" else " 🏗️" if cat == "long_term" else ""
+            with st.expander(icon2 + cat_label + " " + a.get("what", "") + " [" + imp.upper() + " | " + a.get("effort", "").upper() + "]"):
+                how_exactly = a.get("how_exactly", a.get("how", ""))
+                st.markdown("**Comment concrètement :** " + how_exactly)
+                if a.get("how") and a.get("how_exactly") and a["how"] != a["how_exactly"]:
+                    st.markdown("**Résumé :** " + a.get("how", ""))
+                st.markdown("**Pourquoi :** " + a.get("why", ""))
+                if a.get("time_estimate"):
+                    st.markdown("**Temps estimé :** `" + a["time_estimate"] + "`")
 
     for t in fp.get("ab_tests", []):
-        with st.expander("Test : " + t.get("hypothesis", "")):
+        with st.expander("🧪 Test A/B : " + t.get("hypothesis", "")):
             ta, tb = st.columns(2)
             with ta: st.markdown("**A :** " + t.get("variant_a", ""))
             with tb: st.markdown("**B :** " + t.get("variant_b", ""))
-            st.markdown("**Metrique :** " + t.get("success_metric", ""))
+            st.markdown("**Métrique :** " + t.get("success_metric", ""))
 
     st.markdown("---")
     st.subheader("Rewrite Recommandations")
@@ -785,6 +991,16 @@ OPENAI_API_KEY = "sk-..."
             ])
 
             st.markdown("---")
+            brand_type = st.radio(
+                "Type de marque",
+                ["Nouveau lancement", "Marque etablie"],
+                help="**Marque etablie** = marque avec notoriete existante (ex: Gymshark, Nike, Sephora). "
+                     "Le scoring Trust sera adapte pour tenir compte de la reputation de marque.\n\n"
+                     "**Nouveau lancement** = scoring strict 100% base sur les elements de la page.",
+                horizontal=True,
+            )
+
+            st.markdown("---")
             landing_url     = ""
             landing_content = ""
             if mode in ("Funnel Only", "Full Risk"):
@@ -827,6 +1043,7 @@ Remplissez le contexte marche pour des recommandations personnalisees.
             for err in errors: st.error(err)
             if errors: st.stop()
 
+            detected_page_type = "Non applicable (mode Ads Only)"
             if mode in ("Funnel Only", "Full Risk") and landing_url.strip():
                 with st.spinner("Extraction du contenu de la page..."):
                     landing_content, status = extract_page(landing_url.strip())
@@ -834,14 +1051,20 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                 if not landing_content:
                     st.error("Impossible d'extraire le contenu. Verifiez l'URL.")
                     st.stop()
+                # Bug 2 : auto-detection du type de page
+                detected_page_type = detect_page_type(landing_content, landing_url.strip())
+                st.caption("🔍 Type de page detecte : **" + detected_page_type + "**")
 
             with st.spinner("Analyse LRS en cours... (10-30 secondes)"):
                 try:
                     result = run_audit(mode, platform, offer_type, landing_content,
-                                       ad_text, market_context, model)
+                                       ad_text, market_context, model,
+                                       brand_type=brand_type,
+                                       page_type=detected_page_type)
                     ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
                     meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
-                            "url": landing_url, "timestamp": ts}
+                            "url": landing_url, "timestamp": ts,
+                            "brand_type": brand_type, "page_type": detected_page_type}
                     save_history(result, meta)
                     st.session_state.loaded_result = None
                     render_results(result)
