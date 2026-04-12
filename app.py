@@ -1,4 +1,4 @@
-# LRS - Launch Risk System V2.2
+# LRS - Launch Risk System V2.3
 # Paid Traffic Pre-Launch Audit Tool
 # Built with Streamlit + OpenAI
 
@@ -8,6 +8,7 @@ import trafilatura
 import json
 import os
 import datetime
+import time
 from html.parser import HTMLParser
 
 try:
@@ -21,7 +22,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.2"
+APP_VERSION    = "2.3"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -58,10 +59,43 @@ def get_decision(score):
     if score <= 14: return "Test small budget", "Moderate"
     return "Ready to scale", "Low"
 
+# ── HISTORIQUE PERSISTANT ────────────────────────────────────
+HISTORY_FILE = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
+
+def load_history_file():
+    """Charge l'historique depuis le fichier JSON (persistant entre sessions)."""
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Nettoyer les entrées sans champ 'result' (compatibilité)
+                return [e for e in data if isinstance(e, dict)]
+    except Exception:
+        pass
+    return []
+
+def write_history_file(history):
+    """Sauvegarde l'historique dans le fichier JSON."""
+    try:
+        # Ne pas sérialiser la clé _c (données calculées côté code, pas JSON-safe à 100%)
+        clean = []
+        for entry in history:
+            e = {k: v for k, v in entry.items() if k != "result"}
+            # Garder result mais sans _c
+            if "result" in entry:
+                r = {k: v for k, v in entry["result"].items() if k != "_c"}
+                e["result"] = r
+            clean.append(e)
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(clean[:50], f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # Silencieux si pas de droits d'écriture (Streamlit Cloud)
+
 # ── SESSION STATE ────────────────────────────────────────────
 def init_session():
     if "audit_history" not in st.session_state:
-        st.session_state.audit_history = []
+        # Charger depuis fichier au démarrage
+        st.session_state.audit_history = load_history_file()
     if "loaded_result" not in st.session_state:
         st.session_state.loaded_result = None
 
@@ -69,8 +103,10 @@ def save_history(result, meta):
     entry = {**meta, "score": result.get("_c", {}).get("score", 0),
              "decision": result.get("_c", {}).get("decision", ""), "result": result}
     st.session_state.audit_history.insert(0, entry)
-    if len(st.session_state.audit_history) > 20:
-        st.session_state.audit_history = st.session_state.audit_history[:20]
+    if len(st.session_state.audit_history) > 50:
+        st.session_state.audit_history = st.session_state.audit_history[:50]
+    # Persister sur disque
+    write_history_file(st.session_state.audit_history)
 
 # ── CHARGEMENT TXT ───────────────────────────────────────────
 def load_txt(path):
@@ -84,6 +120,33 @@ def load_txt(path):
 def clamp(text, n=MAX_PAGE_CHARS):
     return text[:n] + "[TRONQUE]" if len(text) > n else text
 
+def detect_language(text: str) -> str:
+    """Détection simple de la langue dominante de la page (fr / en / autre)."""
+    sample = text[:3000].lower()
+    fr_words = ["le ", "la ", "les ", "de ", "du ", "des ", "un ", "une ", "est ", "sont ",
+                "avec ", "pour ", "dans ", "vous ", "nous ", "votre ", "notre "]
+    en_words = ["the ", "and ", "with ", "for ", "your ", "our ", "this ", "that ", "from ",
+                "you ", "are ", "have ", "will ", "more ", "can ", "all ", "free "]
+    fr_count = sum(sample.count(w) for w in fr_words)
+    en_count = sum(sample.count(w) for w in en_words)
+    if fr_count == 0 and en_count == 0:
+        return "autre"
+    if en_count > fr_count * 1.5:
+        return "en"
+    if fr_count > en_count * 1.5:
+        return "fr"
+    return "mixte"
+
+def check_js_heavy(html: str, extracted: str) -> bool:
+    """Retourne True si la page semble être une SPA / rendue en JavaScript."""
+    if len(extracted) < 400 and len(html) > 5000:
+        return True
+    js_signals = ["__next", "__nuxt", "react-root", "ng-version", "data-reactroot",
+                  "window.__INITIAL_STATE__", "window.__PRELOADED_STATE__", "_app.js",
+                  "chunk.js", "bundle.js"]
+    html_low = html[:10000].lower()
+    return sum(1 for s in js_signals if s in html_low) >= 2
+
 def extract_page(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -96,13 +159,15 @@ def extract_page(url):
         r.raise_for_status()
         html = r.text
     except requests.exceptions.ConnectionError:
-        return "", "Impossible de se connecter."
+        return "", "Impossible de se connecter.", False
     except requests.exceptions.Timeout:
-        return "", "Timeout."
+        return "", "Timeout.", False
     except Exception as e:
-        return "", str(e)
+        return "", str(e), False
 
     extracted = trafilatura.extract(html, include_links=False, include_images=False, no_fallback=False)
+    is_js = check_js_heavy(html, extracted or "")
+
     if extracted and len(extracted.strip()) > 200:
         # Priorité above-the-fold : mettre les 2000 premiers caractères en tête
         full = extracted.strip()
@@ -112,7 +177,7 @@ def extract_page(url):
             "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
             ("\n\n=== SUITE DE LA PAGE ===\n" + rest if rest else "")
         )
-        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)"
+        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)", is_js
 
     class HP(HTMLParser):
         def __init__(self):
@@ -131,11 +196,11 @@ def extract_page(url):
         p = HP(); p.feed(html)
         fb = "\n".join(p.parts)
         if len(fb) > 100:
-            return clamp(fb), f"Extraction partielle ({len(fb[:MAX_PAGE_CHARS])} caracteres)"
+            return clamp(fb), f"Extraction partielle ({len(fb[:MAX_PAGE_CHARS])} caracteres)", is_js
     except Exception:
         pass
 
-    return html[:2000], "Extraction faible."
+    return html[:2000], "Extraction faible.", True  # Si on arrive ici c'est probablement JS
 
 # ── DETECTION TYPE DE PAGE ────────────────────────────────────
 def detect_page_type(content: str, url: str = "") -> str:
@@ -287,6 +352,17 @@ SYSTEM_PROMPT_BASE = (
     "\n"
     "DECISION : 0-9=Do NOT launch+High | 10-14=Test small budget+Moderate | 15-20=Ready to scale+Low\n"
     "\n"
+    "EXEMPLES DE CALIBRAGE (few-shots) :\n"
+    "Hook 5/5 : 'Perdez 5kg en 30 jours sans regime ou on vous rembourse' → specifique, timeframe, garantie, tension\n"
+    "Hook 3/5 : 'Decouvrez notre programme minceur' → generique, pas de specifique, pas de tension\n"
+    "Hook 1/5 : 'Bienvenue sur notre site' → aucun hook\n"
+    "Offer 5/5 : Prix 97€ barre 197€ + 3 bonus chiffres + garantie 30j visible sous CTA + 'Il reste 7 places'\n"
+    "Offer 3/5 : Prix visible, livraison mentionnee, pas de garantie claire, pas d'urgence\n"
+    "Trust 5/5 (nouveau) : 847 avis + photos clients + 4.8/5 + temoignages avec resultats chiffres sous CTA\n"
+    "Trust 4/5 (etablie) : Gymshark / Nike = notoriete forte, meme sans reviews explicites sur la page\n"
+    "Friction 5/5 : 1 seul CTA, repete 3x, pas de menu, checkout en 2 clics, message coherent pub→page\n"
+    "Friction 2/5 : Menu nav complet, plusieurs CTAs concurrents, page longue sans repetition du CTA\n"
+    "\n"
     "IMPORTANT : Cite des elements REELS et PRECIS du contenu analyse. Ne jamais laisser de valeurs generiques.\n"
     "\n"
     "Pour chaque action dans fix_plan, tu DOIS fournir :\n"
@@ -350,7 +426,7 @@ def build_methodology_context(mode, offer_type):
     return "\n\n".join(parts)
 
 def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
-              brand_type="Nouveau lancement", page_type="Non determine"):
+              brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
     if OpenAI is None:
         raise ValueError("Librairie openai non installee. Relancez : pip install openai")
 
@@ -448,11 +524,26 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
             "Applique le scoring standard landing page de conversion paid traffic."
         )
 
+    # Instruction langue (détection automatique)
+    if page_lang == "en":
+        lang_instruction = (
+            "LANGUE DE LA PAGE : Anglais.\n"
+            "La page analysée est en anglais. Analyse les éléments en anglais tel quels (hook, CTA, etc.) "
+            "et cite-les dans leur langue originale dans les détails. Tes réponses JSON restent en français."
+        )
+    elif page_lang == "mixte":
+        lang_instruction = (
+            "LANGUE DE LA PAGE : Mixte (français + anglais).\n"
+            "Cite les éléments dans leur langue originale. Tes réponses JSON restent en français."
+        )
+    else:
+        lang_instruction = "LANGUE DE LA PAGE : Français."
+
     system = (
         SYSTEM_PROMPT_BASE
         .replace("BRAND_CONTEXT_PLACEHOLDER", brand_context)
         .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
-        .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + page_type_instructions)
+        .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + page_type_instructions + "\n\n" + lang_instruction)
         .replace("METHODOLOGY_PLACEHOLDER", methodology_context or "Non disponible.")
     )
 
@@ -460,7 +551,7 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     user_parts = [
         "AUDIT LRS -- " + mode.upper(),
         "Plateforme : " + platform + " | Offre : " + offer_type + " | Marque : " + brand_type,
-        "Type de page detecte : " + page_type,
+        "Type de page detecte : " + page_type + " | Langue : " + page_lang,
         "",
     ]
 
@@ -495,26 +586,39 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS -- cite le contenu analyse."]
     user_prompt = "\n".join(user_parts)
 
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=0.15,
-            max_tokens=4500,
-            response_format={"type": "json_object"},
-        )
-    except Exception as e:
-        err = str(e)
-        if "api_key" in err.lower() or "authentication" in err.lower():
-            raise ValueError("Cle API invalide ou expiree. Verifiez votre OPENAI_API_KEY.")
-        if "rate_limit" in err.lower():
-            raise ValueError("Rate limit OpenAI atteint. Attendez quelques secondes et relancez.")
-        if "quota" in err.lower() or "billing" in err.lower():
-            raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
-        raise ValueError("Erreur OpenAI : " + err)
+    # Retry automatique : 3 tentatives avec backoff
+    response = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature=0.15,
+                max_tokens=4500,
+                response_format={"type": "json_object"},
+            )
+            break  # Succès
+        except Exception as e:
+            last_err = str(e)
+            if "api_key" in last_err.lower() or "authentication" in last_err.lower():
+                raise ValueError("Cle API invalide ou expiree. Verifiez votre OPENAI_API_KEY.")
+            if "quota" in last_err.lower() or "billing" in last_err.lower():
+                raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
+            if attempt < 2:
+                wait = 2 ** attempt  # 1s, 2s
+                time.sleep(wait)
+            else:
+                # 3ème échec
+                if "rate_limit" in last_err.lower():
+                    raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
+                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+
+    if response is None:
+        raise ValueError("Erreur OpenAI : pas de reponse apres 3 tentatives.")
 
     raw = response.choices[0].message.content or ""
 
@@ -779,23 +883,45 @@ def render_results(result):
     ms    = mm.get("status", "N/A")
 
     st.markdown("---")
-    st.subheader("Resultat LRS")
+    st.subheader("Résultat LRS")
 
     # Infos meta depuis lrs
     lrs_meta = result.get("lrs", {})
     brand_type_display = lrs_meta.get("brand_type", "")
     page_type_display  = lrs_meta.get("page_type", "")
 
+    # ── Bandeau score principal ──────────────────────────────
+    score_color = RISK_COLORS.get(risk, "#888")
+    bar_filled  = round(score / 20 * 10)
+    bar_visual  = "█" * bar_filled + "░" * (10 - bar_filled)
+    dec_emoji   = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
+
+    st.markdown(
+        f"""<div style='background:linear-gradient(135deg,#1a1a2e,#16213e);
+            border-left:6px solid {score_color};border-radius:12px;
+            padding:20px 28px;margin-bottom:16px'>
+          <div style='display:flex;align-items:center;gap:32px;flex-wrap:wrap'>
+            <div>
+              <div style='color:#aaa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px'>Score LRS</div>
+              <div style='color:{score_color};font-size:3.2em;font-weight:900;line-height:1'>{score}<span style='font-size:0.45em;color:#888'> / 20</span></div>
+              <div style='color:#555;font-family:monospace;font-size:1.1em'>{bar_visual}</div>
+            </div>
+            <div style='flex:1;min-width:200px'>
+              <div style='color:{score_color};font-size:1.6em;font-weight:800'>{dec_emoji} {dec}</div>
+              <div style='color:#aaa;font-size:0.95em;margin-top:4px'>Risk : <strong style='color:{score_color}'>{risk}</strong></div>
+            </div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
     col1, col2, col3, col4 = st.columns(4)
-    with col1: st.metric("Score Global", str(score) + " / 20")
-    with col2:
-        rc = RISK_COLORS.get(risk, "#888")
-        st.markdown("**Risk Level**<br><span style='font-size:1.4em;color:" + rc + ";font-weight:800'>" + risk + "</span>", unsafe_allow_html=True)
-    with col3:
-        st.markdown("**Launch Decision**<br><span style='font-weight:700'>" + dec + "</span>", unsafe_allow_html=True)
-    with col4:
+    with col1:
         mc = MATCH_COLORS.get(ms, "#888")
-        st.markdown("**Message Match**<br><span style='font-size:1.4em;color:" + mc + ";font-weight:800'>" + ms + "</span>", unsafe_allow_html=True)
+        st.markdown("**Message Match**<br><span style='font-size:1.3em;color:" + mc + ";font-weight:800'>" + ms + "</span>", unsafe_allow_html=True)
+    with col2: st.metric("Hook",    str(c.get("hook",    0)) + " / 5")
+    with col3: st.metric("Offer",   str(c.get("offer",   0)) + " / 5")
+    with col4: st.metric("Trust",   str(c.get("trust",   0)) + " / 5")
 
     if brand_type_display or page_type_display:
         info_parts = []
@@ -1185,16 +1311,37 @@ Remplissez le contexte marche pour des recommandations personnalisees.
             if errors: st.stop()
 
             detected_page_type = "Non applicable (mode Ads Only)"
+            page_lang          = "fr"
             if mode in ("Funnel Only", "Full Risk") and landing_url.strip():
                 with st.spinner("Extraction du contenu de la page..."):
-                    landing_content, status = extract_page(landing_url.strip())
+                    landing_content, status, is_js_page = extract_page(landing_url.strip())
                 st.info(status)
                 if not landing_content:
                     st.error("Impossible d'extraire le contenu. Verifiez l'URL.")
                     st.stop()
-                # Bug 2 : auto-detection du type de page
+
+                # Warning page JavaScript
+                if is_js_page:
+                    st.warning(
+                        "⚠️ **Page JavaScript détectée** — Cette page semble être rendue dynamiquement "
+                        "(React, Next.js, Shopify Hydrogen, etc.). LRS n'a peut-être pas lu tout le contenu visible. "
+                        "Le score pourrait être **sous-estimé**. Pour un audit plus précis, copie-colle "
+                        "manuellement le texte de la page dans le champ ci-dessous."
+                    )
+                elif len(landing_content) < 500:
+                    st.warning(
+                        "⚠️ **Contenu extrait très court** (" + str(len(landing_content)) + " caractères). "
+                        "La page n'a peut-être pas été lue correctement. Vérifiez l'aperçu ci-dessous."
+                    )
+
+                # Détection langue
+                page_lang = detect_language(landing_content)
+
+                # Auto-detection du type de page
                 detected_page_type = detect_page_type(landing_content, landing_url.strip())
-                st.caption("🔍 Type de page detecte : **" + detected_page_type + "**")
+                lang_label = {"fr": "🇫🇷 Français", "en": "🇬🇧 Anglais", "mixte": "🌐 Mixte", "autre": "❓"}.get(page_lang, "")
+                st.caption("🔍 **" + detected_page_type + "**  |  " + lang_label)
+
                 # Aperçu du contenu scrapé
                 with st.expander("👁️ Aperçu du contenu extrait (debug)", expanded=False):
                     st.caption("Ce texte est exactement ce que LRS analyse. S'il est vide ou incohérent, le score sera moins fiable.")
@@ -1205,7 +1352,8 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                     result = run_audit(mode, platform, offer_type, landing_content,
                                        ad_text, market_context, model,
                                        brand_type=brand_type,
-                                       page_type=detected_page_type)
+                                       page_type=detected_page_type,
+                                       page_lang=page_lang)
                     ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
                     meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
                             "url": landing_url, "timestamp": ts,
