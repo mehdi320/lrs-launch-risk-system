@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.6"
+APP_VERSION    = "2.8"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -39,44 +39,83 @@ st.set_page_config(
 )
 
 # ── CSS GLOBAL ───────────────────────────────────────────────
-def inject_css():
-    st.markdown("""
+_DARK_VARS = """
+    --bg-base: #07071a;
+    --bg-card: #0f0f1a;
+    --bg-card2: #1a1a2e;
+    --bg-input: #0f0f1a;
+    --border: #1e1e3a;
+    --border2: #2a2a4a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #aaa;
+    --text-muted: #666;
+    --tab-bg: #0f0f1a;
+    --tab-active: #1a1a2e;
+    --expander-bg: #0f0f1a;
+    --expander-content: #0a0a14;
+    --caption-color: #666;
+    --streamlit-bg: #07071a;
+"""
+_LIGHT_VARS = """
+    --bg-base: #f4f4f8;
+    --bg-card: #ffffff;
+    --bg-card2: #f0f0f8;
+    --bg-input: #ffffff;
+    --border: #dde0ef;
+    --border2: #c8cbdf;
+    --text-primary: #1a1a2e;
+    --text-secondary: #444;
+    --text-muted: #888;
+    --tab-bg: #e8e8f0;
+    --tab-active: #ffffff;
+    --expander-bg: #ffffff;
+    --expander-content: #f8f8fc;
+    --caption-color: #888;
+    --streamlit-bg: #f4f4f8;
+"""
+
+_CSS_TEMPLATE = """
 <style>
-/* ── Base & Typography ── */
+:root { VARS_PLACEHOLDER }
+
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-color: var(--bg-base) !important;
+    color: var(--text-primary) !important;
 }
-h1, h2, h3 { letter-spacing: -0.3px; }
+h1, h2, h3 { letter-spacing: -0.3px; color: var(--text-primary) !important; }
 
-/* ── Hide Streamlit chrome ── */
 #MainMenu, footer, header { visibility: hidden; }
 .block-container {
     padding-top: 1.5rem !important;
     padding-bottom: 2rem !important;
     max-width: 1100px !important;
+    background-color: var(--bg-base) !important;
 }
+.main { background-color: var(--bg-base) !important; }
+.stApp { background-color: var(--bg-base) !important; }
 
 /* ── Tabs ── */
 .stTabs [data-baseweb="tab-list"] {
     gap: 4px;
-    background: #0f0f1a;
+    background: var(--tab-bg);
     padding: 6px 8px;
     border-radius: 12px;
-    border: 1px solid #1e1e3a;
+    border: 1px solid var(--border);
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px;
     padding: 8px 18px;
     font-size: 0.85rem;
     font-weight: 500;
-    color: #888 !important;
+    color: var(--text-muted) !important;
     background: transparent !important;
     border: none !important;
 }
 .stTabs [aria-selected="true"] {
-    background: #1a1a2e !important;
-    color: #fff !important;
-    border: 1px solid #2a2a4a !important;
+    background: var(--tab-active) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border2) !important;
 }
 
 /* ── Buttons ── */
@@ -85,7 +124,9 @@ h1, h2, h3 { letter-spacing: -0.3px; }
     font-weight: 600 !important;
     font-size: 0.88rem !important;
     transition: all 0.15s ease !important;
-    border: 1px solid #2a2a4a !important;
+    border: 1px solid var(--border2) !important;
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
 }
 .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
@@ -102,10 +143,10 @@ h1, h2, h3 { letter-spacing: -0.3px; }
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
 .stSelectbox > div > div {
-    background: #0f0f1a !important;
-    border: 1px solid #2a2a4a !important;
+    background: var(--bg-input) !important;
+    border: 1px solid var(--border2) !important;
     border-radius: 8px !important;
-    color: #e0e0e0 !important;
+    color: var(--text-primary) !important;
     font-size: 0.88rem !important;
 }
 .stTextInput > div > div > input:focus,
@@ -119,36 +160,36 @@ h1, h2, h3 { letter-spacing: -0.3px; }
 .stRadio label, .stFileUploader label {
     font-size: 0.82rem !important;
     font-weight: 500 !important;
-    color: #999 !important;
+    color: var(--text-secondary) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
 }
 
 /* ── Expanders ── */
 .streamlit-expanderHeader {
-    background: #0f0f1a !important;
-    border: 1px solid #1e1e3a !important;
+    background: var(--expander-bg) !important;
+    border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     font-size: 0.88rem !important;
     font-weight: 500 !important;
-    color: #ccc !important;
+    color: var(--text-secondary) !important;
 }
 .streamlit-expanderContent {
-    background: #0a0a14 !important;
-    border: 1px solid #1e1e3a !important;
+    background: var(--expander-content) !important;
+    border: 1px solid var(--border) !important;
     border-top: none !important;
     border-radius: 0 0 8px 8px !important;
 }
 
 /* ── Métriques ── */
 [data-testid="metric-container"] {
-    background: #0f0f1a;
-    border: 1px solid #1e1e3a;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
 }
 [data-testid="metric-container"] label {
-    color: #888 !important;
+    color: var(--text-secondary) !important;
     font-size: 0.75rem !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
@@ -156,12 +197,12 @@ h1, h2, h3 { letter-spacing: -0.3px; }
 [data-testid="metric-container"] [data-testid="stMetricValue"] {
     font-size: 1.6rem !important;
     font-weight: 700 !important;
-    color: #fff !important;
+    color: var(--text-primary) !important;
 }
 
 /* ── Dataframes ── */
 [data-testid="stDataFrame"] {
-    border: 1px solid #1e1e3a;
+    border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -180,28 +221,33 @@ h1, h2, h3 { letter-spacing: -0.3px; }
 
 /* ── Download button ── */
 .stDownloadButton > button {
-    background: #0f0f1a !important;
-    border: 1px solid #2a2a4a !important;
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border2) !important;
     border-radius: 8px !important;
-    color: #ccc !important;
+    color: var(--text-secondary) !important;
     font-size: 0.85rem !important;
     font-weight: 500 !important;
 }
 .stDownloadButton > button:hover {
     border-color: #6366f1 !important;
-    color: #fff !important;
+    color: var(--text-primary) !important;
 }
 
 /* ── Divider ── */
-hr { border-color: #1e1e3a !important; margin: 1rem 0 !important; }
+hr { border-color: var(--border) !important; margin: 1rem 0 !important; }
 
 /* ── Caption ── */
-.stCaption { color: #666 !important; font-size: 0.78rem !important; }
+.stCaption { color: var(--caption-color) !important; font-size: 0.78rem !important; }
 
 /* ── Sidebar (cachée par défaut) ── */
 [data-testid="stSidebar"] { display: none; }
 </style>
-""", unsafe_allow_html=True)
+"""
+
+def inject_css(light_mode=False):
+    vars_block = _LIGHT_VARS if light_mode else _DARK_VARS
+    css = _CSS_TEMPLATE.replace("VARS_PLACEHOLDER", vars_block)
+    st.markdown(css, unsafe_allow_html=True)
 
 # ── CVR BENCHMARKS ──────────────────────────────────────────
 CVR_BENCHMARKS = {
@@ -367,6 +413,10 @@ def init_session():
         st.session_state.bulk_results = []
     if "score_alerts" not in st.session_state:
         st.session_state.score_alerts = []
+    if "auto_reaudit_idx" not in st.session_state:
+        st.session_state.auto_reaudit_idx = None
+    if "light_mode" not in st.session_state:
+        st.session_state.light_mode = False
 
 def save_history(result, meta):
     entry = {**meta, "score": result.get("_c", {}).get("score", 0),
@@ -1060,6 +1110,229 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     }
     return result
 
+
+# ── HELPERS : parse JSON + compute scores (partagés par run_audit et run_audit_stream) ──
+def _parse_audit_json(raw_text, mode, platform, offer_type):
+    """Parse le JSON brut retourné par le LLM et compute les scores."""
+    clean = raw_text.strip()
+    for m2 in ["```json", "```"]:
+        clean = clean.replace(m2, "")
+    clean = clean.strip()
+    if clean and clean[0] == '"':
+        clean = "{" + clean
+    if clean and not clean.rstrip().endswith("}"):
+        clean = clean.rstrip() + "}"
+    s, e2 = clean.find("{"), clean.rfind("}") + 1
+    if s != -1 and e2 > s:
+        clean = clean[s:e2]
+
+    result = None
+    for attempt in [clean, clean + "}", clean + "}}"]:
+        try:
+            result = json.loads(attempt)
+            break
+        except json.JSONDecodeError:
+            continue
+
+    if result is None:
+        result = {
+            "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
+                    "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
+            "message_match": {"status": "N/A", "score_explication": "Analyse incomplete", "mismatches": [], "fix": []},
+            "why_this_score": {"hook_detail": "Analyse incomplete", "offer_detail": "Analyse incomplete",
+                               "trust_detail": "Analyse incomplete", "friction_detail": "Analyse incomplete",
+                               "top_3_reasons": ["Analyse incomplete"], "critical_gaps": []},
+            "fix_plan": {"priority_actions": [], "ab_tests": []},
+            "rewrite": {"headline": "", "subheadline": "", "hero_bullets": [], "cta_primary": "",
+                        "cta_secondary": "", "proof_block": "", "offer_stack": [], "guarantee": "", "faq_objections": []},
+            "ads": {"angles": [], "hooks": [], "variants": [], "script_ugc_20s": ""},
+        }
+
+    bd       = result.get("lrs", {}).get("score_breakdown_5", {})
+    hook     = max(0, min(5, int(bd.get("hook", 0))))
+    offer    = max(0, min(5, int(bd.get("offer", 0))))
+    trust    = max(0, min(5, int(bd.get("trust", 0))))
+    friction = max(0, min(5, int(bd.get("friction_message_match", 0))))
+    score    = hook + offer + trust + friction
+    decision, risk = get_decision(score)
+    tier     = get_tier(score)
+    bench    = CVR_BENCHMARKS.get(offer_type, CVR_BENCHMARKS["Digital product"])
+    cvr_cur, cvr_fix, cvr_up = bench[tier]
+    result["_c"] = {
+        "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
+        "decision": decision, "risk": risk,
+        "cvr_cur": cvr_cur, "cvr_fix": cvr_fix, "cvr_up": cvr_up,
+    }
+    return result
+
+
+# ── STREAMING AUDIT ───────────────────────────────────────────
+STREAM_STAGES = [
+    (0,    "📡 Connexion au modèle IA..."),
+    (250,  "🔍 Lecture des patterns de conversion..."),
+    (800,  "📊 Scoring Hook · Offer · Trust · Friction..."),
+    (1800, "🎯 Génération du plan d'action prioritaire..."),
+    (3000, "✍️  Rédaction rewrites & angles pub..."),
+]
+
+def run_audit_stream(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+                     brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr",
+                     status_stage=None, status_tokens=None):
+    """
+    Identique à run_audit() mais utilise stream=True pour afficher la progression
+    en temps réel dans le status Streamlit.
+    status_stage  : st.empty() pour afficher l'étape courante
+    status_tokens : st.empty() pour afficher le compteur de tokens
+    """
+    if OpenAI is None:
+        raise ValueError("Librairie openai non installee.")
+    api_key = get_api_key()
+    if not api_key:
+        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans .env ou Streamlit Secrets.")
+
+    client = OpenAI(api_key=api_key)
+    methodology_context = build_methodology_context(mode, offer_type)
+
+    # ── Brand context ──
+    if brand_type == "Marque etablie":
+        brand_context = (
+            "TYPE : Marque etablie (notoriete existante).\n"
+            "INSTRUCTION SCORING TRUST : prend en compte la reputation de marque. "
+            "Ne pas penaliser trust uniquement sur absence de reviews si marque connue.\n"
+            "INSTRUCTION HOOK/OFFER : marques etablies peuvent avoir hooks moins agressifs."
+        )
+    else:
+        brand_context = (
+            "TYPE : Nouveau lancement (cold traffic pur).\n"
+            "INSTRUCTION SCORING TRUST : Scoring strict — prouver valeur uniquement via elements visibles.\n"
+            "INSTRUCTION HOOK/OFFER : Sois exigeant — doit compenser absence de notoriete."
+        )
+
+    # ── Page type instructions ──
+    pt_lower = page_type.lower()
+    if "produit ecom" in pt_lower or "fiche produit" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING PAGE PRODUIT ECOM : note 3/5 si titre clair, "
+                                   "ne pas sur-penaliser navigation. Propose améliorations réalistes pour page produit.")
+    elif "catalogue" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING CATALOGUE : HOOK 1-2/5 normal, FRICTION moderee normale. "
+                                   "Recommande landing page dédiée pour paid traffic.")
+    elif "homepage" in pt_lower or "accueil" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING HOMEPAGE : scores bas Hook/Friction normaux. "
+                                   "INSISTE sur nécessité landing page dédiée pour paid traffic.")
+    elif "saas" in pt_lower or "logiciel" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING SAAS : HOOK = clarté proposition valeur, "
+                                   "OFFER = pricing/free trial, TRUST = logos/témoignages, FRICTION = form simple.")
+    elif "lead gen" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING LEAD GEN : OFFER = valeur perçue lead magnet, "
+                                   "FRICTION = formulaire simple (1 champ = 5/5).")
+    elif "blog" in pt_lower or "article" in pt_lower:
+        page_type_instructions = ("ADAPTATION SCORING BLOG : interprete scores dans contexte éditorial. "
+                                   "Propose amélioration CTAs article.")
+    else:
+        page_type_instructions = "Applique le scoring standard landing page de conversion paid traffic."
+
+    if page_lang == "en":
+        lang_instruction = "LANGUE : Anglais. Cite éléments en anglais, réponses JSON en français."
+    elif page_lang == "mixte":
+        lang_instruction = "LANGUE : Mixte FR+EN. Cite dans langue originale, JSON en français."
+    else:
+        lang_instruction = "LANGUE DE LA PAGE : Français."
+
+    system = (
+        SYSTEM_PROMPT_BASE
+        .replace("BRAND_CONTEXT_PLACEHOLDER", brand_context)
+        .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
+        .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + page_type_instructions + "\n\n" + lang_instruction)
+        .replace("METHODOLOGY_PLACEHOLDER", methodology_context or "Non disponible.")
+    )
+
+    user_parts = [
+        "AUDIT LRS -- " + mode.upper(),
+        "Plateforme : " + platform + " | Offre : " + offer_type + " | Marque : " + brand_type,
+        "Type de page detecte : " + page_type + " | Langue : " + page_lang, "",
+    ]
+    if mode == "Funnel Only" and landing_content:
+        user_parts += ["CONTENU LANDING PAGE :", landing_content, "",
+                       "INSTRUCTIONS : Audite cette landing page. friction_message_match = friction interne. "
+                       "message_match.status = N/A. Cite elements PRECIS."]
+    elif mode == "Ads Only" and ad_text:
+        user_parts += ["PUBLICITE A AUDITER :", ad_text, "",
+                       "INSTRUCTIONS : Audite cette pub. friction_message_match = coherence interne. "
+                       "message_match.status = N/A. Cite elements PRECIS."]
+    elif mode == "Full Risk":
+        if landing_content:
+            user_parts += ["CONTENU LANDING PAGE :", landing_content, ""]
+        if ad_text:
+            user_parts += ["PUBLICITE :", ad_text, ""]
+        user_parts += ["INSTRUCTIONS : Audit COMPLET. friction_message_match = coherence pub+landing. "
+                       "message_match : cite texte EXACT. Pour chaque fix, donne exemple exact."]
+    user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS."]
+    user_prompt = "\n".join(user_parts)
+
+    # ── Streaming call ──
+    def _update_stage(n_chars):
+        if status_stage is None:
+            return
+        for i, (threshold, msg) in reversed(list(enumerate(STREAM_STAGES))):
+            if n_chars >= threshold:
+                status_stage.markdown(
+                    f"<div style='padding:8px 12px;background:#1a1a2e;border-radius:6px;"
+                    f"border-left:3px solid #6366f1;color:#ccc;font-size:0.88em'>{msg}</div>",
+                    unsafe_allow_html=True
+                )
+                break
+
+    full_text = ""
+    last_err = None
+    _update_stage(0)
+
+    for attempt in range(3):
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature=0.15,
+                max_tokens=4500,
+                response_format={"type": "json_object"},
+                stream=True,
+            )
+            full_text = ""
+            prev_stage = -1
+            for chunk in stream:
+                delta = (chunk.choices[0].delta.content or "") if chunk.choices else ""
+                full_text += delta
+                n = len(full_text)
+                # Update stage when crossing a threshold
+                cur_stage = sum(1 for t, _ in STREAM_STAGES if n >= t) - 1
+                if cur_stage > prev_stage:
+                    prev_stage = cur_stage
+                    _update_stage(n)
+                # Update token counter every ~200 chars
+                if status_tokens and n % 200 < len(delta) + 1:
+                    status_tokens.caption(f"⏳ {n} caractères reçus...")
+            break  # success
+        except Exception as e:
+            last_err = str(e)
+            if "api_key" in last_err.lower() or "authentication" in last_err.lower():
+                raise ValueError("Cle API invalide ou expiree.")
+            if "quota" in last_err.lower() or "billing" in last_err.lower():
+                raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                if "rate_limit" in last_err.lower():
+                    raise ValueError("Rate limit OpenAI apres 3 tentatives. Attendez et relancez.")
+                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+
+    if status_tokens:
+        status_tokens.caption(f"✅ {len(full_text)} caractères — parsing JSON...")
+
+    return _parse_audit_json(full_text, mode, platform, offer_type)
+
+
 # ── EXPORT TXT ───────────────────────────────────────────────
 def export_txt(result, meta):
     c   = result.get("_c", {})
@@ -1184,6 +1457,195 @@ def export_txt(result, meta):
 
     L += ["", "=" * 60, "LRS V" + APP_VERSION, "=" * 60]
     return "\n".join(L)
+
+
+# ── EMAIL NOTIFICATIONS ──────────────────────────────────────
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders as email_encoders
+
+def _get_smtp_config():
+    """Lit la config SMTP depuis les secrets Streamlit ou les variables d'env."""
+    try:
+        cfg = st.secrets.get("smtp", {})
+        host     = cfg.get("host",     os.getenv("SMTP_HOST", ""))
+        port     = int(cfg.get("port", os.getenv("SMTP_PORT", 587)))
+        user     = cfg.get("user",     os.getenv("SMTP_USER", ""))
+        password = cfg.get("password", os.getenv("SMTP_PASSWORD", ""))
+        return host, port, user, password
+    except Exception:
+        return (os.getenv("SMTP_HOST",""), int(os.getenv("SMTP_PORT",587)),
+                os.getenv("SMTP_USER",""), os.getenv("SMTP_PASSWORD",""))
+
+def send_audit_email(result, meta, to_email, pdf_bytes=None):
+    """
+    Envoie le résumé de l'audit par email.
+    Configure SMTP dans Streamlit Secrets : [smtp] host/port/user/password
+    ou dans les variables d'environnement SMTP_HOST/PORT/USER/PASSWORD.
+    """
+    host, port, user, password = _get_smtp_config()
+    if not host or not user:
+        raise ValueError(
+            "SMTP non configuré. Ajoutez [smtp] host/port/user/password dans "
+            "Streamlit Secrets ou SMTP_HOST/PORT/USER/PASSWORD dans .env"
+        )
+
+    c   = result.get("_c", {})
+    score    = c.get("score", 0)
+    decision = c.get("decision", "")
+    url      = meta.get("url", meta.get("offer_type", ""))
+    ts       = meta.get("timestamp", "")
+    mode_m   = meta.get("mode", "")
+
+    score_color = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+
+    fp  = result.get("fix_plan", {})
+    top = fp.get("top_priority_action", {})
+    qws = fp.get("quick_wins", [])[:3]
+
+    qws_html = "".join(
+        f"<li style='margin:4px 0;color:#555'>{qw.get('what','')}</li>"
+        for qw in qws
+    )
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 LRS™ — Résultat d'Audit</div>
+    <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{ts} · {mode_m}</div>
+  </div>
+
+  <div style='padding:24px 28px'>
+    <div style='font-size:0.85rem;color:#888;margin-bottom:4px'>URL / Offre</div>
+    <div style='font-size:0.95rem;color:#1a1a2e;margin-bottom:20px'>{url}</div>
+
+    <div style='background:#f8f8fc;border-radius:10px;padding:20px;text-align:center;margin-bottom:20px'>
+      <div style='color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:1px'>Score LRS</div>
+      <div style='color:{score_color};font-size:3.5rem;font-weight:900;line-height:1'>{score}</div>
+      <div style='color:#aaa;font-size:0.9rem'>/20</div>
+      <div style='color:{score_color};font-size:1.1rem;font-weight:700;margin-top:8px'>{decision}</div>
+    </div>
+
+    {"<div style='margin-bottom:20px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>🎯 Action Prioritaire</div><div style='background:#fff0f0;border-left:3px solid #FF4444;border-radius:6px;padding:12px 16px;color:#333'>" + top.get("what","") + "</div></div>" if top and top.get("what") else ""}
+
+    {"<div><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>⚡ Quick Wins</div><ul style='padding-left:18px;margin:0'>" + qws_html + "</ul></div>" if qws_html else ""}
+  </div>
+
+  <div style='background:#f4f4f8;padding:14px 28px;text-align:center'>
+    <span style='color:#aaa;font-size:0.78rem'>LRS™ — Launch Risk System V{APP_VERSION}</span>
+  </div>
+</div>
+</body></html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"🚦 LRS Audit — Score {score}/20 — {decision} — {str(url)[:40]}"
+    msg["From"]    = user
+    msg["To"]      = to_email
+    msg.attach(MIMEText(html_body, "html"))
+
+    if pdf_bytes:
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(pdf_bytes)
+        email_encoders.encode_base64(part)
+        safe_url = (url or "audit").replace("https://","").replace("http://","").replace("/","_")[:40]
+        fname_pdf = f"LRS_{ts.replace('/','').replace(':','').replace(' ','_')}_{safe_url}.pdf"
+        part.add_header("Content-Disposition", f"attachment; filename={fname_pdf}")
+        msg.attach(part)
+
+    with smtplib.SMTP(host, port) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(user, password)
+        server.sendmail(user, to_email, msg.as_string())
+
+
+def build_share_text(result, meta):
+    """Génère un résumé court et lisible à copier-coller / partager."""
+    c   = result.get("_c", {})
+    why = result.get("why_this_score", {})
+    fp  = result.get("fix_plan", {})
+    score    = c.get("score", 0)
+    decision = c.get("decision", "")
+    url      = meta.get("url", meta.get("offer_type", "Audit"))
+    ts       = meta.get("timestamp", "")
+    mode_m   = meta.get("mode", "")
+
+    top3 = why.get("top_3_reasons", [])[:3]
+    top  = fp.get("top_priority_action", {})
+    qws  = fp.get("quick_wins", [])[:3]
+
+    lines = [
+        "═══ 🚦 LRS™ — RÉSULTAT D'AUDIT ═══",
+        f"📅 {ts}  |  {mode_m}",
+        f"🔗 {url}",
+        "",
+        f"{'🟢' if score >= 15 else '🟡' if score >= 10 else '🔴'} Score : {score}/20 — {decision}",
+        f"   Hook {c.get('hook',0)}/5  ·  Offer {c.get('offer',0)}/5  ·  Trust {c.get('trust',0)}/5  ·  Friction {c.get('friction',0)}/5",
+        "",
+    ]
+    if top3:
+        lines.append("📋 Raisons du score :")
+        for r in top3:
+            lines.append(f"   • {r}")
+        lines.append("")
+    if top and top.get("what"):
+        lines.append(f"🎯 Action #1 : {top.get('what','')}")
+        lines.append("")
+    if qws:
+        lines.append("⚡ Quick Wins :")
+        for qw in qws:
+            lines.append(f"   • {qw.get('what','')}")
+        lines.append("")
+    lines.append(f"Généré par LRS™ V{APP_VERSION} — Launch Risk System")
+    return "\n".join(lines)
+
+
+def render_share_widget(result, meta, key_prefix="share"):
+    """Widget 'Partager' — affiche un résumé formaté copier-coller."""
+    with st.expander("🔗 Partager — résumé rapide"):
+        share_txt = build_share_text(result, meta)
+        st.code(share_txt, language=None)
+        st.caption("Sélectionnez tout (Ctrl+A) puis copiez — ou utilisez le bouton copier en haut à droite du bloc.")
+
+
+def render_email_widget(result, meta, key_prefix="email"):
+    """Widget compact pour envoyer le rapport par email — utilisable partout."""
+    host, _, user, _ = _get_smtp_config()
+    smtp_ready = bool(host and user)
+
+    with st.expander("📧 Envoyer par email"):
+        if not smtp_ready:
+            st.warning(
+                "SMTP non configuré. Ajoutez dans Streamlit Secrets :\n"
+                "```toml\n[smtp]\nhost = \"smtp.gmail.com\"\nport = 587\n"
+                "user = \"votre@email.com\"\npassword = \"votre_app_password\"\n```"
+            )
+            st.caption("Gmail : activez l'authentification 2FA puis créez un 'App Password' dans votre compte Google.")
+        else:
+            to_addr = st.text_input("Adresse email destinataire",
+                                     placeholder="client@exemple.com",
+                                     key=f"{key_prefix}_to")
+            send_pdf = st.checkbox("Joindre le rapport PDF", value=True, key=f"{key_prefix}_pdf")
+            if st.button("📤 Envoyer", key=f"{key_prefix}_send", type="primary"):
+                if not to_addr or "@" not in to_addr:
+                    st.error("Adresse email invalide.")
+                else:
+                    with st.spinner("Envoi en cours..."):
+                        try:
+                            pdf_b = None
+                            if send_pdf and PDF_AVAILABLE:
+                                pdf_b = generate_pdf_report(result, {**meta, "version": APP_VERSION})
+                            send_audit_email(result, meta, to_addr, pdf_bytes=pdf_b)
+                            st.success(f"✅ Email envoyé à {to_addr}")
+                        except Exception as email_err:
+                            st.error(f"Erreur envoi : {email_err}")
+
 
 # ── CHECKLIST ────────────────────────────────────────────────
 CHECKLIST = [
@@ -1440,6 +1902,91 @@ def render_results(result):
             with tb: st.markdown("**B :** " + t.get("variant_b",""))
             st.caption("Métrique : " + t.get("success_metric",""))
 
+    # ── 6b. SCORE PREDICTION ─────────────────────────────────
+    st.markdown("---")
+    st.markdown("#### 🔮 Score Prediction — Si tu appliques le plan")
+
+    # Gains réalistes par critère (cible = 4/5, réalisable à ~65%)
+    h_gap = max(0, 4 - c["hook"])
+    o_gap = max(0, 4 - c["offer"])
+    t_gap = max(0, 4 - c["trust"])
+    f_gap = max(0, 4 - c["friction"])
+    h_gain = round(h_gap * 0.65)
+    o_gain = round(o_gap * 0.65)
+    t_gain = round(t_gap * 0.65)
+    f_gain = round(f_gap * 0.65)
+    total_gain    = h_gain + o_gain + t_gain + f_gain
+    pred_score    = min(20, c["score"] + total_gain)
+    pred_decision, _ = get_decision(pred_score)
+    pred_color    = "#FF4444" if pred_score <= 9 else "#FF8C00" if pred_score <= 14 else "#22c55e"
+    n_actions     = (1 if top_prio and top_prio.get("what") else 0) + len(quick_wins) + min(len(long_term), 2)
+
+    # Card prediction
+    gain_items = []
+    if h_gain > 0: gain_items.append(f"Hook +{h_gain}")
+    if o_gain > 0: gain_items.append(f"Offer +{o_gain}")
+    if t_gain > 0: gain_items.append(f"Trust +{t_gain}")
+    if f_gain > 0: gain_items.append(f"Friction +{f_gain}")
+
+    gain_str = " · ".join(gain_items) if gain_items else "Score déjà optimal"
+    pred_col1, pred_col2 = st.columns([2, 1])
+
+    with pred_col1:
+        pred_bars_html = ""
+        crit_list = [
+            ("Hook",     c["hook"],     h_gain, "#6366f1"),
+            ("Offer",    c["offer"],    o_gain, "#22c55e"),
+            ("Trust",    c["trust"],    t_gain, "#FF8C00"),
+            ("Friction", c["friction"], f_gain, "#06b6d4"),
+        ]
+        for lbl, cur_v, gain_v, col_v in crit_list:
+            cur_pct  = cur_v / 5 * 100
+            gain_pct = min(100, (cur_v + gain_v) / 5 * 100)
+            pred_bars_html += f"""
+            <div style='margin-bottom:12px'>
+              <div style='display:flex;justify-content:space-between;margin-bottom:4px'>
+                <span style='color:#aaa;font-size:0.83em'>{lbl}</span>
+                <span style='font-size:0.83em'>
+                  <span style='color:#555'>{cur_v}/5</span>
+                  {"&nbsp;→&nbsp;<span style='color:" + col_v + ";font-weight:700'>" + str(cur_v + gain_v) + "/5</span>" if gain_v > 0 else ""}
+                </span>
+              </div>
+              <div style='background:#1a1a2e;border-radius:4px;height:6px;position:relative'>
+                <div style='background:#2a2a4a;width:{gain_pct:.0f}%;height:6px;border-radius:4px;position:absolute'></div>
+                <div style='background:{col_v};width:{cur_pct:.0f}%;height:6px;border-radius:4px;position:absolute'></div>
+              </div>
+            </div>"""
+        st.markdown(
+            f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:10px;padding:16px 20px'>
+              <div style='color:#888;font-size:0.75em;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px'>
+                Potentiel d'amélioration — en appliquant {n_actions} action{"s" if n_actions > 1 else ""}
+              </div>
+              {pred_bars_html}
+              <div style='color:#555;font-size:0.78em;margin-top:8px'>{gain_str}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+    with pred_col2:
+        st.markdown(
+            f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;
+                border-top:4px solid {pred_color};border-radius:10px;
+                padding:20px;text-align:center;height:100%'>
+              <div style='color:#555;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Score actuel</div>
+              <div style='color:#888;font-size:2em;font-weight:700'>{c["score"]}<span style='color:#333;font-size:0.4em'>/20</span></div>
+              <div style='color:#555;font-size:1.3em;margin:6px 0'>↓</div>
+              <div style='color:#555;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Score estimé</div>
+              <div style='color:{pred_color};font-size:2.6em;font-weight:900;line-height:1'>
+                {pred_score}<span style='color:#333;font-size:0.4em'>/20</span>
+              </div>
+              <div style='color:{pred_color};font-size:0.85em;font-weight:600;margin-top:4px'>{pred_decision}</div>
+              <div style='color:#22c55e;font-size:0.88em;font-weight:700;margin-top:8px'>
+                {"+" + str(total_gain) + " pts potentiels" if total_gain > 0 else "🏆 Déjà au maximum"}
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
     # ── 7. REWRITE + ADS ─────────────────────────────────────
     st.markdown("---")
     rw_col, ads_col = st.columns(2)
@@ -1616,14 +2163,20 @@ def render_history():
                     st.session_state.loaded_result = entry["result"]
                     st.rerun()
             with btn2:
-                if url_entry and st.button("🔁 Re-auditer cette URL", key="reaudit_" + str(i)):
-                    st.session_state.reaudit_url = url_entry
+                can_reaudit = bool(url_entry or entry.get("ad_text"))
+                if can_reaudit and st.button("🚀 Re-audit 1-clic", key="reaudit1c_" + str(i),
+                                              help="Relance l'audit avec exactement les mêmes paramètres — sans rien retaper",
+                                              type="primary"):
+                    st.session_state.auto_reaudit_idx = i
                     st.rerun()
             with btn3:
-                pass  # placeholder
+                if st.button("🔗 Pré-remplir formulaire", key="reaudit_" + str(i),
+                              help="Ouvre le formulaire pré-rempli dans l'onglet Audit"):
+                    st.session_state.reaudit_url = url_entry
+                    st.rerun()
 
             fname_base = "LRS_" + entry["timestamp"].replace("/","-").replace(":","-").replace(" ","_")
-            ecA, ecB, ecC = st.columns(3)
+            ecA, ecB, ecC, ecD = st.columns(4)
             with ecA:
                 txt = export_txt(entry["result"], entry)
                 st.download_button("📥 .txt", data=txt.encode("utf-8"),
@@ -1634,7 +2187,7 @@ def render_history():
                     try:
                         entry_meta = {**entry, "version": APP_VERSION}
                         pdf_b = generate_pdf_report(entry["result"], entry_meta)
-                        st.download_button("📄 PDF Audit", data=pdf_b,
+                        st.download_button("📄 PDF", data=pdf_b,
                                            file_name=fname_base+".pdf", mime="application/pdf",
                                            key="exppdf_"+str(i))
                     except Exception:
@@ -1642,17 +2195,102 @@ def render_history():
             with ecC:
                 if PDF_AVAILABLE:
                     try:
-                        client_name = st.text_input("Nom client (optionnel)", key="client_" + str(i),
+                        client_name = st.text_input("Nom client", key="client_" + str(i),
                                                      placeholder="Ex: Startup XYZ", label_visibility="collapsed")
                         entry_meta_c = {**entry, "version": APP_VERSION,
                                         "client_name": client_name or "",
                                         "report_mode": "client"}
                         pdf_c = generate_pdf_report(entry["result"], entry_meta_c)
-                        st.download_button("👔 Rapport Client", data=pdf_c,
+                        st.download_button("👔 Client", data=pdf_c,
                                            file_name=fname_base+"_client.pdf", mime="application/pdf",
                                            key="exppdf_client_"+str(i))
                     except Exception:
                         pass
+            with ecD:
+                render_email_widget(entry["result"], entry, key_prefix=f"hist_email_{i}")
+            # Share below the 4-col row
+            share_s1, share_s2 = st.columns(2)
+            with share_s1:
+                render_share_widget(entry["result"], entry, key_prefix=f"hist_share_{i}")
+            with share_s2:
+                pass
+
+        # ── Re-audit 1-clic inline ────────────────────────────
+        if st.session_state.get("auto_reaudit_idx") == i:
+            st.markdown("---")
+            st.markdown("#### 🚀 Re-audit en cours...")
+            with st.status("🧠 LRS ré-analyse votre page...", expanded=True) as _ra_status:
+                _ra_stage  = st.empty()
+                _ra_tokens = st.empty()
+                try:
+                    ra_mode    = entry.get("mode", "Funnel Only")
+                    ra_url     = entry.get("url", "")
+                    ra_plat    = entry.get("platform", "Meta")
+                    ra_offer   = entry.get("offer_type", "Digital product")
+                    ra_brand   = entry.get("brand_type", "Nouveau lancement")
+                    ra_model   = entry.get("model", "gpt-4o-mini")
+                    ra_ad      = entry.get("ad_text", "")
+                    ra_mkt     = entry.get("market_context", "")
+
+                    ra_content = ""
+                    if ra_mode in ("Funnel Only", "Full Risk") and ra_url:
+                        _ra_stage.markdown(
+                            "<div style='padding:8px 12px;background:#1a1a2e;border-radius:6px;"
+                            "border-left:3px solid #6366f1;color:#ccc;font-size:0.88em'>"
+                            "🔍 Extraction de la page...</div>",
+                            unsafe_allow_html=True
+                        )
+                        ra_content, _, _ = extract_page(ra_url)
+
+                    ra_pt = detect_page_type(ra_content, ra_url) if ra_content else entry.get("page_type", "Landing page")
+                    ra_pl = detect_language(ra_content) if ra_content else "fr"
+
+                    new_result = run_audit_stream(
+                        ra_mode, ra_plat, ra_offer, ra_content, ra_ad, ra_mkt,
+                        ra_model, brand_type=ra_brand, page_type=ra_pt, page_lang=ra_pl,
+                        status_stage=_ra_stage, status_tokens=_ra_tokens,
+                    )
+                    ts_ra = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                    new_meta = {
+                        "mode": ra_mode, "platform": ra_plat, "offer_type": ra_offer,
+                        "url": ra_url, "timestamp": ts_ra, "brand_type": ra_brand,
+                        "page_type": ra_pt, "ad_text": ra_ad, "model": ra_model,
+                        "market_context": ra_mkt,
+                    }
+                    save_history(new_result, new_meta)
+                    st.session_state.auto_reaudit_idx = None
+                    _ra_status.update(label="✅ Re-audit terminé !", state="complete", expanded=False)
+                    _ra_tokens.empty()
+
+                    # Score delta immédiat
+                    prev_score = entry.get("score", 0)
+                    new_score  = new_result.get("_c", {}).get("score", 0)
+                    delta_ra   = new_score - prev_score
+                    dc_ra      = "#22c55e" if delta_ra > 0 else "#FF4444" if delta_ra < 0 else "#888"
+                    sign_ra    = "+" if delta_ra > 0 else ""
+                    st.markdown(
+                        f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:10px;
+                            padding:16px 20px;margin:12px 0;display:flex;gap:24px;align-items:center'>
+                          <div>
+                            <div style='color:#888;font-size:0.75em;text-transform:uppercase'>Avant</div>
+                            <div style='color:#aaa;font-size:1.8em;font-weight:700'>{prev_score}<span style='color:#555;font-size:0.5em'>/20</span></div>
+                          </div>
+                          <div style='color:#555;font-size:1.5em'>→</div>
+                          <div>
+                            <div style='color:#888;font-size:0.75em;text-transform:uppercase'>Après</div>
+                            <div style='color:{dc_ra};font-size:1.8em;font-weight:700'>{new_score}<span style='color:#555;font-size:0.5em'>/20</span></div>
+                          </div>
+                          <div style='color:{dc_ra};font-size:1.4em;font-weight:800'>{sign_ra}{delta_ra} pts</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+                    render_results(new_result)
+
+                except Exception as e_ra:
+                    _ra_status.update(label="❌ Erreur", state="error", expanded=False)
+                    st.error(f"Erreur re-audit : {e_ra}")
+                    st.session_state.auto_reaudit_idx = None
+
 
 # ── ONGLET MONITORING (Schedule + Alertes + Score Trend) ─────
 def render_monitoring(api_key):
@@ -2530,28 +3168,40 @@ def check_access():
 
 
 def main():
-    inject_css()
     init_session()
+    light_mode = st.session_state.get("light_mode", False)
+    inject_css(light_mode=light_mode)
 
     if not check_access():
         st.stop()
 
     # ── Header ───────────────────────────────────────────────
-    st.markdown(
-        f"""<div style='display:flex;align-items:center;justify-content:space-between;
-            margin-bottom:1.2rem;padding-bottom:0.8rem;border-bottom:1px solid #1e1e3a'>
-          <div>
-            <span style='font-size:1.6rem;font-weight:800;color:#fff;letter-spacing:-0.5px'>
-              🚦 LRS™
-            </span>
-            <span style='color:#555;font-size:0.85rem;margin-left:10px'>
-              Launch Risk System · V{APP_VERSION}
-            </span>
-          </div>
-          <span style='color:#444;font-size:0.78rem'>Paid Traffic Pre-Launch Audit</span>
-        </div>""",
-        unsafe_allow_html=True,
-    )
+    hdr_l, hdr_r = st.columns([5, 1])
+    border_col = "#dde0ef" if light_mode else "#1e1e3a"
+    txt_col    = "#1a1a2e" if light_mode else "#fff"
+    sub_col    = "#888"    if light_mode else "#555"
+    tag_col    = "#aaa"    if light_mode else "#444"
+    with hdr_l:
+        st.markdown(
+            f"""<div style='display:flex;align-items:center;
+                margin-bottom:1.2rem;padding-bottom:0.8rem;border-bottom:1px solid {border_col}'>
+              <div>
+                <span style='font-size:1.6rem;font-weight:800;color:{txt_col};letter-spacing:-0.5px'>
+                  🚦 LRS™
+                </span>
+                <span style='color:{sub_col};font-size:0.85rem;margin-left:10px'>
+                  Launch Risk System · V{APP_VERSION}
+                </span>
+              </div>
+              <span style='color:{tag_col};font-size:0.78rem;margin-left:auto'>Paid Traffic Pre-Launch Audit</span>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    with hdr_r:
+        toggle_label = "☀️ Light" if not light_mode else "🌙 Dark"
+        if st.button(toggle_label, key="theme_toggle", help="Basculer mode clair/sombre"):
+            st.session_state.light_mode = not light_mode
+            st.rerun()
 
     # ── API Key check ────────────────────────────────────────
     api_key = get_api_key()
@@ -2783,112 +3433,110 @@ def main():
                     st.caption("Ce texte est exactement ce que LRS analyse. S'il est vide ou incohérent, le score sera moins fiable.")
                     st.text(landing_content[:1500] + ("..." if len(landing_content) > 1500 else ""))
 
-            with st.spinner("Analyse LRS en cours... (10-30 secondes)"):
+            result = None
+            with st.status("🧠 LRS analyse votre page...", expanded=True) as _audit_status:
+                _stage_ph  = st.empty()
+                _tokens_ph = st.empty()
                 try:
-                    result = run_audit(mode, platform, offer_type, landing_content,
-                                       ad_text, market_context, model,
-                                       brand_type=brand_type,
-                                       page_type=detected_page_type,
-                                       page_lang=page_lang)
-                    ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-                    meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
-                            "url": landing_url, "timestamp": ts,
-                            "brand_type": brand_type, "page_type": detected_page_type}
-                    save_history(result, meta)
-                    st.session_state.loaded_result = None
-                    # Réinitialiser re-audit URL après utilisation
-                    if st.session_state.get("reaudit_url"):
-                        st.session_state.reaudit_url = ""
-                    render_results(result)
+                    result = run_audit_stream(
+                        mode, platform, offer_type, landing_content,
+                        ad_text, market_context, model,
+                        brand_type=brand_type,
+                        page_type=detected_page_type,
+                        page_lang=page_lang,
+                        status_stage=_stage_ph,
+                        status_tokens=_tokens_ph,
+                    )
+                    _audit_status.update(label="✅ Analyse complète !", state="complete", expanded=False)
+                except Exception as _e:
+                    _audit_status.update(label="❌ Erreur d'analyse", state="error", expanded=False)
+                    st.error(str(_e))
+                    st.stop()
 
-                    # ── Mode Avant/Après ──────────────────────────────
-                    history = st.session_state.audit_history
-                    if len(history) >= 2:
-                        with st.expander("📊 Comparer avec un audit précédent (Avant/Après)", expanded=False):
-                            prev_options = {
-                                f"{e['timestamp']} — {str(e.get('url','') or e.get('offer_type',''))[:40]} — {e['score']}/20": i+1
-                                for i, e in enumerate(history[1:], 0)
-                            }
-                            selected = st.selectbox("Choisir l'audit de référence", list(prev_options.keys()), key="avant_apres_sel")
-                            if selected:
-                                prev_idx = prev_options[selected]
-                                prev = history[prev_idx]
-                                cur_score = result.get("_c",{}).get("score",0)
-                                prev_score = prev.get("score",0)
-                                delta = cur_score - prev_score
-                                delta_color = "#22c55e" if delta > 0 else "#FF4444" if delta < 0 else "#888888"
-                                delta_icon  = "▲" if delta > 0 else "▼" if delta < 0 else "="
+            if result:
+                ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
+                        "url": landing_url, "timestamp": ts,
+                        "brand_type": brand_type, "page_type": detected_page_type,
+                        "ad_text": ad_text, "model": model, "market_context": market_context}
+                save_history(result, meta)
+                st.session_state.loaded_result = None
+                if st.session_state.get("reaudit_url"):
+                    st.session_state.reaudit_url = ""
+                render_results(result)
 
-                                c1,c2,c3 = st.columns(3)
-                                with c1: st.metric("Score précédent", f"{prev_score}/20")
-                                with c2: st.metric("Score actuel",    f"{cur_score}/20")
-                                with c3: st.metric("Delta",
-                                    f"{delta_icon} {abs(delta)} pts",
-                                    delta=delta, delta_color="normal")
+                # ── Mode Avant/Après ──────────────────────────────
+                history = st.session_state.audit_history
+                if len(history) >= 2:
+                    with st.expander("📊 Comparer avec un audit précédent (Avant/Après)", expanded=False):
+                        prev_options = {
+                            f"{e['timestamp']} — {str(e.get('url','') or e.get('offer_type',''))[:40]} — {e['score']}/20": i+1
+                            for i, e in enumerate(history[1:], 0)
+                        }
+                        selected = st.selectbox("Choisir l'audit de référence", list(prev_options.keys()), key="avant_apres_sel")
+                        if selected:
+                            prev_idx = prev_options[selected]
+                            prev = history[prev_idx]
+                            cur_score = result.get("_c",{}).get("score",0)
+                            prev_score = prev.get("score",0)
+                            delta = cur_score - prev_score
+                            delta_icon  = "▲" if delta > 0 else "▼" if delta < 0 else "="
+                            c1,c2,c3 = st.columns(3)
+                            with c1: st.metric("Score précédent", f"{prev_score}/20")
+                            with c2: st.metric("Score actuel",    f"{cur_score}/20")
+                            with c3: st.metric("Delta", f"{delta_icon} {abs(delta)} pts", delta=delta, delta_color="normal")
+                            pc = prev.get("result",{}).get("_c",{})
+                            cc = result.get("_c",{})
+                            rows = []
+                            for label, pk, ck in [("Hook","hook","hook"),("Offer","offer","offer"),
+                                                   ("Trust","trust","trust"),("Friction","friction","friction")]:
+                                pv = pc.get(pk,0); cv = cc.get(ck,0); dv = cv-pv
+                                arrow = "▲" if dv>0 else "▼" if dv<0 else "="
+                                color = "🟢" if dv>0 else "🔴" if dv<0 else "⚪"
+                                rows.append(f"**{label}** : {pv}/5 → {cv}/5  {color} {arrow}{abs(dv)}")
+                            for r in rows: st.markdown(r)
 
-                                # Breakdown comparatif
-                                pc = prev.get("result",{}).get("_c",{})
-                                cc = result.get("_c",{})
-                                rows = []
-                                for label, pk, ck in [("Hook","hook","hook"),("Offer","offer","offer"),
-                                                       ("Trust","trust","trust"),("Friction","friction","friction")]:
-                                    pv = pc.get(pk,0); cv = cc.get(ck,0); dv = cv-pv
-                                    arrow = "▲" if dv>0 else "▼" if dv<0 else "="
-                                    color = "🟢" if dv>0 else "🔴" if dv<0 else "⚪"
-                                    rows.append(f"**{label}** : {pv}/5 → {cv}/5  {color} {arrow}{abs(dv)}")
-                                for r in rows: st.markdown(r)
+                st.markdown("---")
+                # ── Exports ───────────────────────────────────────
+                meta["version"] = APP_VERSION
+                fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
+                ecol1, ecol2, ecol3, ecol4 = st.columns(4)
+                with ecol1:
+                    txt = export_txt(result, meta)
+                    st.download_button("📥 .txt", data=txt.encode("utf-8"),
+                                       file_name=fname_base+".txt", mime="text/plain",
+                                       use_container_width=True)
+                with ecol2:
+                    if PDF_AVAILABLE:
+                        try:
+                            pdf_bytes = generate_pdf_report(result, meta)
+                            st.download_button("📄 PDF", data=pdf_bytes,
+                                               file_name=fname_base+".pdf", mime="application/pdf",
+                                               type="primary", use_container_width=True)
+                        except Exception as pdf_err:
+                            st.caption(f"PDF indisponible : {pdf_err}")
+                    else:
+                        st.caption("PDF non disponible")
+                with ecol3:
+                    if PDF_AVAILABLE:
+                        with st.expander("👔 Rapport Client"):
+                            client_name_tab1 = st.text_input("Nom du client",
+                                placeholder="Ex: Startup XYZ", key="client_name_tab1")
+                            if st.button("Générer", key="gen_client_pdf"):
+                                try:
+                                    meta_c = {**meta, "client_name": client_name_tab1 or "",
+                                              "report_mode": "client"}
+                                    pdf_c = generate_pdf_report(result, meta_c)
+                                    st.download_button("⬇️ Télécharger", data=pdf_c,
+                                        file_name=fname_base+"_client.pdf", mime="application/pdf",
+                                        key="dl_client_pdf")
+                                except Exception as ce:
+                                    st.error(f"Erreur : {ce}")
+                with ecol4:
+                    render_email_widget(result, meta, key_prefix="tab1_email")
 
-                    st.markdown("---")
-                    # ── Exports ───────────────────────────────────────
-                    meta["version"] = APP_VERSION
-                    fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
-
-                    ecol1, ecol2, ecol3 = st.columns(3)
-                    with ecol1:
-                        txt = export_txt(result, meta)
-                        st.download_button("📥 Export .txt", data=txt.encode("utf-8"),
-                                           file_name=fname_base+".txt", mime="text/plain",
-                                           use_container_width=True)
-                    with ecol2:
-                        if PDF_AVAILABLE:
-                            try:
-                                pdf_bytes = generate_pdf_report(result, meta)
-                                st.download_button("📄 Rapport PDF",
-                                                   data=pdf_bytes,
-                                                   file_name=fname_base+".pdf",
-                                                   mime="application/pdf",
-                                                   type="primary",
-                                                   use_container_width=True)
-                            except Exception as pdf_err:
-                                st.caption(f"PDF indisponible : {pdf_err}")
-                        else:
-                            st.caption("PDF non disponible (reportlab manquant)")
-                    with ecol3:
-                        if PDF_AVAILABLE:
-                            with st.expander("👔 Rapport Client"):
-                                client_name_tab1 = st.text_input(
-                                    "Nom du client",
-                                    placeholder="Ex: Startup XYZ",
-                                    key="client_name_tab1"
-                                )
-                                if st.button("Générer rapport client", key="gen_client_pdf"):
-                                    try:
-                                        meta_c = {**meta, "client_name": client_name_tab1 or "",
-                                                  "report_mode": "client"}
-                                        pdf_c = generate_pdf_report(result, meta_c)
-                                        st.download_button(
-                                            "⬇️ Télécharger",
-                                            data=pdf_c,
-                                            file_name=fname_base+"_client.pdf",
-                                            mime="application/pdf",
-                                            key="dl_client_pdf",
-                                        )
-                                    except Exception as ce:
-                                        st.error(f"Erreur PDF client : {ce}")
-                except ValueError as e:
-                    st.error(str(e))
-                except Exception as e:
-                    st.error("Erreur inattendue : " + str(e))
+                # Share widget full-width below exports
+                render_share_widget(result, meta, key_prefix="tab1_share")
 
     # ── tab2 : Multi-Audit (Bulk + Comparaison) ──────────────
     with tab2:
