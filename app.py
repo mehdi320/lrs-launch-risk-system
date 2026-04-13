@@ -35,8 +35,173 @@ st.set_page_config(
     page_title="LRS - Launch Risk System",
     page_icon="🚦",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
+
+# ── CSS GLOBAL ───────────────────────────────────────────────
+def inject_css():
+    st.markdown("""
+<style>
+/* ── Base & Typography ── */
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+h1, h2, h3 { letter-spacing: -0.3px; }
+
+/* ── Hide Streamlit chrome ── */
+#MainMenu, footer, header { visibility: hidden; }
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-bottom: 2rem !important;
+    max-width: 1100px !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    background: #0f0f1a;
+    padding: 6px 8px;
+    border-radius: 12px;
+    border: 1px solid #1e1e3a;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #888 !important;
+    background: transparent !important;
+    border: none !important;
+}
+.stTabs [aria-selected="true"] {
+    background: #1a1a2e !important;
+    color: #fff !important;
+    border: 1px solid #2a2a4a !important;
+}
+
+/* ── Buttons ── */
+.stButton > button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    transition: all 0.15s ease !important;
+    border: 1px solid #2a2a4a !important;
+}
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
+    border-color: #6366f1 !important;
+    color: #fff !important;
+}
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #7c7ff7, #6366f1) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(99,102,241,0.35) !important;
+}
+
+/* ── Inputs ── */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div {
+    background: #0f0f1a !important;
+    border: 1px solid #2a2a4a !important;
+    border-radius: 8px !important;
+    color: #e0e0e0 !important;
+    font-size: 0.88rem !important;
+}
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.2) !important;
+}
+
+/* ── Labels ── */
+.stTextInput label, .stTextArea label, .stSelectbox label,
+.stRadio label, .stFileUploader label {
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    color: #999 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* ── Expanders ── */
+.streamlit-expanderHeader {
+    background: #0f0f1a !important;
+    border: 1px solid #1e1e3a !important;
+    border-radius: 8px !important;
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
+    color: #ccc !important;
+}
+.streamlit-expanderContent {
+    background: #0a0a14 !important;
+    border: 1px solid #1e1e3a !important;
+    border-top: none !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
+/* ── Métriques ── */
+[data-testid="metric-container"] {
+    background: #0f0f1a;
+    border: 1px solid #1e1e3a;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+[data-testid="metric-container"] label {
+    color: #888 !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+}
+[data-testid="metric-container"] [data-testid="stMetricValue"] {
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    color: #fff !important;
+}
+
+/* ── Dataframes ── */
+[data-testid="stDataFrame"] {
+    border: 1px solid #1e1e3a;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ── Info / Warning / Error ── */
+.stInfo, .stSuccess, .stWarning, .stError {
+    border-radius: 8px !important;
+    font-size: 0.88rem !important;
+}
+
+/* ── Progress bar ── */
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, #6366f1, #22c55e) !important;
+    border-radius: 4px !important;
+}
+
+/* ── Download button ── */
+.stDownloadButton > button {
+    background: #0f0f1a !important;
+    border: 1px solid #2a2a4a !important;
+    border-radius: 8px !important;
+    color: #ccc !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+}
+.stDownloadButton > button:hover {
+    border-color: #6366f1 !important;
+    color: #fff !important;
+}
+
+/* ── Divider ── */
+hr { border-color: #1e1e3a !important; margin: 1rem 0 !important; }
+
+/* ── Caption ── */
+.stCaption { color: #666 !important; font-size: 0.78rem !important; }
+
+/* ── Sidebar (cachée par défaut) ── */
+[data-testid="stSidebar"] { display: none; }
+</style>
+""", unsafe_allow_html=True)
 
 # ── CVR BENCHMARKS ──────────────────────────────────────────
 CVR_BENCHMARKS = {
@@ -1092,228 +1257,223 @@ def render_results(result):
     dec   = c.get("decision", "Do NOT launch")
     ms    = mm.get("status", "N/A")
 
-    st.markdown("---")
-    st.subheader("Résultat LRS")
-
-    # Infos meta depuis lrs
-    lrs_meta = result.get("lrs", {})
-    brand_type_display = lrs_meta.get("brand_type", "")
+    lrs_meta           = result.get("lrs", {})
     page_type_display  = lrs_meta.get("page_type", "")
+    score_color        = RISK_COLORS.get(risk, "#888")
+    dec_emoji          = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
+    bar_filled         = round(score / 20 * 10)
+    bar_visual         = "█" * bar_filled + "░" * (10 - bar_filled)
 
-    # ── Bandeau score principal ──────────────────────────────
-    score_color = RISK_COLORS.get(risk, "#888")
-    bar_filled  = round(score / 20 * 10)
-    bar_visual  = "█" * bar_filled + "░" * (10 - bar_filled)
-    dec_emoji   = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
-
+    # ── 1. HERO SCORE ────────────────────────────────────────
     st.markdown(
-        f"""<div style='background:linear-gradient(135deg,#1a1a2e,#16213e);
-            border-left:6px solid {score_color};border-radius:12px;
-            padding:20px 28px;margin-bottom:16px'>
-          <div style='display:flex;align-items:center;gap:32px;flex-wrap:wrap'>
-            <div>
-              <div style='color:#aaa;font-size:0.8em;text-transform:uppercase;letter-spacing:1px'>Score LRS</div>
-              <div style='color:{score_color};font-size:3.2em;font-weight:900;line-height:1'>{score}<span style='font-size:0.45em;color:#888'> / 20</span></div>
-              <div style='color:#555;font-family:monospace;font-size:1.1em'>{bar_visual}</div>
+        f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;
+            border-top:4px solid {score_color};border-radius:14px;
+            padding:28px 32px;margin:12px 0 20px'>
+          <div style='display:flex;align-items:center;gap:40px;flex-wrap:wrap'>
+            <div style='text-align:center;min-width:120px'>
+              <div style='color:{score_color};font-size:4rem;font-weight:900;
+                   line-height:1;letter-spacing:-2px'>{score}</div>
+              <div style='color:#444;font-size:1rem;font-weight:600'>/20</div>
+              <div style='color:#333;font-family:monospace;font-size:0.95rem;
+                   margin-top:4px'>{bar_visual}</div>
             </div>
-            <div style='flex:1;min-width:200px'>
-              <div style='color:{score_color};font-size:1.6em;font-weight:800'>{dec_emoji} {dec}</div>
-              <div style='color:#aaa;font-size:0.95em;margin-top:4px'>Risk : <strong style='color:{score_color}'>{risk}</strong></div>
+            <div style='flex:1;min-width:180px'>
+              <div style='color:{score_color};font-size:1.5rem;font-weight:800;
+                   margin-bottom:6px'>{dec_emoji} {dec}</div>
+              <div style='color:#555;font-size:0.85rem'>
+                Risk level : <strong style='color:{score_color}'>{risk}</strong>
+              </div>
+              {f"<div style='color:#444;font-size:0.78rem;margin-top:8px'>🔍 {page_type_display[:60]}</div>" if page_type_display else ""}
             </div>
           </div>
         </div>""",
         unsafe_allow_html=True,
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        mc = MATCH_COLORS.get(ms, "#888")
-        st.markdown("**Message Match**<br><span style='font-size:1.3em;color:" + mc + ";font-weight:800'>" + ms + "</span>", unsafe_allow_html=True)
-    with col2: st.metric("Hook",    str(c.get("hook",    0)) + " / 5")
-    with col3: st.metric("Offer",   str(c.get("offer",   0)) + " / 5")
-    with col4: st.metric("Trust",   str(c.get("trust",   0)) + " / 5")
-
-    if brand_type_display or page_type_display:
-        info_parts = []
-        if brand_type_display: info_parts.append("🏷️ **" + brand_type_display + "**")
-        if page_type_display:  info_parts.append("🔍 " + page_type_display)
-        st.caption("  |  ".join(info_parts))
-
-    st.markdown("---")
-    st.subheader("Score Breakdown")
-    for label, val in [("Hook", c.get("hook", 0)), ("Offer", c.get("offer", 0)),
-                       ("Trust", c.get("trust", 0)), ("Friction / Message Match", c.get("friction", 0))]:
-        color = "#FF4444" if val <= 2 else "#FF8C00" if val <= 3 else "#22c55e"
-        cl, cr = st.columns([4, 1])
-        with cl:
-            st.markdown("**" + label + "** &nbsp; <span style='font-family:monospace;color:" + color + "'>`" + bar(val) + "`</span>", unsafe_allow_html=True)
-        with cr:
-            st.markdown("<span style='color:" + color + ";font-weight:700'>" + str(val) + " / 5</span>", unsafe_allow_html=True)
+    # ── 2. BREAKDOWN (4 barres) ──────────────────────────────
+    criteria = [
+        ("Hook",     c.get("hook",     0)),
+        ("Offer",    c.get("offer",    0)),
+        ("Trust",    c.get("trust",    0)),
+        ("Friction", c.get("friction", 0)),
+    ]
+    bars_html = ""
+    for lbl, val in criteria:
+        col = "#FF4444" if val <= 2 else "#FF8C00" if val <= 3 else "#22c55e"
+        pct = val / 5 * 100
+        bars_html += f"""
+        <div style='margin-bottom:10px'>
+          <div style='display:flex;justify-content:space-between;margin-bottom:3px'>
+            <span style='color:#aaa;font-size:0.82rem;font-weight:600'>{lbl}</span>
+            <span style='color:{col};font-weight:700;font-size:0.85rem'>{val}/5</span>
+          </div>
+          <div style='background:#1a1a2e;border-radius:4px;height:6px'>
+            <div style='background:{col};width:{pct}%;height:6px;border-radius:4px;
+                 transition:width 0.3s'></div>
+          </div>
+        </div>"""
+    st.markdown(
+        f"<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;"
+        f"padding:20px 24px;margin-bottom:16px'>{bars_html}</div>",
+        unsafe_allow_html=True,
+    )
 
     if c.get("trust", 0) <= 2:
-        st.warning("Note Trust basse : L'outil lit uniquement le texte. Les preuves visuelles (photos d'avis, captures) ne sont pas comptees. Verifiez manuellement.")
+        st.caption("⚠️ Trust bas : LRS ne lit que le texte — vérifiez manuellement les preuves visuelles (photos, avis screenshots).")
 
+    # ── 3. CVR ───────────────────────────────────────────────
+    cv1, cv2, cv3 = st.columns(3)
+    with cv1: st.metric("CVR actuel estimé",  c.get("cvr_cur", "—"))
+    with cv2: st.metric("CVR post-fix",        c.get("cvr_fix", "—"))
+    with cv3: st.metric("Uplift potentiel",    c.get("cvr_up",  "—"))
+    st.caption("Benchmarks cold traffic — non garantis.")
+
+    # ── 4. ANALYSE ───────────────────────────────────────────
     st.markdown("---")
-    st.subheader("Analyse Detaillee")
-    for key, label, val in [("hook_detail", "Hook", c.get("hook", 0)),
-                             ("offer_detail", "Offer", c.get("offer", 0)),
-                             ("trust_detail", "Trust", c.get("trust", 0)),
-                             ("friction_detail", "Friction", c.get("friction", 0))]:
+    st.markdown("#### 🔬 Analyse détaillée")
+    for key, lbl, val in [("hook_detail","Hook",c.get("hook",0)),
+                           ("offer_detail","Offer",c.get("offer",0)),
+                           ("trust_detail","Trust",c.get("trust",0)),
+                           ("friction_detail","Friction",c.get("friction",0))]:
         detail = why.get(key, "")
+        col    = "#FF4444" if val <= 2 else "#FF8C00" if val <= 3 else "#22c55e"
         if detail:
-            with st.expander(label + " -- " + str(val) + "/5", expanded=(val <= 2)):
+            with st.expander(f"{lbl} — {val}/5", expanded=(val <= 2)):
                 st.markdown(detail)
 
     top3 = why.get("top_3_reasons", [])
-    if top3:
-        st.markdown("**Top 3 raisons :**")
-        for i, r in enumerate(top3, 1):
-            st.markdown(str(i) + ". " + r)
-
     gaps = why.get("critical_gaps", [])
-    if gaps:
-        st.markdown("**Critical Gaps :**")
-        for g in gaps: st.markdown("- " + g)
+    if top3 or gaps:
+        tg1, tg2 = st.columns(2)
+        with tg1:
+            if top3:
+                st.markdown("**Top 3 raisons du score :**")
+                for i, r in enumerate(top3, 1):
+                    st.markdown(f"{i}. {r}")
+        with tg2:
+            if gaps:
+                st.markdown("**Gaps critiques :**")
+                for g in gaps:
+                    st.markdown(f"- {g}")
 
+    # ── 5. MESSAGE MATCH ─────────────────────────────────────
     if ms not in ("N/A", None, ""):
         st.markdown("---")
-        st.subheader("Message Match Analysis")
+        st.markdown("#### 🔗 Message Match")
+        mc = MATCH_COLORS.get(ms, "#888")
+        st.markdown(f"<span style='color:{mc};font-weight:700;font-size:1.1rem'>{ms}</span>",
+                    unsafe_allow_html=True)
         expl = mm.get("score_explication", "")
-        if expl: st.info(expl)
-        ca, cb = st.columns(2)
-        with ca:
-            mm_list = mm.get("mismatches", [])
-            if mm_list:
-                st.markdown("**Mismatches :**")
-                for m2 in mm_list: st.markdown("- " + m2)
-        with cb:
-            fixes = mm.get("fix", [])
-            if fixes:
-                st.markdown("**Corrections :**")
-                for f in fixes: st.markdown("- " + f)
+        if expl: st.caption(expl)
+        mm_list = mm.get("mismatches", [])
+        fixes   = mm.get("fix", [])
+        if mm_list or fixes:
+            ca, cb = st.columns(2)
+            with ca:
+                if mm_list:
+                    st.markdown("**Mismatches :**")
+                    for m2 in mm_list: st.markdown(f"- {m2}")
+            with cb:
+                if fixes:
+                    st.markdown("**Corrections :**")
+                    for f in fixes: st.markdown(f"- {f}")
 
+    # ── 6. PLAN D'ACTION ─────────────────────────────────────
     st.markdown("---")
-    st.subheader("Estimation CVR (cold traffic, sous hypotheses)")
-    c1, c2, c3 = st.columns(3)
-    with c1: st.metric("CVR Actuel", c.get("cvr_cur", "N/A"))
-    with c2: st.metric("CVR Post-Fix", c.get("cvr_fix", "N/A"))
-    with c3: st.metric("Uplift", c.get("cvr_up", "N/A"))
-    st.caption("Benchmarks cold traffic. Non garantis.")
+    st.markdown("#### 🎯 Plan d'action")
 
-    st.markdown("---")
-    st.subheader("Plan d'Action Priorise")
-
-    # TOP PRIORITY ACTION — Bug 3
     top_prio = fp.get("top_priority_action", {})
     if top_prio and top_prio.get("what"):
-        st.markdown("#### 🎯 Action Prioritaire #1")
-        st.error(
-            "**" + top_prio.get("what", "") + "**\n\n"
-            "**Comment concrètement :** " + top_prio.get("how_exactly", "") + "\n\n"
-            "**Impact attendu :** " + top_prio.get("expected_impact", "") + "  |  "
-            "**Temps estimé :** " + top_prio.get("time_estimate", "")
+        st.markdown(
+            f"""<div style='background:#1a0a0a;border:1px solid #FF4444;
+                border-left:4px solid #FF4444;border-radius:10px;padding:16px 20px;margin-bottom:12px'>
+              <div style='color:#FF4444;font-size:0.75rem;font-weight:700;
+                   text-transform:uppercase;letter-spacing:1px;margin-bottom:6px'>
+                Action prioritaire #1
+              </div>
+              <div style='color:#fff;font-weight:700;font-size:0.95rem;margin-bottom:8px'>
+                {top_prio.get("what","")}
+              </div>
+              <div style='color:#aaa;font-size:0.85rem;line-height:1.6'>
+                {top_prio.get("how_exactly","")}
+              </div>
+              <div style='color:#555;font-size:0.78rem;margin-top:8px'>
+                Impact : {top_prio.get("expected_impact","")} &nbsp;·&nbsp;
+                Temps : {top_prio.get("time_estimate","")}
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
         )
 
-    # QUICK WINS — Bug 3
     quick_wins = fp.get("quick_wins", [])
     if quick_wins:
-        st.markdown("#### ⚡ Quick Wins (moins d'1h)")
+        st.markdown("**⚡ Quick Wins** *(< 1h)*")
         for qw in quick_wins:
             with st.expander("⚡ " + qw.get("what", "")):
-                st.markdown("**Comment concrètement :** " + qw.get("how_exactly", ""))
-                st.markdown("**Impact attendu :** " + qw.get("expected_impact", ""))
-                st.markdown("**Temps estimé :** `" + qw.get("time_estimate", "<1h") + "`")
+                st.markdown("**Comment :** " + qw.get("how_exactly", ""))
+                st.caption("Impact : " + qw.get("expected_impact","") + " · Temps : " + qw.get("time_estimate","<1h"))
 
-    # LONG TERM — Bug 3
     long_term = fp.get("long_term", [])
     if long_term:
-        st.markdown("#### 🏗️ Améliorations Long Terme")
+        st.markdown("**🏗️ Long terme**")
         for lt in long_term:
             with st.expander("🏗️ " + lt.get("what", "")):
-                st.markdown("**Comment concrètement :** " + lt.get("how_exactly", ""))
-                st.markdown("**Impact attendu :** " + lt.get("expected_impact", ""))
-                st.markdown("**Temps estimé :** `" + lt.get("time_estimate", "") + "`")
+                st.markdown("**Comment :** " + lt.get("how_exactly", ""))
+                st.caption("Impact : " + lt.get("expected_impact","") + " · Temps : " + lt.get("time_estimate",""))
 
-    # PRIORITY ACTIONS (fallback + A/B tests)
     priority_actions = fp.get("priority_actions", [])
     if priority_actions:
-        st.markdown("#### 📋 Toutes les Actions")
         for a in priority_actions:
-            imp   = a.get("impact", "medium")
-            icon2 = "🔴" if imp == "high" else "🟡" if imp == "medium" else "🟢"
-            cat   = a.get("category", "")
-            cat_label = " ⚡" if cat == "quick_win" else " 🏗️" if cat == "long_term" else ""
-            with st.expander(icon2 + cat_label + " " + a.get("what", "") + " [" + imp.upper() + " | " + a.get("effort", "").upper() + "]"):
-                how_exactly = a.get("how_exactly", a.get("how", ""))
-                st.markdown("**Comment concrètement :** " + how_exactly)
-                if a.get("how") and a.get("how_exactly") and a["how"] != a["how_exactly"]:
-                    st.markdown("**Résumé :** " + a.get("how", ""))
-                st.markdown("**Pourquoi :** " + a.get("why", ""))
-                if a.get("time_estimate"):
-                    st.markdown("**Temps estimé :** `" + a["time_estimate"] + "`")
+            imp = a.get("impact","medium")
+            icon2 = "🔴" if imp=="high" else "🟡" if imp=="medium" else "🟢"
+            cat   = a.get("category","")
+            cat_l = " ⚡" if cat=="quick_win" else " 🏗️" if cat=="long_term" else ""
+            with st.expander(f"{icon2}{cat_l} {a.get('what','')}"):
+                st.markdown("**Comment :** " + a.get("how_exactly", a.get("how","")))
+                if a.get("why"): st.caption("Pourquoi : " + a["why"])
+                if a.get("time_estimate"): st.caption("Temps : " + a["time_estimate"])
 
     for t in fp.get("ab_tests", []):
-        with st.expander("🧪 Test A/B : " + t.get("hypothesis", "")):
+        with st.expander("🧪 A/B : " + t.get("hypothesis", "")):
             ta, tb = st.columns(2)
-            with ta: st.markdown("**A :** " + t.get("variant_a", ""))
-            with tb: st.markdown("**B :** " + t.get("variant_b", ""))
-            st.markdown("**Métrique :** " + t.get("success_metric", ""))
+            with ta: st.markdown("**A :** " + t.get("variant_a",""))
+            with tb: st.markdown("**B :** " + t.get("variant_b",""))
+            st.caption("Métrique : " + t.get("success_metric",""))
 
+    # ── 7. REWRITE + ADS ─────────────────────────────────────
     st.markdown("---")
-    st.subheader("Rewrite Recommandations")
-    with st.expander("Voir le rewrite complet", expanded=False):
-        if rw.get("headline"):    st.markdown("**Headline :**"); st.info(rw["headline"])
-        if rw.get("subheadline"): st.markdown("**Subheadline :**"); st.info(rw["subheadline"])
-        bullets = rw.get("hero_bullets", [])
-        if bullets:
-            st.markdown("**Bullets :**")
-            for b in bullets: st.markdown("- " + b)
-        if rw.get("cta_primary"):  st.markdown("**CTA :** `" + rw["cta_primary"] + "`")
-        if rw.get("proof_block"):  st.markdown("**Proof Block :**"); st.info(rw["proof_block"])
-        stack = rw.get("offer_stack", [])
-        if stack:
-            st.markdown("**Offer Stack :**")
-            for o in stack: st.markdown("- " + o)
-        if rw.get("guarantee"): st.markdown("**Garantie :** " + rw["guarantee"])
-        faqs = rw.get("faq_objections", [])
-        if faqs:
-            st.markdown("**FAQ :**")
-            for q in faqs: st.markdown("- " + q)
-
-    st.markdown("---")
-    st.subheader("Ad Creative Recommendations")
-    with st.expander("Voir les angles, hooks et variantes", expanded=False):
-        angles = ads.get("angles", [])
-        if angles:
-            st.markdown("**Angles :**")
-            for a2 in angles:
+    rw_col, ads_col = st.columns(2)
+    with rw_col:
+        with st.expander("✍️ Rewrite recommandé"):
+            if rw.get("headline"):    st.markdown("**Headline :**"); st.info(rw["headline"])
+            if rw.get("subheadline"): st.markdown("**Sub :**");      st.info(rw["subheadline"])
+            bullets = rw.get("hero_bullets", [])
+            if bullets:
+                st.markdown("**Bullets :**")
+                for b in bullets: st.markdown(f"- {b}")
+            if rw.get("cta_primary"):  st.markdown(f"**CTA :** `{rw['cta_primary']}`")
+            if rw.get("guarantee"):    st.caption("Garantie : " + rw["guarantee"])
+            for o in rw.get("offer_stack",[]): st.markdown(f"- {o}")
+            for q in rw.get("faq_objections",[]): st.markdown(f"- {q}")
+    with ads_col:
+        with st.expander("📣 Ad Creative"):
+            for a2 in ads.get("angles",[]):
                 if isinstance(a2, dict):
-                    st.markdown("- **" + a2.get("angle", "") + "** -- " + a2.get("rationale", ""))
-                else:
-                    st.markdown("- " + str(a2))
-
-        hooks = ads.get("hooks", [])
-        if hooks:
-            st.markdown("**Hooks :**")
-            for h in hooks:
+                    st.markdown(f"- **{a2.get('angle','')}** — {a2.get('rationale','')}")
+            for h in ads.get("hooks",[]):
                 if isinstance(h, dict):
-                    st.markdown("- `[" + h.get("platform", "") + "/" + h.get("type", "") + "]` " + h.get("hook", ""))
-                else:
-                    st.markdown("- " + str(h))
+                    st.markdown(f"- `[{h.get('platform','')}/{h.get('type','')}]` {h.get('hook','')}")
+            for i, v in enumerate(ads.get("variants",[]), 1):
+                with st.expander(f"Variante {i} — {v.get('platform','')}"):
+                    st.markdown("**Headline :** " + v.get("headline",""))
+                    st.text_area("Primary Text", value=v.get("primary_text",""),
+                                 height=110, disabled=True, key=f"pt_{i}")
+                    st.markdown(f"**CTA :** `{v.get('cta','')}`")
+            if ads.get("script_ugc_20s"):
+                st.text_area("Script UGC 20-30s", value=ads["script_ugc_20s"],
+                             height=150, disabled=True)
 
-        variants = ads.get("variants", [])
-        for i, v in enumerate(variants, 1):
-            with st.expander("Variante " + str(i) + " -- " + v.get("platform", "")):
-                st.markdown("**Headline :** " + v.get("headline", ""))
-                st.text_area("Primary Text", value=v.get("primary_text", ""), height=130, disabled=True, key="pt_" + str(i))
-                st.markdown("**CTA :** `" + v.get("cta", "") + "`")
-
-        if ads.get("script_ugc_20s"):
-            st.markdown("**Script UGC 20-30s :**")
-            st.text_area("Script UGC", value=ads["script_ugc_20s"], height=180, disabled=True)
-
-    st.markdown("---")
-    with st.expander("JSON Brut (Debug)", expanded=False):
+    with st.expander("🔧 JSON brut (debug)"):
         st.json(result)
 
 # ── HISTORIQUE ───────────────────────────────────────────────
@@ -2370,71 +2530,79 @@ def check_access():
 
 
 def main():
+    inject_css()
     init_session()
 
     if not check_access():
         st.stop()
 
-    st.markdown("# 🚦 LRS - Launch Risk System")
-    st.markdown("**V" + APP_VERSION + "** — Paid Traffic Pre-Launch Audit — Strict Scoring")
+    # ── Header ───────────────────────────────────────────────
+    st.markdown(
+        f"""<div style='display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:1.2rem;padding-bottom:0.8rem;border-bottom:1px solid #1e1e3a'>
+          <div>
+            <span style='font-size:1.6rem;font-weight:800;color:#fff;letter-spacing:-0.5px'>
+              🚦 LRS™
+            </span>
+            <span style='color:#555;font-size:0.85rem;margin-left:10px'>
+              Launch Risk System · V{APP_VERSION}
+            </span>
+          </div>
+          <span style='color:#444;font-size:0.78rem'>Paid Traffic Pre-Launch Audit</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
 
-    # Verification cle API
+    # ── API Key check ────────────────────────────────────────
     api_key = get_api_key()
     if not api_key:
-        st.error(
-            "**Cle API OpenAI manquante.** Ajoutez `OPENAI_API_KEY=sk-...` dans votre fichier `.env` "
-            "(local) ou dans Streamlit Cloud > App settings > Secrets."
+        st.markdown(
+            """<div style='background:#1a0a0a;border:1px solid #FF4444;border-radius:10px;
+                padding:20px 24px;margin:8px 0'>
+              <div style='color:#FF4444;font-weight:700;margin-bottom:6px'>
+                🔑 Clé API OpenAI manquante
+              </div>
+              <div style='color:#ccc;font-size:0.88rem'>
+                Ajoutez <code>OPENAI_API_KEY = "sk-..."</code> dans vos
+                <strong>Streamlit Secrets</strong> (App settings → Secrets)
+                ou dans votre fichier <code>.env</code> en local.
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
         )
-        with st.expander("Comment configurer la cle API ?"):
-            st.markdown("""
-**En local :**
-1. Copiez `.env.example` en `.env`
-2. Remplacez `sk-your-openai-api-key-here` par votre vraie cle
-
-**Sur Streamlit Cloud :**
-1. Allez dans votre app > `⋮` > `Settings` > `Secrets`
-2. Ajoutez :
-```toml
-OPENAI_API_KEY = "sk-..."
-```
-            """)
         st.stop()
 
-    # ── Scheduler au démarrage (une fois par session) ─────────
+    # ── Scheduler au démarrage ────────────────────────────────
     if not st.session_state.get("scheduled_ran"):
         run_scheduled_audits()
         st.session_state.scheduled_ran = True
 
-    # ── Alerte planifié : badge si audits ont tourné ──────────
-    alerts = compute_score_alerts(st.session_state.audit_history)
-    n_alerts = len(alerts)
-    monitor_label = f"Monitoring 🔴 {n_alerts}" if n_alerts > 0 else "Monitoring"
-
-    # ── Onboarding banner ────────────────────────────────────
+    # ── Onboarding ────────────────────────────────────────────
     render_onboarding_banner()
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
-        "Audit", "Bulk Audit", "Comparaison", "Projets",
-        "Checklist", "Historique", monitor_label,
-        "Benchmark 2025", "Changelog"
+    # ── Calcul alertes (pour badge onglet) ───────────────────
+    alerts     = compute_score_alerts(st.session_state.audit_history)
+    n_alerts   = len(alerts)
+    suivi_label = f"Suivi 🔴" if n_alerts > 0 else "Suivi"
+
+    # ── 5 onglets ────────────────────────────────────────────
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources"
     ])
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
 
         with col_l:
-            st.subheader("Configuration")
-
-            # ── Profils sauvegardés ───────────────────────────
-            profiles = st.session_state.profiles
+            # ── Profils ───────────────────────────────────────
+            profiles      = st.session_state.profiles
             profile_names = list(profiles.keys())
             if profile_names:
-                prof_col1, prof_col2 = st.columns([3, 1])
-                with prof_col1:
-                    sel_profile = st.selectbox("📂 Charger un profil", ["— Nouveau —"] + profile_names, key="sel_profile")
-                with prof_col2:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if sel_profile != "— Nouveau —" and st.button("🗑️", key="del_prof"):
+                pc1, pc2 = st.columns([4, 1])
+                with pc1:
+                    sel_profile = st.selectbox("📂 Profil", ["— Nouveau —"] + profile_names, key="sel_profile", label_visibility="collapsed")
+                with pc2:
+                    if sel_profile != "— Nouveau —" and st.button("🗑️", key="del_prof", help="Supprimer ce profil"):
                         delete_profile(sel_profile)
                         st.session_state.profiles = load_profiles()
                         st.rerun()
@@ -2445,25 +2613,70 @@ OPENAI_API_KEY = "sk-..."
             def pval(key, default):
                 return loaded_prof.get(key, default)
 
-            mode       = st.selectbox("Mode d'audit", ["Funnel Only", "Ads Only", "Full Risk"],
-                                       index=["Funnel Only","Ads Only","Full Risk"].index(pval("mode","Funnel Only")))
-            platform   = st.selectbox("Plateforme", ["Meta", "TikTok", "Google", "Mixed", "N/A"],
-                                       index=["Meta","TikTok","Google","Mixed","N/A"].index(pval("platform","Meta")))
-            offer_type = st.selectbox("Type d'offre", ["Digital product", "Ecom (produit physique)"],
-                                       index=["Digital product","Ecom (produit physique)"].index(pval("offer_type","Digital product")))
-            model      = st.selectbox(
-                "Modele OpenAI",
-                ["gpt-4o-mini", "gpt-4o"],
-                help="gpt-4o-mini : rapide et economique (~0.01$/audit). gpt-4o : plus precis (~0.10$/audit)."
-            )
+            # ── Champs essentiels ─────────────────────────────
+            default_url = st.session_state.get("reaudit_url", "")
+            if default_url:
+                st.info("🔁 URL pré-remplie depuis l'historique")
 
-            st.markdown("---")
-            st.markdown("**Contexte Marche** (ameliore la precision)")
-            price       = st.text_input("Prix du produit",  value=pval("price",""),  placeholder="Ex: 47 euros")
-            target      = st.text_input("Cible / Persona",  value=pval("target",""), placeholder="Ex: adultes 25-45 ans, insomnies")
-            test_budget = st.text_input("Budget test",      value=pval("budget",""), placeholder="Ex: 300 euros/semaine")
-            niche       = st.text_input("Niche / Marche",   value=pval("niche",""),  placeholder="Ex: wellness, mindset")
-            competitors = st.text_input("Concurrents",      value=pval("competitors",""), placeholder="Ex: Calm, Headspace")
+            mode = st.selectbox("Mode",
+                ["Funnel Only", "Ads Only", "Full Risk"],
+                index=["Funnel Only","Ads Only","Full Risk"].index(pval("mode","Funnel Only")),
+                help="Funnel Only = audit landing page · Ads Only = audit pub · Full Risk = les deux")
+
+            landing_url = ""
+            if mode in ("Funnel Only", "Full Risk"):
+                landing_url = st.text_input("URL de la page", value=default_url,
+                                             placeholder="https://ma-landing.com")
+
+            ad_text = ""
+            if mode in ("Ads Only", "Full Risk"):
+                ad_text = st.text_area("Texte de la pub", placeholder="Primary text, headline, script UGC...", height=110)
+
+            r1, r2 = st.columns(2)
+            with r1:
+                platform = st.selectbox("Plateforme",
+                    ["Meta", "TikTok", "Google", "Mixed", "N/A"],
+                    index=["Meta","TikTok","Google","Mixed","N/A"].index(pval("platform","Meta")))
+            with r2:
+                offer_type = st.selectbox("Offre",
+                    ["Digital product", "Ecom (produit physique)"],
+                    index=["Digital product","Ecom (produit physique)"].index(pval("offer_type","Digital product")))
+
+            bt_opts   = ["Nouveau lancement", "Marque etablie"]
+            bt_idx    = bt_opts.index(pval("brand_type","Nouveau lancement")) if pval("brand_type","Nouveau lancement") in bt_opts else 0
+            brand_type = st.radio("Type de marque", bt_opts, index=bt_idx, horizontal=True,
+                                   help="Marque etablie = Gymshark, Nike… Trust évalué différemment")
+
+            # ── Options avancées (masquées par défaut) ────────
+            with st.expander("⚙️ Options avancées"):
+                model = st.selectbox("Modèle OpenAI", ["gpt-4o-mini", "gpt-4o"],
+                    help="gpt-4o-mini : rapide ~0.01$/audit · gpt-4o : plus précis ~0.10$/audit")
+                st.markdown("**Contexte marché** *(améliore la précision)*")
+                price       = st.text_input("Prix",        value=pval("price",""),       placeholder="Ex: 47€")
+                target      = st.text_input("Cible",       value=pval("target",""),      placeholder="Ex: femmes 25-40, douleurs dos")
+                test_budget = st.text_input("Budget test", value=pval("budget",""),      placeholder="Ex: 300€/semaine")
+                niche       = st.text_input("Niche",       value=pval("niche",""),       placeholder="Ex: wellness, coaching")
+                competitors = st.text_input("Concurrents", value=pval("competitors",""), placeholder="Ex: Calm, Headspace")
+                st.markdown("---")
+                new_prof_name = st.text_input("Sauvegarder comme profil", placeholder="Nom du profil", key="save_prof_name")
+                if st.button("💾 Sauvegarder", key="btn_save_prof"):
+                    if new_prof_name.strip():
+                        save_profile(new_prof_name.strip(), {
+                            "mode": mode, "platform": platform, "offer_type": offer_type,
+                            "price": price, "target": target, "budget": test_budget,
+                            "niche": niche, "competitors": competitors, "brand_type": brand_type,
+                        })
+                        st.session_state.profiles = load_profiles()
+                        st.success(f"Profil '{new_prof_name}' sauvegardé !")
+                    else:
+                        st.error("Donnez un nom au profil.")
+            # Valeurs par défaut si options avancées pas ouvertes
+            if 'model' not in dir():       model       = "gpt-4o-mini"
+            if 'price' not in dir():       price       = pval("price","")
+            if 'target' not in dir():      target      = pval("target","")
+            if 'test_budget' not in dir(): test_budget = pval("budget","")
+            if 'niche' not in dir():       niche       = pval("niche","")
+            if 'competitors' not in dir(): competitors = pval("competitors","")
 
             market_context = "\n".join([
                 "Prix : "        + (price       or "Non renseigne"),
@@ -2473,76 +2686,56 @@ OPENAI_API_KEY = "sk-..."
                 "Concurrents : " + (competitors or "Non renseigne"),
             ])
 
-            # Sauvegarder ce profil
-            with st.expander("💾 Sauvegarder ce profil", expanded=False):
-                new_prof_name = st.text_input("Nom du profil", placeholder="Ex: Client SaaS B2B / Ecom Beauté", key="save_prof_name")
-                if st.button("Sauvegarder", key="btn_save_prof"):
-                    if new_prof_name.strip():
-                        save_profile(new_prof_name.strip(), {
-                            "mode": mode, "platform": platform, "offer_type": offer_type,
-                            "price": price, "target": target, "budget": test_budget,
-                            "niche": niche, "competitors": competitors,
-                            "brand_type": pval("brand_type", "Nouveau lancement"),
-                        })
-                        st.session_state.profiles = load_profiles()
-                        st.success(f"Profil '{new_prof_name}' sauvegardé !")
-                    else:
-                        st.error("Donnez un nom au profil.")
-
-            st.markdown("---")
-            bt_opts = ["Nouveau lancement", "Marque etablie"]
-            bt_idx  = bt_opts.index(pval("brand_type", "Nouveau lancement")) if pval("brand_type","Nouveau lancement") in bt_opts else 0
-            brand_type = st.radio(
-                "Type de marque",
-                bt_opts,
-                index=bt_idx,
-                help="**Marque etablie** = marque avec notoriete existante (ex: Gymshark, Nike, Sephora). "
-                     "Le scoring Trust sera adapte pour tenir compte de la reputation de marque.\n\n"
-                     "**Nouveau lancement** = scoring strict 100% base sur les elements de la page.",
-                horizontal=True,
-            )
-
-            st.markdown("---")
-            landing_url     = ""
-            landing_content = ""
-
-            # Pre-remplir URL depuis re-audit
-            default_url = st.session_state.get("reaudit_url", "")
-            if default_url:
-                st.info(f"🔁 Re-audit : URL pré-remplie depuis l'historique")
-
-            if mode in ("Funnel Only", "Full Risk"):
-                landing_url = st.text_input("URL Landing Page",
-                                             value=default_url,
-                                             placeholder="https://exemple.com/page")
-
-            ad_text = ""
-            if mode in ("Ads Only", "Full Risk"):
-                ad_text = st.text_area("Texte / Script pub", placeholder="Primary text, headline, script...", height=150)
-
-            st.markdown("---")
-            run_btn = st.button("🚀 Run LRS Audit", type="primary", use_container_width=True)
+            st.markdown("")
+            run_btn = st.button("🚀 Lancer l'audit", type="primary", use_container_width=True)
 
         with col_r:
             if st.session_state.loaded_result and not run_btn:
-                st.info("Resultat charge depuis l'historique")
+                st.caption("Résultat chargé depuis l'historique")
                 render_results(st.session_state.loaded_result)
-                if st.button("Effacer"):
+                if st.button("✕ Fermer", key="close_loaded"):
                     st.session_state.loaded_result = None
                     st.rerun()
                 st.stop()
 
             if not run_btn:
-                st.markdown("### Configurez votre audit a gauche puis cliquez Run LRS Audit")
-                st.markdown("""
-| Mode | Ce que vous obtenez |
-|------|---------------------|
-| **Funnel Only** | Score /20, analyse detaillee, rewrite complet |
-| **Ads Only** | Score /20, hooks, angles, variantes prets |
-| **Full Risk** | Audit complet + Message Match + Plan d'action |
-
-Remplissez le contexte marche pour des recommandations personnalisees.
-                """)
+                # ── Page d'accueil col droite ─────────────────
+                st.markdown(
+                    """<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;
+                        padding:28px 32px;margin-top:8px'>
+                      <div style='color:#6366f1;font-size:0.75rem;font-weight:600;
+                           text-transform:uppercase;letter-spacing:1px;margin-bottom:12px'>
+                        Comment ça marche
+                      </div>
+                      <div style='color:#ccc;font-size:0.92rem;line-height:1.9'>
+                        <span style='color:#6366f1;font-weight:700'>①</span>&nbsp;
+                        Collez l'URL de votre landing page<br>
+                        <span style='color:#6366f1;font-weight:700'>②</span>&nbsp;
+                        Choisissez votre plateforme et type d'offre<br>
+                        <span style='color:#6366f1;font-weight:700'>③</span>&nbsp;
+                        Cliquez <strong>Lancer l'audit</strong> — résultats en ~15s
+                      </div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+                st.markdown("")
+                # Modes
+                m1, m2, m3 = st.columns(3)
+                for col, title, desc, color in [
+                    (m1, "Funnel Only", "Score /20 · Analyse · Rewrite", "#6366f1"),
+                    (m2, "Ads Only",    "Score /20 · Hooks · Variantes", "#22c55e"),
+                    (m3, "Full Risk",   "Audit complet + Message Match", "#FF8C00"),
+                ]:
+                    with col:
+                        st.markdown(
+                            f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;
+                                border-top:3px solid {color};border-radius:10px;
+                                padding:14px 16px;text-align:center'>
+                              <div style='color:#fff;font-weight:700;font-size:0.88rem'>{title}</div>
+                              <div style='color:#666;font-size:0.78rem;margin-top:4px'>{desc}</div>
+                            </div>""",
+                            unsafe_allow_html=True,
+                        )
                 st.stop()
 
             errors = []
@@ -2697,29 +2890,35 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                 except Exception as e:
                     st.error("Erreur inattendue : " + str(e))
 
+    # ── tab2 : Multi-Audit (Bulk + Comparaison) ──────────────
     with tab2:
-        render_bulk(api_key)
+        sub1, sub2 = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages"])
+        with sub1:
+            render_bulk(api_key)
+        with sub2:
+            render_comparison(api_key)
 
+    # ── tab3 : Suivi (Projets + Monitoring) ──────────────────
     with tab3:
-        render_comparison(api_key)
+        sub3, sub4 = st.tabs(["🗂️ Projets", "📡 Monitoring & Alertes"])
+        with sub3:
+            render_projects(api_key)
+        with sub4:
+            render_monitoring(api_key)
 
+    # ── tab4 : Historique ────────────────────────────────────
     with tab4:
-        render_projects(api_key)
-
-    with tab5:
-        render_checklist()
-
-    with tab6:
         render_history()
 
-    with tab7:
-        render_monitoring(api_key)
-
-    with tab8:
-        render_benchmark_tab()
-
-    with tab9:
-        render_changelog()
+    # ── tab5 : Ressources (Checklist + Benchmark + Changelog) ─
+    with tab5:
+        sub5, sub6, sub7 = st.tabs(["✅ Checklist Pré-Lancement", "📊 Benchmark 2025", "📋 Changelog"])
+        with sub5:
+            render_checklist()
+        with sub6:
+            render_benchmark_tab()
+        with sub7:
+            render_changelog()
 
 
 if __name__ == "__main__":
