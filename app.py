@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.5"
+APP_VERSION    = "2.6"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -66,9 +66,11 @@ def get_decision(score):
     return "Ready to scale", "Low"
 
 # ── PERSISTANCE ──────────────────────────────────────────────
-HISTORY_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
-PROFILES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_profiles.json")
-PROJECTS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
+HISTORY_FILE   = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
+PROFILES_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_profiles.json")
+PROJECTS_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
+SCHEDULE_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_schedule.json")
+ONBOARDING_FILE= os.path.join(os.path.dirname(__file__), ".lrs_onboarded.json")
 
 def load_history_file():
     """Charge l'historique depuis le fichier JSON (persistant entre sessions)."""
@@ -126,6 +128,39 @@ def delete_profile(name):
     profiles.pop(name, None)
     save_profiles(profiles)
 
+# ── AUDITS PLANIFIÉS ─────────────────────────────────────────
+def load_schedule():
+    try:
+        if os.path.exists(SCHEDULE_FILE):
+            with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_schedule(schedule):
+    try:
+        with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
+            json.dump(schedule, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# ── ONBOARDING ───────────────────────────────────────────────
+def is_onboarded():
+    try:
+        if os.path.exists(ONBOARDING_FILE):
+            return True
+    except Exception:
+        pass
+    return False
+
+def mark_onboarded():
+    try:
+        with open(ONBOARDING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"done": True, "date": datetime.datetime.now().strftime("%d/%m/%Y")}, f)
+    except Exception:
+        pass
+
 # ── PROJETS MULTI-PAGES ──────────────────────────────────────
 def load_projects():
     try:
@@ -156,8 +191,17 @@ def init_session():
     if "projects" not in st.session_state:
         st.session_state.projects = load_projects()
     if "impl_tracker" not in st.session_state:
-        # {entry_idx: {rec_id: bool}} — tracker local session (merge avec JSON)
         st.session_state.impl_tracker = {}
+    if "schedule" not in st.session_state:
+        st.session_state.schedule = load_schedule()
+    if "onboarded" not in st.session_state:
+        st.session_state.onboarded = is_onboarded()
+    if "scheduled_ran" not in st.session_state:
+        st.session_state.scheduled_ran = False  # éviter double run par session
+    if "bulk_results" not in st.session_state:
+        st.session_state.bulk_results = []
+    if "score_alerts" not in st.session_state:
+        st.session_state.score_alerts = []
 
 def save_history(result, meta):
     entry = {**meta, "score": result.get("_c", {}).get("score", 0),
@@ -167,6 +211,112 @@ def save_history(result, meta):
         st.session_state.audit_history = st.session_state.audit_history[:50]
     # Persister sur disque
     write_history_file(st.session_state.audit_history)
+
+# ── SCHEDULER : vérif au démarrage ──────────────────────────
+def run_scheduled_audits():
+    """
+    Vérifie les audits planifiés et exécute ceux dont la date est dépassée.
+    Appelé une fois par session (guard via scheduled_ran).
+    """
+    schedule = st.session_state.schedule
+    if not schedule:
+        return
+
+    now = datetime.datetime.now()
+    ran_any = False
+
+    for sid, sched in list(schedule.items()):
+        if not sched.get("enabled", True):
+            continue
+        last_run_str = sched.get("last_run", "")
+        freq_days    = int(sched.get("freq_days", 7))
+        try:
+            last_run = datetime.datetime.strptime(last_run_str, "%d/%m/%Y %H:%M") if last_run_str else datetime.datetime(2000, 1, 1)
+        except Exception:
+            last_run = datetime.datetime(2000, 1, 1)
+
+        delta_days = (now - last_run).days
+        if delta_days < freq_days:
+            continue
+
+        url = sched.get("url", "")
+        if not url:
+            continue
+
+        # Lancer l'audit silencieusement
+        try:
+            content, status, is_js = extract_page(url)
+            if not content:
+                schedule[sid]["last_error"] = status
+                schedule[sid]["last_run"]   = now.strftime("%d/%m/%Y %H:%M")
+                continue
+            pt  = detect_page_type(content, url)
+            pl  = detect_language(content)
+            res = run_audit(
+                sched.get("mode", "Funnel Only"),
+                sched.get("platform", "Meta"),
+                sched.get("offer_type", "Digital product"),
+                content, "",
+                sched.get("market_context", ""),
+                "gpt-4o-mini",
+                brand_type=sched.get("brand_type", "Nouveau lancement"),
+                page_type=pt, page_lang=pl,
+            )
+            ts   = now.strftime("%d/%m/%Y %H:%M")
+            meta = {"url": url, "mode": sched.get("mode","Funnel Only"),
+                    "platform": sched.get("platform","Meta"),
+                    "offer_type": sched.get("offer_type","Digital product"),
+                    "brand_type": sched.get("brand_type","Nouveau lancement"),
+                    "page_type": pt, "timestamp": ts,
+                    "scheduled": True}
+            save_history(res, meta)
+            schedule[sid]["last_run"]    = ts
+            schedule[sid]["last_error"]  = ""
+            schedule[sid]["last_score"]  = res.get("_c", {}).get("score", 0)
+            ran_any = True
+        except Exception as e:
+            schedule[sid]["last_error"] = str(e)
+            schedule[sid]["last_run"]   = now.strftime("%d/%m/%Y %H:%M")
+
+    if ran_any:
+        save_schedule(schedule)
+        st.session_state.schedule = schedule
+
+def compute_score_alerts(history):
+    """
+    Analyse l'historique et retourne une liste d'alertes (drops / progressions).
+    Regroupe par URL, compare le dernier audit au précédent.
+    """
+    if len(history) < 2:
+        return []
+    url_map = {}
+    for entry in reversed(history):  # du plus ancien au plus récent
+        url = entry.get("url", "")
+        if not url:
+            continue
+        if url not in url_map:
+            url_map[url] = []
+        url_map[url].append(entry)
+
+    alerts = []
+    for url, entries in url_map.items():
+        if len(entries) < 2:
+            continue
+        latest = entries[-1]
+        prev   = entries[-2]
+        delta  = latest.get("score", 0) - prev.get("score", 0)
+        if abs(delta) >= 2:   # seuil : changement significatif
+            alerts.append({
+                "url": url,
+                "latest_score": latest.get("score", 0),
+                "prev_score":   prev.get("score", 0),
+                "delta":        delta,
+                "latest_ts":    latest.get("timestamp", ""),
+                "direction":    "up" if delta > 0 else "down",
+            })
+    # Trier par amplitude décroissante
+    alerts.sort(key=lambda a: abs(a["delta"]), reverse=True)
+    return alerts
 
 # ── CHARGEMENT TXT ───────────────────────────────────────────
 def load_txt(path):
@@ -1344,6 +1494,216 @@ def render_history():
                     except Exception:
                         pass
 
+# ── ONGLET MONITORING (Schedule + Alertes + Score Trend) ─────
+def render_monitoring(api_key):
+    st.subheader("📡 Monitoring — Audits Planifiés & Alertes")
+
+    history  = st.session_state.audit_history
+    schedule = st.session_state.schedule
+    alerts   = compute_score_alerts(history)
+
+    # ── Bandeau alertes ──────────────────────────────────────
+    if alerts:
+        st.markdown("#### 🚨 Alertes Score")
+        for al in alerts[:5]:
+            url_short = al["url"].replace("https://","").replace("http://","")[:50]
+            delta     = al["delta"]
+            icon      = "📈" if delta > 0 else "📉"
+            col_al    = "#22c55e" if delta > 0 else "#FF4444"
+            sign      = "+" if delta > 0 else ""
+            st.markdown(
+                f"""<div style='background:#1a1a2e;border-left:4px solid {col_al};
+                    border-radius:8px;padding:12px 16px;margin:4px 0;
+                    display:flex;gap:16px;align-items:center'>
+                  <span style='font-size:1.5em'>{icon}</span>
+                  <div style='flex:1'>
+                    <span style='color:#ccc;font-size:0.9em'>{url_short}</span><br>
+                    <span style='color:#888;font-size:0.78em'>{al['latest_ts']}</span>
+                  </div>
+                  <div style='text-align:right'>
+                    <span style='color:#888'>{al['prev_score']}/20</span>
+                    <span style='color:#555'> → </span>
+                    <span style='color:{col_al};font-weight:700'>{al['latest_score']}/20</span>
+                    <span style='color:{col_al};font-size:0.85em'> ({sign}{delta} pts)</span>
+                  </div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        st.markdown("")
+    else:
+        st.info("Aucune alerte — aucune variation significative (≥2 pts) détectée entre les derniers audits.")
+
+    st.markdown("---")
+
+    # ── Score Trend par Page ──────────────────────────────────
+    st.markdown("#### 📈 Score Trend par Page")
+
+    url_map = {}
+    for entry in reversed(history):
+        url = entry.get("url", "")
+        if not url: continue
+        url_map.setdefault(url, []).append(entry)
+
+    tracked_urls = {u: entries for u, entries in url_map.items() if len(entries) >= 2}
+
+    if not tracked_urls:
+        st.caption("Auditez la même URL plusieurs fois pour voir son évolution ici.")
+    else:
+        sel_url = st.selectbox(
+            "Choisir une page suivie",
+            list(tracked_urls.keys()),
+            format_func=lambda u: u.replace("https://","").replace("http://","")[:60],
+            key="trend_url_sel",
+        )
+        if sel_url:
+            entries_url = tracked_urls[sel_url]
+            import pandas as pd
+            chart_data = []
+            for e in entries_url:
+                chart_data.append({
+                    "Date":          e.get("timestamp", ""),
+                    "Score /20":     e.get("score", 0),
+                    "Seuil Test":    10,
+                    "Seuil Scale":   15,
+                })
+            df_trend = pd.DataFrame(chart_data)
+            st.line_chart(df_trend.set_index("Date")[["Score /20", "Seuil Test", "Seuil Scale"]])
+
+            first_sc = entries_url[0].get("score", 0)
+            last_sc  = entries_url[-1].get("score", 0)
+            delta_t  = last_sc - first_sc
+            col_t    = "#22c55e" if delta_t > 0 else "#FF4444" if delta_t < 0 else "#888"
+            sign_t   = "+" if delta_t >= 0 else ""
+            met1, met2, met3 = st.columns(3)
+            with met1: st.metric("Premier audit", f"{first_sc}/20")
+            with met2: st.metric("Dernier audit",  f"{last_sc}/20")
+            with met3: st.metric("Progression totale", f"{sign_t}{delta_t} pts",
+                                  delta=delta_t, delta_color="normal")
+
+    st.markdown("---")
+
+    # ── Gestion des audits planifiés ─────────────────────────
+    st.markdown("#### ⏰ Audits Planifiés Automatiques")
+    st.caption("L'app vérifie les audits en retard à chaque ouverture et les exécute automatiquement.")
+
+    with st.expander("➕ Planifier un audit", expanded=(len(schedule) == 0)):
+        sc_url  = st.text_input("URL à surveiller", placeholder="https://ma-landing.com", key="sc_url")
+        sc_freq = st.selectbox("Fréquence", ["7 jours", "14 jours", "30 jours"], key="sc_freq")
+        freq_map = {"7 jours": 7, "14 jours": 14, "30 jours": 30}
+
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            sc_mode   = st.selectbox("Mode", ["Funnel Only","Full Risk"], key="sc_mode")
+            sc_plat   = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"], key="sc_plat")
+        with sc2:
+            sc_offer  = st.selectbox("Offre", ["Digital product","Ecom (produit physique)"], key="sc_offer")
+            sc_brand  = st.radio("Marque", ["Nouveau lancement","Marque etablie"], key="sc_brand", horizontal=True)
+
+        if st.button("⏰ Planifier", type="primary", key="btn_schedule"):
+            if not sc_url.strip():
+                st.error("Renseignez une URL.")
+            else:
+                sid = "sc_" + str(int(time.time()))
+                schedule[sid] = {
+                    "url":        sc_url.strip(),
+                    "freq_days":  freq_map[sc_freq],
+                    "mode":       sc_mode,
+                    "platform":   sc_plat,
+                    "offer_type": sc_offer,
+                    "brand_type": sc_brand,
+                    "enabled":    True,
+                    "last_run":   "",
+                    "last_score": None,
+                    "last_error": "",
+                    "created":    datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                }
+                save_schedule(schedule)
+                st.session_state.schedule = schedule
+                st.success(f"Audit planifié toutes les {sc_freq} pour {sc_url.strip()[:40]}")
+                st.rerun()
+
+    if schedule:
+        st.markdown("**Audits en cours de surveillance :**")
+        for sid, sched in list(schedule.items()):
+            url_s     = sched.get("url","")[:50]
+            freq      = sched.get("freq_days", 7)
+            last_run  = sched.get("last_run","Jamais")
+            last_sc   = sched.get("last_score")
+            enabled   = sched.get("enabled", True)
+            err       = sched.get("last_error","")
+
+            # Calcul prochain audit
+            try:
+                lr_dt = datetime.datetime.strptime(last_run, "%d/%m/%Y %H:%M") if last_run != "Jamais" else None
+                if lr_dt:
+                    next_run = lr_dt + datetime.timedelta(days=freq)
+                    days_left = (next_run - datetime.datetime.now()).days
+                    next_str  = f"dans {days_left}j" if days_left > 0 else "à la prochaine ouverture"
+                else:
+                    next_str = "à la prochaine ouverture"
+            except Exception:
+                next_str = "N/A"
+
+            sc_icon = ("🟢" if (last_sc or 0) >= 15 else "🟡" if (last_sc or 0) >= 10 else "🔴") if last_sc is not None else "⚪"
+            status_icon = "✅" if enabled else "⏸️"
+
+            with st.expander(f"{status_icon} {url_s} — toutes les {freq}j — {sc_icon} {last_sc}/20 si disponible" if last_sc else f"{status_icon} {url_s} — toutes les {freq}j — pas encore audité"):
+                col_s1, col_s2, col_s3 = st.columns(3)
+                with col_s1:
+                    st.markdown(f"**Dernier audit :** {last_run}")
+                    if last_sc is not None:
+                        st.markdown(f"**Dernier score :** {last_sc}/20")
+                with col_s2:
+                    st.markdown(f"**Prochain audit :** {next_str}")
+                    st.markdown(f"**Mode :** {sched.get('mode','')}")
+                with col_s3:
+                    if err:
+                        st.error(f"Erreur : {err[:80]}")
+                    # Forcer re-run
+                    if st.button("▶️ Lancer maintenant", key="sc_run_" + sid):
+                        with st.spinner("Audit en cours..."):
+                            try:
+                                content, status, _ = extract_page(url_s if len(url_s) < 50 else sched.get("url",""))
+                                if content:
+                                    pt  = detect_page_type(content, sched.get("url",""))
+                                    pl  = detect_language(content)
+                                    res = run_audit(sched.get("mode","Funnel Only"), sched.get("platform","Meta"),
+                                                   sched.get("offer_type","Digital product"), content, "",
+                                                   "", "gpt-4o-mini", brand_type=sched.get("brand_type","Nouveau lancement"),
+                                                   page_type=pt, page_lang=pl)
+                                    ts_now = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                                    meta_s = {"url": sched.get("url",""), "mode": sched.get("mode",""),
+                                              "platform": sched.get("platform",""), "offer_type": sched.get("offer_type",""),
+                                              "brand_type": sched.get("brand_type",""), "page_type": pt,
+                                              "timestamp": ts_now, "scheduled": True}
+                                    save_history(res, meta_s)
+                                    schedule[sid]["last_run"]   = ts_now
+                                    schedule[sid]["last_score"] = res.get("_c",{}).get("score",0)
+                                    schedule[sid]["last_error"] = ""
+                                    save_schedule(schedule)
+                                    st.session_state.schedule = schedule
+                                    st.success(f"Audit terminé : {res.get('_c',{}).get('score',0)}/20")
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
+
+                act1, act2 = st.columns(2)
+                with act1:
+                    tog_label = "⏸️ Désactiver" if enabled else "▶️ Activer"
+                    if st.button(tog_label, key="sc_tog_" + sid):
+                        schedule[sid]["enabled"] = not enabled
+                        save_schedule(schedule)
+                        st.session_state.schedule = schedule
+                        st.rerun()
+                with act2:
+                    if st.button("🗑️ Supprimer", key="sc_del_" + sid):
+                        del schedule[sid]
+                        save_schedule(schedule)
+                        st.session_state.schedule = schedule
+                        st.rerun()
+    else:
+        st.caption("Aucun audit planifié.")
+
 # ── PROJETS MULTI-PAGES ──────────────────────────────────────
 def render_projects(api_key):
     st.subheader("🗂️ Projets Multi-Pages")
@@ -1504,6 +1864,187 @@ def render_projects(api_key):
                     st.session_state.projects = projects
                     st.rerun()
 
+# ── BULK AUDIT ───────────────────────────────────────────────
+def render_bulk(api_key):
+    st.subheader("⚡ Bulk Audit — Plusieurs URLs en 1 clic")
+    st.caption("Collez jusqu'à 20 URLs (une par ligne) ou importez un CSV. LRS audite tout et génère un tableau comparatif.")
+
+    bulk_tab_input, bulk_tab_csv = st.tabs(["✏️ Saisie manuelle", "📄 Import CSV"])
+
+    with bulk_tab_input:
+        urls_raw = st.text_area(
+            "URLs (une par ligne)",
+            placeholder="https://page1.com\nhttps://page2.com\nhttps://concurrent.com",
+            height=160,
+            key="bulk_urls_input",
+        )
+        urls_list = [u.strip() for u in urls_raw.strip().splitlines() if u.strip().startswith("http")]
+
+    with bulk_tab_csv:
+        uploaded_csv = st.file_uploader("Importer un CSV (colonne 'url')", type=["csv","txt"], key="bulk_csv_upload")
+        if uploaded_csv:
+            try:
+                import io as _io
+                content_csv = uploaded_csv.read().decode("utf-8", errors="ignore")
+                lines = content_csv.splitlines()
+                # Détecter si CSV avec header ou liste brute
+                csv_urls = []
+                for line in lines:
+                    parts = line.split(",")
+                    for part in parts:
+                        part = part.strip().strip('"').strip("'")
+                        if part.startswith("http"):
+                            csv_urls.append(part)
+                if csv_urls:
+                    st.success(f"{len(csv_urls)} URLs détectées dans le fichier.")
+                    urls_list = csv_urls
+                else:
+                    st.warning("Aucune URL valide trouvée dans le fichier.")
+            except Exception as e:
+                st.error(f"Erreur lecture CSV : {e}")
+
+    bc1, bc2, bc3 = st.columns(3)
+    with bc1: bulk_mode   = st.selectbox("Mode",      ["Funnel Only","Full Risk"], key="bulk_mode")
+    with bc2: bulk_plat   = st.selectbox("Plateforme",["Meta","TikTok","Google","Mixed"], key="bulk_plat")
+    with bc3: bulk_offer  = st.selectbox("Offre",     ["Digital product","Ecom (produit physique)"], key="bulk_offer")
+    bulk_brand = st.radio("Marque", ["Nouveau lancement","Marque etablie"], key="bulk_brand", horizontal=True)
+
+    n_urls = len(urls_list) if 'urls_list' in dir() and urls_list else 0
+    btn_label = f"⚡ Lancer {n_urls} audits" if n_urls > 0 else "⚡ Lancer les audits"
+    run_bulk  = st.button(btn_label, type="primary", use_container_width=True, key="run_bulk_btn",
+                           disabled=(n_urls == 0))
+
+    if run_bulk and n_urls > 0:
+        if n_urls > 20:
+            st.warning("Maximum 20 URLs par batch. Seules les 20 premières seront auditées.")
+            urls_list = urls_list[:20]
+
+        bulk_results = []
+        progress_bar = st.progress(0)
+        status_text  = st.empty()
+
+        for idx, url in enumerate(urls_list):
+            status_text.markdown(f"🔍 Auditing **{url.replace('https://','')[:50]}**... ({idx+1}/{len(urls_list)})")
+            try:
+                content, status, is_js = extract_page(url)
+                if not content:
+                    bulk_results.append({"url": url, "error": status, "score": None})
+                    progress_bar.progress((idx+1)/len(urls_list))
+                    continue
+                pt  = detect_page_type(content, url)
+                pl  = detect_language(content)
+                res = run_audit(bulk_mode, bulk_plat, bulk_offer, content, "",
+                               "", "gpt-4o-mini", brand_type=bulk_brand,
+                               page_type=pt, page_lang=pl)
+                c_r = res.get("_c", {})
+                ts  = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                meta_b = {"url": url, "mode": bulk_mode, "platform": bulk_plat,
+                          "offer_type": bulk_offer, "brand_type": bulk_brand,
+                          "page_type": pt, "timestamp": ts}
+                save_history(res, meta_b)
+                bulk_results.append({
+                    "url": url,
+                    "score": c_r.get("score", 0),
+                    "hook": c_r.get("hook", 0),
+                    "offer": c_r.get("offer", 0),
+                    "trust": c_r.get("trust", 0),
+                    "friction": c_r.get("friction", 0),
+                    "decision": c_r.get("decision", ""),
+                    "risk": c_r.get("risk", "High"),
+                    "page_type": pt,
+                    "result": res,
+                    "error": None,
+                })
+            except Exception as e:
+                bulk_results.append({"url": url, "error": str(e)[:80], "score": None})
+            progress_bar.progress((idx+1)/len(urls_list))
+
+        status_text.empty()
+        st.session_state.bulk_results = bulk_results
+        st.rerun()
+
+    # ── Affichage résultats bulk ──────────────────────────────
+    if st.session_state.bulk_results:
+        results = st.session_state.bulk_results
+        st.markdown("---")
+        st.markdown(f"### Résultats — {len(results)} pages auditées")
+
+        # Trier par score décroissant
+        sortable = [r for r in results if r.get("score") is not None]
+        errors   = [r for r in results if r.get("score") is None]
+        sortable.sort(key=lambda r: r["score"], reverse=True)
+
+        # Tableau récap
+        import pandas as pd
+        rows_df = []
+        for r in sortable:
+            sc    = r["score"]
+            emoji = "🟢" if sc >= 15 else "🟡" if sc >= 10 else "🔴"
+            rows_df.append({
+                "Rang": sortable.index(r)+1,
+                "URL":  r["url"].replace("https://","")[:50],
+                "Score": f"{emoji} {sc}/20",
+                "Hook":  f"{r.get('hook',0)}/5",
+                "Offer": f"{r.get('offer',0)}/5",
+                "Trust": f"{r.get('trust',0)}/5",
+                "Friction": f"{r.get('friction',0)}/5",
+                "Décision": r.get("decision",""),
+            })
+        if rows_df:
+            df_bulk = pd.DataFrame(rows_df)
+            st.dataframe(df_bulk, use_container_width=True, hide_index=True)
+
+        # Podium top 3
+        if len(sortable) >= 3:
+            st.markdown("#### 🏆 Podium")
+            p1, p2, p3 = st.columns(3)
+            for col, rank, entry in [(p2, 2, sortable[1]), (p1, 1, sortable[0]), (p3, 3, sortable[2])]:
+                with col:
+                    sc_c = "#FFD700" if rank==1 else "#C0C0C0" if rank==2 else "#CD7F32"
+                    medal = "🥇" if rank==1 else "🥈" if rank==2 else "🥉"
+                    url_s = entry["url"].replace("https://","")[:35]
+                    sc_h  = "#22c55e" if entry["score"]>=15 else "#FF8C00" if entry["score"]>=10 else "#FF4444"
+                    st.markdown(
+                        f"""<div style='background:#1a1a2e;border:2px solid {sc_c};border-radius:10px;
+                            padding:14px;text-align:center;margin:4px'>
+                          <div style='font-size:1.8em'>{medal}</div>
+                          <div style='color:#888;font-size:0.75em;margin:4px 0'>{url_s}</div>
+                          <div style='color:{sc_h};font-size:2em;font-weight:900'>{entry['score']}<span style='color:#555;font-size:0.5em'>/20</span></div>
+                          <div style='color:{sc_h};font-size:0.8em'>{entry.get('decision','')}</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+        # Détail par URL
+        st.markdown("#### 📋 Détail par page")
+        for r in sortable:
+            sc = r["score"]
+            sc_color = "#22c55e" if sc >= 15 else "#FF8C00" if sc >= 10 else "#FF4444"
+            with st.expander(f"{r['url'].replace('https://','')[:55]} — {sc}/20 — {r.get('decision','')}"):
+                render_results(r["result"])
+
+        if errors:
+            st.markdown("#### ⚠️ Erreurs")
+            for e in errors:
+                st.error(f"{e['url']} : {e.get('error','Erreur inconnue')}")
+
+        # Export CSV résultats
+        if sortable:
+            import csv as _csv
+            import io as _io2
+            out = _io2.StringIO()
+            writer = _csv.DictWriter(out, fieldnames=["url","score","hook","offer","trust","friction","decision","risk","page_type"])
+            writer.writeheader()
+            for r in sortable:
+                writer.writerow({k: r.get(k,"") for k in ["url","score","hook","offer","trust","friction","decision","risk","page_type"]})
+            st.download_button("📥 Exporter résultats CSV", data=out.getvalue().encode("utf-8"),
+                               file_name="LRS_bulk_results.csv", mime="text/csv",
+                               use_container_width=True)
+
+        if st.button("🗑️ Vider les résultats", key="clear_bulk"):
+            st.session_state.bulk_results = []
+            st.rerun()
+
 # ── COMPARAISON 2 URLs ───────────────────────────────────────
 def render_comparison(api_key, model="gpt-4o-mini"):
     st.subheader("Mode Comparaison — 2 URLs côte à côte")
@@ -1613,13 +2154,57 @@ def _score_color_str(v, mx=5):
     if r <= 0.65: return "#FF8C00"
     return "#22c55e"
 
+# ── ONBOARDING ───────────────────────────────────────────────
+def render_onboarding_banner():
+    """
+    Affiche un guide de démarrage pour les nouveaux utilisateurs.
+    Disparaît une fois que l'utilisateur clique "Compris".
+    """
+    if st.session_state.get("onboarded"):
+        return
+
+    st.markdown(
+        """
+        <div style='background:linear-gradient(135deg,#1a1a2e,#16213e);
+             border:2px solid #6366f1;border-radius:14px;
+             padding:24px 28px;margin-bottom:20px'>
+          <div style='color:#6366f1;font-size:1.1em;font-weight:700;margin-bottom:8px'>
+            👋 Bienvenue sur LRS™ — Launch Risk System
+          </div>
+          <div style='color:#ccc;font-size:0.92em;line-height:1.7'>
+            <b style='color:#fff'>3 étapes pour votre premier audit :</b><br>
+            &nbsp;&nbsp;<span style='color:#6366f1'>①</span> &nbsp;Collez l'URL de votre landing page dans l'onglet <b>Audit</b><br>
+            &nbsp;&nbsp;<span style='color:#6366f1'>②</span> &nbsp;Choisissez votre plateforme publicitaire et le type d'offre<br>
+            &nbsp;&nbsp;<span style='color:#6366f1'>③</span> &nbsp;Cliquez <b>🚀 Run LRS Audit</b> — résultats en 15 secondes<br><br>
+            <b style='color:#fff'>Fonctionnalités disponibles :</b>
+            &nbsp;Audit · Comparaison · Projets multi-pages · Bulk audit · Monitoring planifié · Export PDF client
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    col_ok, col_skip = st.columns([1, 5])
+    with col_ok:
+        if st.button("✅ Compris, démarrer", type="primary", key="onboarding_ok"):
+            mark_onboarded()
+            st.session_state.onboarded = True
+            st.rerun()
+
 # ── CHANGELOG ────────────────────────────────────────────────
 def render_changelog():
     st.subheader("📋 Changelog LRS™")
     st.caption("Historique de toutes les améliorations apportées à l'outil.")
 
     versions = [
-        ("V2.5 — Aujourd'hui", [
+        ("V2.6 — Aujourd'hui", [
+            "🆕 Bulk Audit : auditez jusqu'à 20 URLs en 1 clic + import CSV + export résultats CSV",
+            "🆕 Monitoring : alertes score (drop/progression ≥2 pts), score trend par page",
+            "🆕 Audits planifiés automatiques : surveillance toutes les 7/14/30 jours, exécution au démarrage",
+            "🆕 Onboarding interactif : guide de démarrage pour les nouveaux utilisateurs",
+            "🆕 Onglet Monitoring avec podium, tableau comparatif et badge d'alerte",
+        ]),
+        ("V2.5", [
             "🆕 Profils d'audit sauvegardés (charger / sauvegarder vos paramètres habituels)",
             "🆕 Delta de score : progression globale depuis le premier audit visible dans l'Historique",
             "🆕 Tracker d'implémentation des recommandations (checkboxes + barre de progression)",
@@ -1670,7 +2255,7 @@ def render_changelog():
     ]
 
     for v_title, items in versions:
-        with st.expander(v_title, expanded=(v_title.startswith("V2.4"))):
+        with st.expander(v_title, expanded=(v_title.startswith("V2.6"))):
             for item in items:
                 st.markdown(item)
 
@@ -1815,7 +2400,24 @@ OPENAI_API_KEY = "sk-..."
             """)
         st.stop()
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["Audit", "Comparaison", "Projets", "Checklist Pre-Lancement", "Historique", "Benchmark 2025", "Changelog"])
+    # ── Scheduler au démarrage (une fois par session) ─────────
+    if not st.session_state.get("scheduled_ran"):
+        run_scheduled_audits()
+        st.session_state.scheduled_ran = True
+
+    # ── Alerte planifié : badge si audits ont tourné ──────────
+    alerts = compute_score_alerts(st.session_state.audit_history)
+    n_alerts = len(alerts)
+    monitor_label = f"Monitoring 🔴 {n_alerts}" if n_alerts > 0 else "Monitoring"
+
+    # ── Onboarding banner ────────────────────────────────────
+    render_onboarding_banner()
+
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
+        "Audit", "Bulk Audit", "Comparaison", "Projets",
+        "Checklist", "Historique", monitor_label,
+        "Benchmark 2025", "Changelog"
+    ])
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
@@ -2096,21 +2698,27 @@ Remplissez le contexte marche pour des recommandations personnalisees.
                     st.error("Erreur inattendue : " + str(e))
 
     with tab2:
-        render_comparison(api_key)
+        render_bulk(api_key)
 
     with tab3:
-        render_projects(api_key)
+        render_comparison(api_key)
 
     with tab4:
-        render_checklist()
+        render_projects(api_key)
 
     with tab5:
-        render_history()
+        render_checklist()
 
     with tab6:
-        render_benchmark_tab()
+        render_history()
 
     with tab7:
+        render_monitoring(api_key)
+
+    with tab8:
+        render_benchmark_tab()
+
+    with tab9:
         render_changelog()
 
 
