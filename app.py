@@ -28,7 +28,7 @@ try:
 except ImportError:
     pass
 
-APP_VERSION    = "2.8"
+APP_VERSION    = "3.0"
 MAX_PAGE_CHARS = 8000
 
 st.set_page_config(
@@ -282,6 +282,157 @@ PROFILES_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_profiles.json")
 PROJECTS_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
 SCHEDULE_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_schedule.json")
 ONBOARDING_FILE= os.path.join(os.path.dirname(__file__), ".lrs_onboarded.json")
+USAGE_FILE     = os.path.join(os.path.dirname(__file__), ".lrs_usage.json")
+
+# ── PLAN / QUOTA SYSTEM ──────────────────────────────────────
+PLAN_LIMITS = {
+    "starter": {
+        "label":             "Starter",
+        "audits_per_month":  10,
+        "modes":             ["Funnel Only"],
+        "bulk":              False,
+        "monitoring":        False,
+        "ads_library":       False,
+        "integrations":      False,
+        "white_label":       False,
+        "price":             "19€/mois",
+        "badge_color":       "#6b7280",
+    },
+    "pro": {
+        "label":             "Pro",
+        "audits_per_month":  999,   # unlimited
+        "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
+        "bulk":              True,
+        "monitoring":        True,
+        "ads_library":       True,
+        "integrations":      True,
+        "white_label":       False,
+        "price":             "49€/mois",
+        "badge_color":       "#6366f1",
+    },
+    "agency": {
+        "label":             "Agency",
+        "audits_per_month":  999,   # unlimited
+        "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
+        "bulk":              True,
+        "monitoring":        True,
+        "ads_library":       True,
+        "integrations":      True,
+        "white_label":       True,
+        "price":             "99€/mois",
+        "badge_color":       "#f59e0b",
+    },
+}
+
+def _get_plan():
+    """Retourne le plan actif ('starter'|'pro'|'agency')."""
+    try:
+        plan = st.secrets.get("license", {}).get("plan", "")
+        if plan in PLAN_LIMITS:
+            return plan
+    except Exception:
+        pass
+    plan = os.getenv("LRS_PLAN", "starter").lower()
+    return plan if plan in PLAN_LIMITS else "starter"
+
+def _load_usage():
+    """Charge les données d'usage depuis .lrs_usage.json."""
+    try:
+        if os.path.exists(USAGE_FILE):
+            with open(USAGE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_usage(data):
+    try:
+        with open(USAGE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+def _check_quota():
+    """
+    Vérifie si l'utilisateur a des crédits restants ce mois.
+    Retourne (ok: bool, used: int, limit: int).
+    """
+    plan  = _get_plan()
+    limit = PLAN_LIMITS[plan]["audits_per_month"]
+    if limit >= 999:
+        return True, 0, limit
+    month_key = datetime.datetime.now().strftime("%Y-%m")
+    usage = _load_usage()
+    used  = usage.get(month_key, 0)
+    return used < limit, used, limit
+
+def _increment_usage():
+    """Incrémente le compteur d'audits du mois en cours."""
+    month_key = datetime.datetime.now().strftime("%Y-%m")
+    usage = _load_usage()
+    usage[month_key] = usage.get(month_key, 0) + 1
+    _save_usage(usage)
+
+def get_remaining_audits():
+    """Retourne (remaining: int, limit: int). -1 si illimité."""
+    plan  = _get_plan()
+    limit = PLAN_LIMITS[plan]["audits_per_month"]
+    if limit >= 999:
+        return -1, -1
+    month_key = datetime.datetime.now().strftime("%Y-%m")
+    usage = _load_usage()
+    used  = usage.get(month_key, 0)
+    return max(0, limit - used), limit
+
+
+# ── TRADUCTIONS (EN / FR) ────────────────────────────────────
+_T = {
+    # ── Navigation ──
+    "tab_audit":        {"fr": "Audit",           "en": "Audit"},
+    "tab_multi":        {"fr": "Multi-Audit",      "en": "Multi-Audit"},
+    "tab_suivi":        {"fr": "Suivi",            "en": "Monitoring"},
+    "tab_history":      {"fr": "Historique",       "en": "History"},
+    "tab_resources":    {"fr": "Ressources",       "en": "Resources"},
+    # ── Audit form ──
+    "mode_label":       {"fr": "Mode",             "en": "Mode"},
+    "url_label":        {"fr": "URL de la page",   "en": "Page URL"},
+    "ad_text_label":    {"fr": "Texte de la pub",  "en": "Ad copy"},
+    "platform_label":   {"fr": "Plateforme",       "en": "Platform"},
+    "offer_label":      {"fr": "Offre",            "en": "Offer type"},
+    "brand_type_label": {"fr": "Type de marque",   "en": "Brand type"},
+    "run_btn":          {"fr": "🚀 Lancer l'audit","en": "🚀 Run audit"},
+    "advanced_opts":    {"fr": "⚙️ Options avancées","en": "⚙️ Advanced options"},
+    # ── Quota ──
+    "quota_remaining":  {"fr": "audits restants ce mois", "en": "audits left this month"},
+    "quota_exhausted":  {"fr": "❌ Quota épuisé — passez en Pro pour des audits illimités.",
+                         "en": "❌ Quota exhausted — upgrade to Pro for unlimited audits."},
+    "mode_locked":      {"fr": "⚠️ Ce mode est réservé au plan Pro/Agency.",
+                         "en": "⚠️ This mode is available on Pro/Agency plans only."},
+    # ── Results ──
+    "score_label":      {"fr": "Score LRS",        "en": "LRS Score"},
+    "decision_label":   {"fr": "Décision",         "en": "Decision"},
+    "action_label":     {"fr": "Plan d'action",    "en": "Action plan"},
+    # ── Integrations ──
+    "int_title":        {"fr": "🔗 Intégrations",  "en": "🔗 Integrations"},
+    "int_slack":        {"fr": "Slack",            "en": "Slack"},
+    "int_sheets":       {"fr": "Google Sheets",    "en": "Google Sheets"},
+    "int_notion":       {"fr": "Notion",           "en": "Notion"},
+    "send_slack":       {"fr": "📤 Envoyer sur Slack", "en": "📤 Send to Slack"},
+    "export_sheets":    {"fr": "📊 Exporter vers Sheets", "en": "📊 Export to Sheets"},
+    "export_notion":    {"fr": "📝 Exporter vers Notion", "en": "📝 Export to Notion"},
+    "not_configured":   {"fr": "Non configuré. Ajoutez la clé dans Streamlit Secrets.",
+                         "en": "Not configured. Add the key in Streamlit Secrets."},
+    "success_slack":    {"fr": "✅ Envoyé sur Slack !",     "en": "✅ Sent to Slack!"},
+    "success_sheets":   {"fr": "✅ Exporté vers Sheets !",  "en": "✅ Exported to Sheets!"},
+    "success_notion":   {"fr": "✅ Exporté vers Notion !",  "en": "✅ Exported to Notion!"},
+}
+
+def t(key):
+    """Retourne la traduction selon la langue active."""
+    lang = st.session_state.get("lang", "fr")
+    entry = _T.get(key, {})
+    return entry.get(lang, entry.get("fr", key))
+
 
 def load_history_file():
     """Charge l'historique depuis le fichier JSON (persistant entre sessions)."""
@@ -417,6 +568,8 @@ def init_session():
         st.session_state.auto_reaudit_idx = None
     if "light_mode" not in st.session_state:
         st.session_state.light_mode = False
+    if "lang" not in st.session_state:
+        st.session_state.lang = "fr"
 
 def save_history(result, meta):
     entry = {**meta, "score": result.get("_c", {}).get("score", 0),
@@ -1612,6 +1765,302 @@ def render_share_widget(result, meta, key_prefix="share"):
         share_txt = build_share_text(result, meta)
         st.code(share_txt, language=None)
         st.caption("Sélectionnez tout (Ctrl+A) puis copiez — ou utilisez le bouton copier en haut à droite du bloc.")
+
+
+# ── INTÉGRATIONS : Slack / Google Sheets / Notion ────────────
+
+def _get_integration_config():
+    """Lit les clés d'intégration depuis Streamlit Secrets ou variables d'env."""
+    try:
+        cfg = st.secrets
+        slack_webhook    = cfg.get("SLACK_WEBHOOK_URL",    os.getenv("SLACK_WEBHOOK_URL", ""))
+        sheets_creds     = cfg.get("GOOGLE_SHEETS_CREDS",  os.getenv("GOOGLE_SHEETS_CREDS", ""))
+        sheets_id        = cfg.get("GOOGLE_SHEETS_ID",     os.getenv("GOOGLE_SHEETS_ID", ""))
+        notion_token     = cfg.get("NOTION_TOKEN",         os.getenv("NOTION_TOKEN", ""))
+        notion_db        = cfg.get("NOTION_DATABASE_ID",   os.getenv("NOTION_DATABASE_ID", ""))
+    except Exception:
+        slack_webhook = os.getenv("SLACK_WEBHOOK_URL", "")
+        sheets_creds  = os.getenv("GOOGLE_SHEETS_CREDS", "")
+        sheets_id     = os.getenv("GOOGLE_SHEETS_ID", "")
+        notion_token  = os.getenv("NOTION_TOKEN", "")
+        notion_db     = os.getenv("NOTION_DATABASE_ID", "")
+    return {
+        "slack_webhook": slack_webhook,
+        "sheets_creds":  sheets_creds,
+        "sheets_id":     sheets_id,
+        "notion_token":  notion_token,
+        "notion_db":     notion_db,
+    }
+
+
+def send_slack_notification(result, meta):
+    """
+    Envoie une notification Slack avec le résumé de l'audit.
+    Configure SLACK_WEBHOOK_URL dans Streamlit Secrets ou .env.
+    """
+    cfg     = _get_integration_config()
+    webhook = cfg["slack_webhook"]
+    if not webhook:
+        raise ValueError("SLACK_WEBHOOK_URL non configuré.")
+
+    c        = result.get("_c", {})
+    score    = c.get("score", 0)
+    decision = c.get("decision", "")
+    url_or_offer = meta.get("url") or meta.get("offer_type", "")
+    ts       = meta.get("timestamp", "")
+    mode     = meta.get("mode", "")
+    emoji    = "🔴" if score <= 9 else "🟡" if score <= 14 else "🟢"
+
+    fp       = result.get("fix_plan", {})
+    top      = fp.get("top_priority_action", {})
+    top_txt  = top.get("what", "") if top else ""
+
+    text = (
+        f"{emoji} *LRS™ Audit — {score}/20 — {decision}*\n"
+        f"*{url_or_offer}*  ·  {ts}  ·  {mode}\n"
+    )
+    if top_txt:
+        text += f">🎯 {top_txt}\n"
+
+    payload = {
+        "text": text,
+        "blocks": [
+            {"type": "section", "text": {"type": "mrkdwn", "text": text}},
+            {"type": "divider"},
+            {"type": "context", "elements": [
+                {"type": "mrkdwn",
+                 "text": f"Généré par *LRS™ V{APP_VERSION}* — Launch Risk System"}
+            ]}
+        ]
+    }
+    resp = requests.post(webhook, json=payload, timeout=10)
+    if resp.status_code not in (200, 204):
+        raise ValueError(f"Slack répondu {resp.status_code}: {resp.text[:200]}")
+
+
+def export_to_sheets(result, meta):
+    """
+    Ajoute une ligne dans un Google Sheet via l'API Sheets v4 (service account).
+    Configurez dans Streamlit Secrets :
+      GOOGLE_SHEETS_CREDS = '<json service account en string>'
+      GOOGLE_SHEETS_ID    = '<spreadsheet id>'
+    """
+    cfg      = _get_integration_config()
+    creds_s  = cfg["sheets_creds"]
+    sheet_id = cfg["sheets_id"]
+    if not creds_s or not sheet_id:
+        raise ValueError("GOOGLE_SHEETS_CREDS ou GOOGLE_SHEETS_ID non configurés.")
+
+    try:
+        creds_dict = json.loads(creds_s)
+    except Exception:
+        raise ValueError("GOOGLE_SHEETS_CREDS : JSON invalide.")
+
+    # ── 1. Obtenir un access token (OAuth2 service account) ──
+    import base64, hashlib, struct, time as _time
+    # Build JWT header + claims
+    iat   = int(_time.time())
+    exp   = iat + 3600
+    scope = "https://www.googleapis.com/auth/spreadsheets"
+    jwt_header  = base64.urlsafe_b64encode(json.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b"=")
+    jwt_claims  = base64.urlsafe_b64encode(json.dumps({
+        "iss": creds_dict["client_email"],
+        "sub": creds_dict["client_email"],
+        "aud": "https://oauth2.googleapis.com/token",
+        "iat": iat, "exp": exp, "scope": scope,
+    }).encode()).rstrip(b"=")
+    signing_input = jwt_header + b"." + jwt_claims
+
+    # Sign with RS256 using private key
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        private_key = serialization.load_pem_private_key(
+            creds_dict["private_key"].encode(), password=None)
+        signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+        sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b"=")
+        jwt_token = (signing_input + b"." + sig_b64).decode()
+    except ImportError:
+        raise ValueError("Package 'cryptography' requis pour Google Sheets. "
+                         "Ajoutez `cryptography` à requirements.txt.")
+
+    token_resp = requests.post("https://oauth2.googleapis.com/token", data={
+        "grant_type":  "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "assertion":   jwt_token,
+    }, timeout=15)
+    if token_resp.status_code != 200:
+        raise ValueError(f"Erreur token Google: {token_resp.text[:200]}")
+    access_token = token_resp.json()["access_token"]
+
+    # ── 2. Append row ──────────────────────────────────────────
+    c        = result.get("_c", {})
+    score    = c.get("score", 0)
+    decision = c.get("decision", "")
+    ts       = meta.get("timestamp", "")
+    url_val  = meta.get("url", meta.get("offer_type", ""))
+    mode     = meta.get("mode", "")
+    platform = meta.get("platform", "")
+    hook     = c.get("hook", 0)
+    offer    = c.get("offer", 0)
+    trust    = c.get("trust", 0)
+    friction = c.get("friction", 0)
+    fp       = result.get("fix_plan", {})
+    top      = fp.get("top_priority_action", {})
+    top_txt  = top.get("what", "") if top else ""
+
+    row = [ts, url_val, mode, platform, score, decision,
+           hook, offer, trust, friction, top_txt]
+
+    url_api = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
+        f"/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
+    )
+    resp = requests.post(
+        url_api,
+        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        json={"values": [row]},
+        timeout=15,
+    )
+    if resp.status_code not in (200, 201):
+        raise ValueError(f"Sheets API {resp.status_code}: {resp.text[:200]}")
+
+
+def export_to_notion(result, meta):
+    """
+    Crée une page dans une base Notion via l'API Notion v1.
+    Configurez dans Streamlit Secrets :
+      NOTION_TOKEN       = 'secret_xxx'
+      NOTION_DATABASE_ID = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+    """
+    cfg     = _get_integration_config()
+    token   = cfg["notion_token"]
+    db_id   = cfg["notion_db"]
+    if not token or not db_id:
+        raise ValueError("NOTION_TOKEN ou NOTION_DATABASE_ID non configurés.")
+
+    c        = result.get("_c", {})
+    score    = c.get("score", 0)
+    decision = c.get("decision", "")
+    ts       = meta.get("timestamp", "")
+    url_val  = meta.get("url", meta.get("offer_type", ""))
+    mode     = meta.get("mode", "")
+    platform = meta.get("platform", "")
+    hook     = c.get("hook", 0)
+    offer_sc = c.get("offer", 0)
+    trust    = c.get("trust", 0)
+    friction = c.get("friction", 0)
+    fp       = result.get("fix_plan", {})
+    top      = fp.get("top_priority_action", {})
+    top_txt  = top.get("what", "") if top else ""
+
+    page_title = f"LRS Audit — {score}/20 — {url_val[:60]}"
+
+    notion_payload = {
+        "parent": {"database_id": db_id},
+        "properties": {
+            "Name":      {"title":  [{"text": {"content": page_title}}]},
+            "Date":      {"rich_text": [{"text": {"content": ts}}]},
+            "URL":       {"url": url_val if url_val.startswith("http") else None},
+            "Mode":      {"select": {"name": mode}},
+            "Platform":  {"select": {"name": platform}},
+            "Score":     {"number": score},
+            "Decision":  {"rich_text": [{"text": {"content": decision}}]},
+            "Hook":      {"number": hook},
+            "Offer":     {"number": offer_sc},
+            "Trust":     {"number": trust},
+            "Friction":  {"number": friction},
+            "Top Action":{"rich_text": [{"text": {"content": top_txt}}]},
+        },
+        "children": [
+            {
+                "object": "block", "type": "paragraph",
+                "paragraph": {"rich_text": [{"text": {"content":
+                    f"Score: {score}/20 — {decision}\n"
+                    f"Hook: {hook}/5 · Offer: {offer_sc}/5 · Trust: {trust}/5 · Friction: {friction}/5\n"
+                    f"Top action: {top_txt}\n\nGénéré par LRS™ V{APP_VERSION}"
+                }}]}
+            }
+        ]
+    }
+    # Remove None values in properties (URL field)
+    if not url_val.startswith("http"):
+        notion_payload["properties"]["URL"] = {"rich_text": [{"text": {"content": url_val}}]}
+
+    resp = requests.post(
+        "https://api.notion.com/v1/pages",
+        headers={
+            "Authorization":  f"Bearer {token}",
+            "Content-Type":   "application/json",
+            "Notion-Version": "2022-06-28",
+        },
+        json=notion_payload,
+        timeout=15,
+    )
+    if resp.status_code not in (200, 201):
+        raise ValueError(f"Notion API {resp.status_code}: {resp.text[:200]}")
+
+
+def render_integrations_widget(result, meta, key_prefix="integ"):
+    """Widget compact Slack / Sheets / Notion — visible si plan Pro+."""
+    plan       = _get_plan()
+    plan_info  = PLAN_LIMITS[plan]
+    if not plan_info.get("integrations", False):
+        st.info("🔗 Intégrations disponibles sur le plan **Pro** et **Agency**.")
+        return
+
+    cfg = _get_integration_config()
+    lang = st.session_state.get("lang", "fr")
+
+    with st.expander(t("int_title")):
+        c1, c2, c3 = st.columns(3)
+
+        # ── Slack ──────────────────────────────────────────────
+        with c1:
+            st.markdown(f"**{t('int_slack')}**")
+            if not cfg["slack_webhook"]:
+                st.caption(
+                    "Configurez `SLACK_WEBHOOK_URL` dans Streamlit Secrets.\n\n"
+                    "Créez un webhook sur api.slack.com/apps."
+                )
+            else:
+                if st.button(t("send_slack"), key=f"{key_prefix}_slack"):
+                    try:
+                        send_slack_notification(result, meta)
+                        st.success(t("success_slack"))
+                    except Exception as e:
+                        st.error(str(e))
+
+        # ── Google Sheets ──────────────────────────────────────
+        with c2:
+            st.markdown(f"**{t('int_sheets')}**")
+            if not cfg["sheets_creds"] or not cfg["sheets_id"]:
+                st.caption(
+                    "Configurez `GOOGLE_SHEETS_CREDS` (JSON service account)\n"
+                    "et `GOOGLE_SHEETS_ID` dans Streamlit Secrets."
+                )
+            else:
+                if st.button(t("export_sheets"), key=f"{key_prefix}_sheets"):
+                    try:
+                        export_to_sheets(result, meta)
+                        st.success(t("success_sheets"))
+                    except Exception as e:
+                        st.error(str(e))
+
+        # ── Notion ─────────────────────────────────────────────
+        with c3:
+            st.markdown(f"**{t('int_notion')}**")
+            if not cfg["notion_token"] or not cfg["notion_db"]:
+                st.caption(
+                    "Configurez `NOTION_TOKEN` et `NOTION_DATABASE_ID`\n"
+                    "dans Streamlit Secrets."
+                )
+            else:
+                if st.button(t("export_notion"), key=f"{key_prefix}_notion"):
+                    try:
+                        export_to_notion(result, meta)
+                        st.success(t("success_notion"))
+                    except Exception as e:
+                        st.error(str(e))
 
 
 def render_email_widget(result, meta, key_prefix="email"):
@@ -3726,10 +4175,38 @@ def main():
             unsafe_allow_html=True,
         )
     with hdr_r:
-        toggle_label = "☀️ Light" if not light_mode else "🌙 Dark"
-        if st.button(toggle_label, key="theme_toggle", help="Basculer mode clair/sombre"):
-            st.session_state.light_mode = not light_mode
-            st.rerun()
+        # ── Plan badge ────────────────────────────────────────
+        _plan_key   = _get_plan()
+        _plan_info  = PLAN_LIMITS[_plan_key]
+        _pbg        = _plan_info["badge_color"]
+        _plabel     = _plan_info["label"]
+        _remaining, _limit = get_remaining_audits()
+        if _remaining == -1:
+            _quota_txt = "∞"
+        else:
+            _quota_txt = f"{_remaining}/{_limit}"
+        st.markdown(
+            f"<div style='display:flex;align-items:center;gap:8px;justify-content:flex-end;"
+            f"margin-bottom:4px'>"
+            f"<span style='background:{_pbg};color:#fff;font-size:0.7rem;font-weight:700;"
+            f"padding:3px 10px;border-radius:20px;letter-spacing:0.5px'>{_plabel.upper()}</span>"
+            f"<span style='color:#888;font-size:0.72rem'>{_quota_txt} audits</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        # ── Controls row ──────────────────────────────────────
+        btn_c1, btn_c2 = st.columns(2)
+        with btn_c1:
+            toggle_label = "☀️" if not light_mode else "🌙"
+            if st.button(toggle_label, key="theme_toggle", help="Basculer mode clair/sombre"):
+                st.session_state.light_mode = not light_mode
+                st.rerun()
+        with btn_c2:
+            lang_now = st.session_state.get("lang", "fr")
+            lang_btn = "🇬🇧" if lang_now == "fr" else "🇫🇷"
+            if st.button(lang_btn, key="lang_toggle", help="Switch language / Changer la langue"):
+                st.session_state.lang = "en" if lang_now == "fr" else "fr"
+                st.rerun()
 
     # ── API Key check ────────────────────────────────────────
     api_key = get_api_key()
@@ -3865,7 +4342,7 @@ def main():
             ])
 
             st.markdown("")
-            run_btn = st.button("🚀 Lancer l'audit", type="primary", use_container_width=True)
+            run_btn = st.button(t("run_btn"), type="primary", use_container_width=True)
 
         with col_r:
             if st.session_state.loaded_result and not run_btn:
@@ -3923,6 +4400,17 @@ def main():
                 errors.append("Texte de la pub requis")
             for err in errors: st.error(err)
             if errors: st.stop()
+
+            # ── Quota & plan enforcement ───────────────────────
+            _active_plan = _get_plan()
+            _allowed_modes = PLAN_LIMITS[_active_plan]["modes"]
+            if mode not in _allowed_modes:
+                st.error(t("mode_locked") + f" (Plan actuel : **{PLAN_LIMITS[_active_plan]['label']}**)")
+                st.stop()
+            _quota_ok, _used, _qlimit = _check_quota()
+            if not _quota_ok:
+                st.error(t("quota_exhausted"))
+                st.stop()
 
             detected_page_type = "Non applicable (mode Ads Only)"
             page_lang          = "fr"
@@ -3982,6 +4470,7 @@ def main():
                     st.stop()
 
             if result:
+                _increment_usage()   # quota counter
                 ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
                 meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
                         "url": landing_url, "timestamp": ts,
@@ -4066,11 +4555,17 @@ def main():
                 # Share widget full-width below exports
                 render_share_widget(result, meta, key_prefix="tab1_share")
 
+                # Integrations widget (Slack / Sheets / Notion) — Pro/Agency only
+                render_integrations_widget(result, meta, key_prefix="tab1_integ")
+
     # ── tab2 : Multi-Audit (Bulk + Comparaison) ──────────────
     with tab2:
         sub1, sub2 = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages"])
         with sub1:
-            render_bulk(api_key)
+            if PLAN_LIMITS[_get_plan()].get("bulk", False):
+                render_bulk(api_key)
+            else:
+                st.info("⚡ **Bulk audit** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
         with sub2:
             render_comparison(api_key)
 
@@ -4080,7 +4575,10 @@ def main():
         with sub3:
             render_projects(api_key)
         with sub4:
-            render_monitoring(api_key)
+            if PLAN_LIMITS[_get_plan()].get("monitoring", False):
+                render_monitoring(api_key)
+            else:
+                st.info("📡 **Monitoring & Alertes** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
 
     # ── tab4 : Historique ────────────────────────────────────
     with tab4:
@@ -4094,7 +4592,18 @@ def main():
         with sub5:
             render_checklist()
         with sub6:
-            render_ads_library()
+            if PLAN_LIMITS[_get_plan()].get("ads_library", False):
+                render_ads_library()
+            else:
+                st.markdown(
+                    "<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;"
+                    "padding:32px;text-align:center'>"
+                    "<div style='font-size:2rem'>🔒</div>"
+                    "<div style='color:#6366f1;font-weight:700;font-size:1.1rem;margin:12px 0 6px'>Ads Library</div>"
+                    "<div style='color:#888;font-size:0.9rem'>Disponible sur le plan <strong>Pro</strong> (49€/mois) et <strong>Agency</strong> (99€/mois).</div>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
         with sub7:
             render_benchmark_tab()
         with sub8:
