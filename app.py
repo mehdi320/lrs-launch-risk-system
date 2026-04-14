@@ -2100,6 +2100,746 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         st.error(str(e))
 
 
+# ══════════════════════════════════════════════════════════════
+# ── INTELLIGENCE CUMULATIVE ───────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+
+def compute_cumulative_intel(history):
+    """
+    Analyse l'ensemble de l'historique et retourne un dict d'insights
+    personnalisés : patterns récurrents, point faible dominant, tendance globale.
+    """
+    if len(history) < 3:
+        return None
+
+    scores  = [e.get("score", 0) for e in history if e.get("score") is not None]
+    hooks   = [e.get("result", {}).get("_c", {}).get("hook",   0) for e in history if e.get("result")]
+    offers  = [e.get("result", {}).get("_c", {}).get("offer",  0) for e in history if e.get("result")]
+    trusts  = [e.get("result", {}).get("_c", {}).get("trust",  0) for e in history if e.get("result")]
+    fricts  = [e.get("result", {}).get("_c", {}).get("friction",0) for e in history if e.get("result")]
+
+    def avg(lst): return round(sum(lst) / len(lst), 2) if lst else 0
+    def trend(lst):
+        if len(lst) < 3: return "stable"
+        recent = avg(lst[:3])
+        older  = avg(lst[-3:])
+        if recent - older >= 1.5: return "improving"
+        if older - recent >= 1.5: return "declining"
+        return "stable"
+
+    avg_scores = avg(scores)
+    avg_h = avg(hooks);  avg_o = avg(offers)
+    avg_t = avg(trusts); avg_f = avg(fricts)
+
+    crits = {"Hook": avg_h, "Offer": avg_o, "Trust": avg_t, "Friction": avg_f}
+    worst_crit  = min(crits, key=crits.get)
+    best_crit   = max(crits, key=crits.get)
+    score_trend = trend(scores)
+
+    # Patterns plateforme
+    plat_scores = {}
+    for e in history:
+        p = e.get("platform","")
+        s = e.get("score", 0)
+        if p:
+            plat_scores.setdefault(p, []).append(s)
+    plat_avgs = {p: avg(v) for p, v in plat_scores.items() if len(v) >= 2}
+    best_plat  = max(plat_avgs, key=plat_avgs.get) if plat_avgs else None
+    worst_plat = min(plat_avgs, key=plat_avgs.get) if plat_avgs else None
+
+    # Pattern mode
+    mode_scores = {}
+    for e in history:
+        m = e.get("mode","")
+        s = e.get("score", 0)
+        if m:
+            mode_scores.setdefault(m, []).append(s)
+    mode_avgs = {m: avg(v) for m, v in mode_scores.items() if len(v) >= 2}
+
+    # Fréquence d'usage (jours entre audits)
+    timestamps = []
+    for e in history:
+        try:
+            timestamps.append(datetime.datetime.strptime(e.get("timestamp",""), "%d/%m/%Y %H:%M"))
+        except Exception:
+            pass
+    timestamps.sort(reverse=True)
+    avg_days_between = None
+    if len(timestamps) >= 2:
+        gaps = [(timestamps[i] - timestamps[i+1]).days for i in range(min(5, len(timestamps)-1))]
+        avg_days_between = round(sum(gaps) / len(gaps), 1)
+
+    # Progression récente (10 derniers vs 10 précédents)
+    progress_msg = None
+    if len(scores) >= 6:
+        recent_avg = avg(scores[:5])
+        older_avg  = avg(scores[5:10]) if len(scores) >= 10 else avg(scores[5:])
+        delta_prog = round(recent_avg - older_avg, 1)
+        if delta_prog >= 1:
+            progress_msg = f"📈 Tu progresses : +{delta_prog} pts en moyenne sur tes 5 derniers audits."
+        elif delta_prog <= -1:
+            progress_msg = f"📉 Attention : tes scores baissent de {abs(delta_prog)} pts en moyenne récemment."
+
+    return {
+        "n_audits":          len(history),
+        "avg_score":         avg_scores,
+        "score_trend":       score_trend,
+        "avg_hook":          avg_h,
+        "avg_offer":         avg_o,
+        "avg_trust":         avg_t,
+        "avg_friction":      avg_f,
+        "worst_crit":        worst_crit,
+        "best_crit":         best_crit,
+        "crits":             crits,
+        "plat_avgs":         plat_avgs,
+        "best_plat":         best_plat,
+        "worst_plat":        worst_plat,
+        "mode_avgs":         mode_avgs,
+        "avg_days_between":  avg_days_between,
+        "progress_msg":      progress_msg,
+    }
+
+
+def render_cumulative_intel():
+    """
+    Onglet Intelligence Cumulative — insights personnalisés basés sur
+    l'intégralité de l'historique de l'utilisateur.
+    """
+    history = st.session_state.audit_history
+    light   = st.session_state.get("light_mode", False)
+    bg      = "#ffffff" if light else "#0f0f1a"
+    bg2     = "#f8f8fc" if light else "#07071a"
+    border  = "#e5e7eb" if light else "#1e1e3a"
+    txt     = "#1a1a2e" if light else "#e0e0e0"
+    txt2    = "#6b7280" if light else "#888"
+
+    st.markdown(f"<h4 style='color:{txt}'>🧠 Intelligence Cumulative</h4>", unsafe_allow_html=True)
+    st.caption("Analyse de l'ensemble de tes audits pour identifier tes patterns récurrents et ton levier de progression n°1.")
+
+    if len(history) < 3:
+        st.info(f"Lancez au moins **3 audits** pour débloquer l'intelligence cumulative. Actuellement : {len(history)}/3")
+        return
+
+    intel = compute_cumulative_intel(history)
+    if not intel:
+        return
+
+    # ── Barre de progression ──────────────────────────────────
+    n = intel["n_audits"]
+    milestones = [3, 10, 25, 50, 100]
+    next_ms = next((m for m in milestones if m > n), None)
+    if next_ms:
+        pct_ms = min(int(n / next_ms * 100), 100)
+        st.progress(pct_ms / 100, text=f"{n} audits analysés · prochain milestone : {next_ms}")
+    st.markdown("")
+
+    # ── Message progression ───────────────────────────────────
+    if intel.get("progress_msg"):
+        color_prog = "#22c55e" if "📈" in intel["progress_msg"] else "#ef4444"
+        st.markdown(
+            f"<div style='background:{bg};border-left:4px solid {color_prog};"
+            f"border:1px solid {border};border-left:4px solid {color_prog};"
+            f"border-radius:8px;padding:12px 16px;margin-bottom:16px'>"
+            f"<span style='color:{color_prog};font-weight:600'>{intel['progress_msg']}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── KPIs moyens ───────────────────────────────────────────
+    trend_icon = {"improving": "📈", "declining": "📉", "stable": "➡️"}[intel["score_trend"]]
+    trend_col  = {"improving": "#22c55e", "declining": "#ef4444", "stable": "#f59e0b"}[intel["score_trend"]]
+    trend_lbl  = {"improving": "En hausse", "declining": "En baisse", "stable": "Stable"}[intel["score_trend"]]
+
+    k1, k2, k3, k4 = st.columns(4)
+    for col, label, val, color in [
+        (k1, "Score moyen",    f"{intel['avg_score']}/20", _score_color(intel['avg_score'])),
+        (k2, "Tendance",       f"{trend_icon} {trend_lbl}", trend_col),
+        (k3, "Point faible",   intel["worst_crit"],         "#ef4444"),
+        (k4, "Point fort",     intel["best_crit"],          "#22c55e"),
+    ]:
+        with col:
+            st.markdown(
+                f"<div style='background:{bg};border:1px solid {border};border-radius:10px;"
+                f"padding:16px;text-align:center'>"
+                f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>{label}</div>"
+                f"<div style='color:{color};font-size:1.5rem;font-weight:800;margin-top:4px'>{val}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+    st.markdown("")
+
+    # ── Radar des moyennes par critère ────────────────────────
+    st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:10px'>📊 Moyenne par critère — sur {n} audits</div>", unsafe_allow_html=True)
+    for crit, avg_val in intel["crits"].items():
+        pct = int(avg_val / 5 * 100)
+        bar_color = "#ef4444" if avg_val < 3 else "#f59e0b" if avg_val < 4 else "#22c55e"
+        worst_flag = " ← 🔴 POINT FAIBLE RÉCURRENT" if crit == intel["worst_crit"] else ""
+        st.markdown(
+            f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+            f"padding:12px 16px;margin-bottom:5px'>"
+            f"<div style='display:flex;justify-content:space-between;margin-bottom:6px'>"
+            f"  <span style='color:{txt};font-size:0.86rem;font-weight:600'>{crit}"
+            f"    <span style='color:#ef4444;font-size:0.75rem'>{worst_flag}</span></span>"
+            f"  <span style='color:{bar_color};font-weight:700'>{avg_val}/5</span>"
+            f"</div>"
+            f"<div style='background:{border};border-radius:4px;height:8px'>"
+            f"  <div style='background:{bar_color};width:{pct}%;height:8px;border-radius:4px'></div>"
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown("")
+
+    # ── Insight personnalisé : levier n°1 ─────────────────────
+    worst = intel["worst_crit"]
+    avg_w = intel["crits"][worst]
+    gap   = 5 - avg_w
+    score_gain_est = round(gap * 0.7 * (20/20), 1)
+
+    prescriptions = {
+        "Hook": {
+            "why":   "Ton hook moyen est faible — les visiteurs quittent la page avant même de lire ton offre.",
+            "fix":   [
+                "Reformule ta headline avec la formule [Résultat] + [Timeframe] + [Sans douleur] — ex: 'Double ton ROAS en 14 jours sans changer ton budget'",
+                "Teste des hooks basés sur la douleur plutôt que le bénéfice : commence par 'Pourquoi...' ou 'Le vrai problème avec...'",
+                "Ajoute un sous-titre qui qualifie immédiatement : qui c'est pour, pour quel résultat, pourquoi maintenant",
+            ]
+        },
+        "Offer": {
+            "why":   "Ton offre n'est pas perçue comme assez forte — les visiteurs ne ressentent pas la valeur avant le prix.",
+            "fix":   [
+                "Construis un offer stack visible : liste chaque composante de ton offre avec sa valeur individuelle, puis montre le prix total vs prix réel",
+                "Rends la garantie impossible à rater — elle doit être visible directement sous ton CTA principal, pas en bas de page",
+                "Ajoute une urgence ou rareté crédible : places limitées, bonus qui expire, prix early-bird avec compteur",
+            ]
+        },
+        "Trust": {
+            "why":   "Tes pages manquent de preuves sociales — les visiteurs doutent avant de sortir leur carte.",
+            "fix":   [
+                "Ajoute des témoignages avec prénom + photo + résultat chiffré spécifique (pas 'super produit' mais 'j'ai gagné 3 kg en 6 semaines')",
+                "Mets en avant le nombre total d'acheteurs/clients dès le hero : '2 847 entrepreneurs ont déjà...'",
+                "Intègre des logos presse ou partenaires même mineurs — la preuve visuelle rassure instantanément",
+            ]
+        },
+        "Friction": {
+            "why":   "Ton parcours d'achat crée de la résistance — trop de clics, de distractions ou d'hésitations avant la conversion.",
+            "fix":   [
+                "Supprime le menu de navigation — chaque lien sortant est une fuite potentielle",
+                "Répète ton CTA au minimum 3 fois : hero, milieu de page, et juste avant le footer",
+                "Réduis le formulaire de commande à l'essentiel — chaque champ supplémentaire réduit la conversion de ~5%",
+            ]
+        },
+    }
+
+    p = prescriptions.get(worst, {})
+    if p:
+        st.markdown(
+            f"<div style='background:{'#fff0f0' if not light else '#fff5f5'};"
+            f"border:1px solid {'#fecaca' if not light else '#fca5a5'};"
+            f"border-left:4px solid #ef4444;border-radius:10px;padding:18px 20px'>"
+            f"<div style='color:#ef4444;font-weight:700;font-size:0.95rem;margin-bottom:8px'>"
+            f"🎯 Ton levier n°1 : améliorer le {worst}</div>"
+            f"<div style='color:{'#555' if light else '#ccc'};font-size:0.87rem;margin-bottom:12px'>{p['why']}</div>"
+            f"<div style='color:{'#374151' if light else '#e0e0e0'};font-weight:600;font-size:0.85rem;margin-bottom:8px'>"
+            f"Si tu corriges le {worst} de {avg_w}/5 → 5/5, tu gagnes ~{score_gain_est} pts de score.</div>",
+            unsafe_allow_html=True,
+        )
+        for fix in p["fix"]:
+            st.markdown(f"<div style='color:{'#555' if light else '#bbb'};font-size:0.84rem;padding:4px 0 4px 12px;border-left:2px solid #ef4444'>→ {fix}</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("")
+
+    # ── Performance par plateforme ────────────────────────────
+    if intel["plat_avgs"]:
+        st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:10px'>📱 Score moyen par plateforme</div>", unsafe_allow_html=True)
+        p_cols = st.columns(min(len(intel["plat_avgs"]), 4))
+        for i, (plat, avg_p) in enumerate(sorted(intel["plat_avgs"].items(), key=lambda x: -x[1])):
+            with p_cols[i % 4]:
+                color_p = _score_color(avg_p)
+                badge = " 🏆" if plat == intel["best_plat"] else (" ⚠️" if plat == intel["worst_plat"] else "")
+                st.markdown(
+                    f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+                    f"padding:14px;text-align:center'>"
+                    f"<div style='color:{txt2};font-size:0.8rem'>{plat}{badge}</div>"
+                    f"<div style='color:{color_p};font-size:1.6rem;font-weight:800'>{avg_p}/20</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+        if intel["best_plat"] and intel["worst_plat"] and intel["best_plat"] != intel["worst_plat"]:
+            st.caption(f"Tu performes mieux sur **{intel['best_plat']}** ({intel['plat_avgs'][intel['best_plat']]}/20) que sur **{intel['worst_plat']}** ({intel['plat_avgs'][intel['worst_plat']]}/20). Concentre ton budget là où tu convertis le mieux.")
+        st.markdown("")
+
+    # ── Fréquence d'usage ─────────────────────────────────────
+    if intel["avg_days_between"] is not None:
+        adb = intel["avg_days_between"]
+        if adb <= 3:
+            freq_msg = f"🔥 Tu audites très régulièrement (tous les ~{adb}j) — continue, c'est le profil des meilleurs optimiseurs."
+            freq_col = "#22c55e"
+        elif adb <= 10:
+            freq_msg = f"✅ Bonne cadence d'optimisation (~{adb}j entre audits)."
+            freq_col = "#6366f1"
+        else:
+            freq_msg = f"⏰ Tu audites en moyenne tous les {adb} jours. Essaie de lancer un audit chaque semaine pour accélérer tes résultats."
+            freq_col = "#f59e0b"
+        st.markdown(
+            f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+            f"padding:12px 16px'><span style='color:{freq_col}'>{freq_msg}</span></div>",
+            unsafe_allow_html=True,
+        )
+
+
+# ══════════════════════════════════════════════════════════════
+# ── SCORING CAMPAGNE EN CONTINU ───────────────────────────────
+# ══════════════════════════════════════════════════════════════
+
+CAMPAIGN_FILE = os.path.join(os.path.dirname(__file__), ".lrs_campaigns.json")
+
+def load_campaigns():
+    try:
+        if os.path.exists(CAMPAIGN_FILE):
+            with open(CAMPAIGN_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_campaigns(data):
+    try:
+        with open(CAMPAIGN_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def _correlate_stats(lrs_score, ctr, cpc, roas, cpa):
+    """
+    Croise les stats de campagne avec le score LRS pour générer des diagnostics.
+    Retourne une liste de messages diagnostics priorisés.
+    """
+    diags = []
+
+    # CTR faible = problème Hook
+    if ctr is not None and ctr < 1.0:
+        diags.append({
+            "level": "danger",
+            "crit":  "Hook",
+            "msg":   f"CTR {ctr:.2f}% est très faible (< 1%). Ton hook pub ne capte pas l'attention. "
+                     "Teste 3 nouvelles accroches et change le visuel.",
+        })
+    elif ctr is not None and ctr < 2.0:
+        diags.append({
+            "level": "warning",
+            "crit":  "Hook",
+            "msg":   f"CTR {ctr:.2f}% est perfectible. Un bon CTR Meta est > 2%. Revois ton angle créatif.",
+        })
+
+    # CPC élevé = compétition + Hook faible
+    if cpc is not None and cpc > 1.5:
+        diags.append({
+            "level": "warning",
+            "crit":  "Hook",
+            "msg":   f"CPC {cpc:.2f}€ est élevé. Soit ta niche est très compétitive, soit ton Quality Score pub souffre d'un CTR bas.",
+        })
+
+    # ROAS faible = problème Offer ou Trust
+    if roas is not None and roas < 2.0:
+        diags.append({
+            "level": "danger",
+            "crit":  "Offer / Trust",
+            "msg":   f"ROAS {roas:.1f}x est sous le seuil de rentabilité. "
+                     "Le trafic arrive mais ne convertit pas — ton Offer Stack ou tes preuves sociales sont insuffisants.",
+        })
+    elif roas is not None and roas < 3.0:
+        diags.append({
+            "level": "warning",
+            "crit":  "Offer",
+            "msg":   f"ROAS {roas:.1f}x est rentable mais optimisable. "
+                     "Renforce ta garantie et ton offer stack pour augmenter la valeur perçue.",
+        })
+
+    # CPA élevé vs score
+    if cpa is not None and lrs_score is not None:
+        if cpa > 50 and lrs_score < 12:
+            diags.append({
+                "level": "danger",
+                "crit":  "Friction",
+                "msg":   f"CPA {cpa:.0f}€ avec un score LRS de {lrs_score}/20 — le problème est clairement sur ta page. "
+                         "Améliore ton score d'au moins 3 pts pour réduire significativement ton CPA.",
+            })
+
+    # Corrélation score LRS
+    if lrs_score is not None:
+        if lrs_score >= 15:
+            diags.append({
+                "level": "ok",
+                "crit":  "Score LRS",
+                "msg":   f"Score LRS {lrs_score}/20 — page bien optimisée. Si le ROAS reste bas, le problème est dans la qualité du trafic (audience, créa pub), pas dans la page.",
+            })
+        elif lrs_score < 10:
+            diags.append({
+                "level": "danger",
+                "crit":  "Score LRS",
+                "msg":   f"Score LRS {lrs_score}/20 — ta page est le goulot d'étranglement principal. Corriger les quick wins LRS avant d'augmenter le budget.",
+            })
+
+    return diags
+
+
+def render_campaign_tracker():
+    """
+    Module 'Campagne en cours' — l'utilisateur entre ses stats pub,
+    LRS croise avec le score de la page pour un diagnostic continu.
+    """
+    history  = st.session_state.audit_history
+    light    = st.session_state.get("light_mode", False)
+    bg       = "#ffffff" if light else "#0f0f1a"
+    border   = "#e5e7eb" if light else "#1e1e3a"
+    txt      = "#1a1a2e" if light else "#e0e0e0"
+    txt2     = "#6b7280" if light else "#888"
+
+    campaigns = load_campaigns()
+
+    st.markdown(f"<h4 style='color:{txt}'>📡 Campagne en cours — Diagnostic live</h4>", unsafe_allow_html=True)
+    st.caption("Entrez vos stats pub. LRS croise vos métriques avec le score de votre page pour identifier précisément où votre funnel perd de l'argent.")
+
+    # ── Sélectionner ou créer une campagne ────────────────────
+    camp_names = list(campaigns.keys())
+    camp_opts  = ["+ Nouvelle campagne"] + camp_names
+    sel_camp   = st.selectbox("Campagne", camp_opts, key="camp_select")
+
+    if sel_camp == "+ Nouvelle campagne":
+        camp_key = None
+        camp_data = {}
+    else:
+        camp_key  = sel_camp
+        camp_data = campaigns.get(sel_camp, {})
+
+    with st.form("campaign_form"):
+        f1, f2 = st.columns(2)
+        with f1:
+            camp_name_in = st.text_input("Nom de la campagne",
+                value=camp_data.get("name", ""),
+                placeholder="Ex: Meta — Produit X — Juillet")
+            platform_c = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"],
+                index=["Meta","TikTok","Google","Mixed"].index(camp_data.get("platform","Meta")))
+            budget_daily = st.number_input("Budget journalier (€)", min_value=0.0, step=5.0,
+                value=float(camp_data.get("budget_daily", 0)))
+        with f2:
+            # Associer à un audit LRS existant
+            audit_opts = {}
+            for i, e in enumerate(history[:20]):
+                url_e = str(e.get("url","") or e.get("offer_type",""))[:40]
+                ts_e  = e.get("timestamp","")
+                sc_e  = e.get("score",0)
+                audit_opts[f"{ts_e} — {url_e} — {sc_e}/20"] = i
+            audit_keys = list(audit_opts.keys())
+            linked_idx = camp_data.get("linked_audit_idx", 0)
+            sel_audit  = st.selectbox("Page liée (audit LRS)",
+                audit_keys if audit_keys else ["Aucun audit"],
+                index=min(linked_idx, max(0, len(audit_keys)-1)),
+                key="camp_audit_link")
+
+        st.markdown("**Stats actuelles de la campagne**")
+        s1, s2, s3, s4 = st.columns(4)
+        with s1: ctr_in  = st.number_input("CTR (%)",  min_value=0.0, step=0.1, value=float(camp_data.get("ctr",  0.0)), format="%.2f")
+        with s2: cpc_in  = st.number_input("CPC (€)",  min_value=0.0, step=0.01,value=float(camp_data.get("cpc",  0.0)), format="%.2f")
+        with s3: roas_in = st.number_input("ROAS (x)", min_value=0.0, step=0.1, value=float(camp_data.get("roas", 0.0)), format="%.1f")
+        with s4: cpa_in  = st.number_input("CPA (€)",  min_value=0.0, step=1.0, value=float(camp_data.get("cpa",  0.0)), format="%.0f")
+
+        notes_in = st.text_area("Notes / contexte", value=camp_data.get("notes",""),
+            placeholder="Audience, créa testée, observations...", height=60)
+
+        submitted = st.form_submit_button("💾 Sauvegarder & Analyser", type="primary", use_container_width=True)
+
+    if submitted and camp_name_in.strip():
+        # Récupérer le score LRS lié
+        lrs_score_linked = None
+        if audit_keys and sel_audit in audit_opts:
+            linked_idx_new = audit_opts[sel_audit]
+            lrs_score_linked = history[linked_idx_new].get("score", 0) if linked_idx_new < len(history) else None
+        else:
+            linked_idx_new = 0
+
+        new_key = camp_name_in.strip()
+        campaigns[new_key] = {
+            "name":              new_key,
+            "platform":          platform_c,
+            "budget_daily":      budget_daily,
+            "ctr":               ctr_in,
+            "cpc":               cpc_in,
+            "roas":              roas_in,
+            "cpa":               cpa_in,
+            "notes":             notes_in,
+            "linked_audit_idx":  linked_idx_new,
+            "lrs_score":         lrs_score_linked,
+            "updated":           datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+        }
+        # Historique des stats (pour graphe évolution)
+        snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
+        hist_snaps = campaigns[new_key].get("history_snaps", {})
+        hist_snaps[snap_key] = {"ctr": ctr_in, "cpc": cpc_in, "roas": roas_in, "cpa": cpa_in}
+        campaigns[new_key]["history_snaps"] = hist_snaps
+        save_campaigns(campaigns)
+        st.session_state["_camp_reload"] = new_key
+        st.rerun()
+
+    # ── Afficher les diagnostics des campagnes sauvegardées ───
+    if not campaigns:
+        return
+
+    st.markdown("---")
+    st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:10px'>🔍 Diagnostics actifs</div>", unsafe_allow_html=True)
+
+    for cname, cdata in campaigns.items():
+        sc_lrs  = cdata.get("lrs_score")
+        ctr_v   = cdata.get("ctr") or None
+        cpc_v   = cdata.get("cpc") or None
+        roas_v  = cdata.get("roas") or None
+        cpa_v   = cdata.get("cpa") or None
+        updated = cdata.get("updated","")
+        plat_v  = cdata.get("platform","")
+        budget  = cdata.get("budget_daily", 0)
+
+        diags = _correlate_stats(sc_lrs,
+                                 ctr_v if ctr_v and ctr_v > 0 else None,
+                                 cpc_v if cpc_v and cpc_v > 0 else None,
+                                 roas_v if roas_v and roas_v > 0 else None,
+                                 cpa_v if cpa_v and cpa_v > 0 else None)
+
+        n_danger  = sum(1 for d in diags if d["level"] == "danger")
+        n_warning = sum(1 for d in diags if d["level"] == "warning")
+        status_badge = "🔴" if n_danger > 0 else "🟡" if n_warning > 0 else "🟢"
+
+        with st.expander(f"{status_badge} {cname} · {plat_v} · {budget}€/j · màj {updated}"):
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            for col, label, val, suffix in [
+                (mc1, "CTR",  ctr_v,  "%"),
+                (mc2, "CPC",  cpc_v,  "€"),
+                (mc3, "ROAS", roas_v, "x"),
+                (mc4, "CPA",  cpa_v,  "€"),
+            ]:
+                with col:
+                    display = f"{val:.2f}{suffix}" if val else "—"
+                    st.metric(label, display)
+            if sc_lrs is not None:
+                st.caption(f"Score LRS page liée : **{sc_lrs}/20**")
+
+            if diags:
+                st.markdown("**Diagnostics :**")
+                level_colors = {"danger": "#ef4444", "warning": "#f59e0b", "ok": "#22c55e"}
+                level_icons  = {"danger": "🔴", "warning": "🟡", "ok": "🟢"}
+                for d in diags:
+                    col_d = level_colors.get(d["level"], "#888")
+                    ico_d = level_icons.get(d["level"], "⚪")
+                    st.markdown(
+                        f"<div style='background:{bg};border-left:3px solid {col_d};"
+                        f"border:1px solid {border};border-left:3px solid {col_d};"
+                        f"border-radius:6px;padding:10px 14px;margin-bottom:6px'>"
+                        f"<span style='color:{col_d};font-weight:600;font-size:0.82rem'>{ico_d} {d['crit']}</span>"
+                        f"<div style='color:{txt};font-size:0.85rem;margin-top:4px'>{d['msg']}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.success("✅ Aucun problème détecté — campagne saine.")
+
+            # Evolution stats (si historique)
+            snaps = cdata.get("history_snaps", {})
+            if len(snaps) >= 2:
+                import pandas as pd
+                snap_df = pd.DataFrame([
+                    {"Date": k, **v} for k, v in sorted(snaps.items())
+                ]).set_index("Date")
+                st.caption("Évolution ROAS")
+                if "roas" in snap_df.columns:
+                    st.line_chart(snap_df["roas"], height=120, use_container_width=True)
+
+            # Actions
+            act1, act2 = st.columns(2)
+            with act1:
+                if st.button("🔁 Audit page maintenant", key=f"camp_audit_{cname[:20]}"):
+                    linked_i = cdata.get("linked_audit_idx", 0)
+                    if linked_i < len(history):
+                        url_link = history[linked_i].get("url","")
+                        if url_link:
+                            st.session_state.reaudit_url = url_link
+                            st.rerun()
+            with act2:
+                if st.button("🗑️ Supprimer", key=f"camp_del_{cname[:20]}"):
+                    del campaigns[cname]
+                    save_campaigns(campaigns)
+                    st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════
+# ── LIBRAIRIE SWIPE FILES PRIVÉE ──────────────────────────────
+# ══════════════════════════════════════════════════════════════
+
+SWIPE_FILE = os.path.join(os.path.dirname(__file__), ".lrs_swipefiles.json")
+
+def load_swipefiles():
+    try:
+        if os.path.exists(SWIPE_FILE):
+            with open(SWIPE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {"hooks": [], "headlines": [], "ctas": [], "angles": []}
+
+def save_swipefiles(data):
+    try:
+        with open(SWIPE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def auto_save_swipes_from_audit(result, meta):
+    """
+    Extrait automatiquement les rewrites générés par l'audit
+    et les propose à l'ajout dans la librairie swipe files personnelle.
+    Appelé après chaque audit réussi.
+    """
+    rewrites = result.get("rewrites", {})
+    platform = meta.get("platform","")
+    offer    = meta.get("offer_type","")
+    ts       = meta.get("timestamp","")
+
+    new_swipes = []
+    if rewrites.get("headline"):
+        new_swipes.append({
+            "type": "headlines", "text": rewrites["headline"],
+            "platform": platform, "offer": offer, "ts": ts, "score_at_save": result.get("_c",{}).get("score",0)
+        })
+    if rewrites.get("hook_angle"):
+        new_swipes.append({
+            "type": "hooks", "text": rewrites["hook_angle"],
+            "platform": platform, "offer": offer, "ts": ts, "score_at_save": result.get("_c",{}).get("score",0)
+        })
+    if rewrites.get("cta"):
+        new_swipes.append({
+            "type": "ctas", "text": rewrites["cta"],
+            "platform": platform, "offer": offer, "ts": ts, "score_at_save": result.get("_c",{}).get("score",0)
+        })
+    return new_swipes
+
+
+def render_swipe_library():
+    """
+    Librairie swipe files privée — hooks, headlines, CTAs sauvegardés
+    depuis les audits passés, tagués par plateforme et niche.
+    """
+    light  = st.session_state.get("light_mode", False)
+    bg     = "#ffffff" if light else "#0f0f1a"
+    border = "#e5e7eb" if light else "#1e1e3a"
+    txt    = "#1a1a2e" if light else "#e0e0e0"
+    txt2   = "#6b7280" if light else "#888"
+
+    swipes = load_swipefiles()
+
+    st.markdown(f"<h4 style='color:{txt}'>🗂️ Ma Librairie — Swipe Files Privés</h4>", unsafe_allow_html=True)
+    st.caption("Tous les hooks, headlines et CTAs générés ou sauvegardés depuis vos audits. Votre banque personnelle qui grandit à chaque audit.")
+
+    # ── Stats librairie ───────────────────────────────────────
+    total = sum(len(v) for v in swipes.values() if isinstance(v, list))
+    k1, k2, k3, k4 = st.columns(4)
+    for col, label, cat in [(k1,"Headlines","headlines"),(k2,"Hooks","hooks"),(k3,"CTAs","ctas"),(k4,"Angles","angles")]:
+        with col:
+            n = len(swipes.get(cat, []))
+            st.markdown(
+                f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+                f"padding:12px;text-align:center'>"
+                f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase'>{label}</div>"
+                f"<div style='color:#6366f1;font-size:1.6rem;font-weight:800'>{n}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+    st.markdown("")
+
+    # ── Ajouter manuellement ──────────────────────────────────
+    with st.expander("➕ Ajouter un swipe file manuellement"):
+        sw1, sw2, sw3 = st.columns(3)
+        with sw1:
+            sw_type = st.selectbox("Type", ["headlines","hooks","ctas","angles"], key="sw_type")
+        with sw2:
+            sw_plat = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed","Tous"], key="sw_plat")
+        with sw3:
+            sw_offer = st.selectbox("Offre", ["Digital product","Ecom","Tous"], key="sw_offer")
+        sw_text  = st.text_area("Texte", placeholder="Collez votre hook, headline ou CTA ici...", height=80, key="sw_text")
+        sw_notes = st.text_input("Notes (pourquoi ça marche ?)", placeholder="Ex: testé sur audience froide 25-34 ans, CTR 3.2%", key="sw_notes")
+        if st.button("💾 Sauvegarder", key="sw_save_btn", type="primary"):
+            if sw_text.strip():
+                swipes.setdefault(sw_type, []).insert(0, {
+                    "text": sw_text.strip(), "platform": sw_plat,
+                    "offer": sw_offer, "notes": sw_notes,
+                    "ts": datetime.datetime.now().strftime("%d/%m/%Y"),
+                    "score_at_save": 0, "manual": True,
+                })
+                save_swipefiles(swipes)
+                st.success("Swipe file sauvegardé !")
+                st.rerun()
+            else:
+                st.error("Le texte est vide.")
+
+    # ── Filtres ────────────────────────────────────────────────
+    sf1, sf2, sf3 = st.columns(3)
+    with sf1:
+        filter_cat  = st.selectbox("Catégorie", ["Toutes","headlines","hooks","ctas","angles"], key="sw_filter_cat")
+    with sf2:
+        filter_plat = st.selectbox("Plateforme", ["Toutes","Meta","TikTok","Google","Mixed"], key="sw_filter_plat")
+    with sf3:
+        search_sw   = st.text_input("Rechercher", placeholder="mot-clé...", key="sw_search")
+
+    # ── Affichage ──────────────────────────────────────────────
+    cat_labels = {"headlines":"📰 Headlines","hooks":"🪝 Hooks","ctas":"🎯 CTAs","angles":"💡 Angles"}
+    cats_to_show = [filter_cat] if filter_cat != "Toutes" else ["headlines","hooks","ctas","angles"]
+    shown_total = 0
+
+    for cat in cats_to_show:
+        items = swipes.get(cat, [])
+        if filter_plat != "Toutes":
+            items = [i for i in items if i.get("platform","") in (filter_plat, "Tous", "Mixed", "")]
+        if search_sw.strip():
+            kw = search_sw.strip().lower()
+            items = [i for i in items if kw in i.get("text","").lower() or kw in i.get("notes","").lower()]
+        if not items:
+            continue
+
+        shown_total += len(items)
+        st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.9rem;margin:12px 0 8px'>{cat_labels.get(cat,cat)} ({len(items)})</div>", unsafe_allow_html=True)
+
+        for idx, item in enumerate(items[:30]):
+            plat_tag = item.get("platform","")
+            off_tag  = item.get("offer","")
+            ts_tag   = item.get("ts","")
+            sc_tag   = item.get("score_at_save", 0)
+            notes_v  = item.get("notes","")
+            manual_v = item.get("manual", False)
+            source   = "✋ Manuel" if manual_v else f"🤖 Auto — {sc_tag}/20"
+
+            st.markdown(
+                f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+                f"padding:12px 16px;margin-bottom:6px'>"
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px'>"
+                f"  <div style='color:{txt};font-size:0.87rem;flex:1;line-height:1.5'>{item.get('text','')}</div>"
+                f"  <div style='display:flex;flex-direction:column;gap:4px;min-width:80px;text-align:right'>"
+                f"    <span style='background:#6366f1;color:#fff;font-size:0.68rem;padding:2px 7px;"
+                f"          border-radius:20px'>{plat_tag}</span>"
+                f"  </div>"
+                f"</div>"
+                f"<div style='color:{txt2};font-size:0.74rem;margin-top:6px'>{source} · {ts_tag}"
+                f"{' · ' + notes_v[:60] if notes_v else ''}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            # Bouton supprimer
+            if st.button("🗑️", key=f"sw_del_{cat}_{idx}", help="Supprimer"):
+                swipes[cat].pop(idx)
+                save_swipefiles(swipes)
+                st.rerun()
+
+    if shown_total == 0:
+        st.info("Aucun swipe file pour ces filtres. Lancez des audits pour auto-populer votre librairie.")
+
+
 # ── REWRITE TRACKER ──────────────────────────────────────────
 REWRITES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_rewrites.json")
 
@@ -5022,7 +5762,11 @@ def main():
 
     # ── tab0 : Dashboard ─────────────────────────────────────
     with tab0:
-        render_dashboard()
+        dash_sub1, dash_sub2 = st.tabs(["📊 Vue d'ensemble", "🧠 Intelligence Cumulative"])
+        with dash_sub1:
+            render_dashboard()
+        with dash_sub2:
+            render_cumulative_intel()
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
@@ -5256,6 +6000,13 @@ def main():
                         "brand_type": brand_type, "page_type": detected_page_type,
                         "ad_text": ad_text, "model": model, "market_context": market_context}
                 save_history(result, meta)
+                # Auto-save swipe files from rewrites generated
+                _new_swipes = auto_save_swipes_from_audit(result, meta)
+                if _new_swipes:
+                    _sw_lib = load_swipefiles()
+                    for _sw in _new_swipes:
+                        _sw_lib.setdefault(_sw["type"], []).insert(0, _sw)
+                    save_swipefiles(_sw_lib)
                 st.session_state.loaded_result = None
                 if st.session_state.get("reaudit_url"):
                     st.session_state.reaudit_url = ""
@@ -5356,9 +6107,9 @@ def main():
         with sub3:
             render_competitor_audit(api_key)
 
-    # ── tab3 : Suivi (Projets + Monitoring) ──────────────────
+    # ── tab3 : Suivi (Projets + Monitoring + Campagnes) ──────
     with tab3:
-        sub3, sub4 = st.tabs(["🗂️ Projets", "📡 Monitoring & Alertes"])
+        sub3, sub4, sub5_camp = st.tabs(["🗂️ Projets", "📡 Monitoring & Alertes", "📡 Campagnes en cours"])
         with sub3:
             render_projects(api_key)
         with sub4:
@@ -5366,15 +6117,17 @@ def main():
                 render_monitoring(api_key)
             else:
                 st.info("📡 **Monitoring & Alertes** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
+        with sub5_camp:
+            render_campaign_tracker()
 
     # ── tab4 : Historique ────────────────────────────────────
     with tab4:
         render_history()
 
-    # ── tab5 : Ressources (Checklist + Benchmark + Changelog) ─
+    # ── tab5 : Ressources (Checklist + Ads Library + Swipe Files + Benchmark + Changelog) ─
     with tab5:
-        sub5, sub6, sub7, sub8 = st.tabs([
-            "✅ Checklist", "📚 Ads Library", "📊 Benchmark 2025", "📋 Changelog"
+        sub5, sub6, sub_swipe, sub7, sub8 = st.tabs([
+            "✅ Checklist", "📚 Ads Library", "🗂️ Mes Swipe Files", "📊 Benchmark 2025", "📋 Changelog"
         ])
         with sub5:
             render_checklist()
@@ -5391,6 +6144,8 @@ def main():
                     "</div>",
                     unsafe_allow_html=True,
                 )
+        with sub_swipe:
+            render_swipe_library()
         with sub7:
             render_benchmark_tab()
         with sub8:
