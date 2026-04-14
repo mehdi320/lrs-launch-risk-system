@@ -630,7 +630,9 @@ def run_scheduled_audits():
                 brand_type=sched.get("brand_type", "Nouveau lancement"),
                 page_type=pt, page_lang=pl,
             )
-            ts   = now.strftime("%d/%m/%Y %H:%M")
+            ts         = now.strftime("%d/%m/%Y %H:%M")
+            new_score  = res.get("_c", {}).get("score", 0)
+            prev_score = schedule[sid].get("last_score")
             meta = {"url": url, "mode": sched.get("mode","Funnel Only"),
                     "platform": sched.get("platform","Meta"),
                     "offer_type": sched.get("offer_type","Digital product"),
@@ -640,8 +642,22 @@ def run_scheduled_audits():
             save_history(res, meta)
             schedule[sid]["last_run"]    = ts
             schedule[sid]["last_error"]  = ""
-            schedule[sid]["last_score"]  = res.get("_c", {}).get("score", 0)
+            schedule[sid]["last_score"]  = new_score
             ran_any = True
+
+            # ── Alerte email si chute de score ≥ 2 pts ───────
+            alert_email = sched.get("alert_email", "") or os.getenv("LRS_ALERT_EMAIL", "")
+            if alert_email and prev_score is not None:
+                drop = new_score - int(prev_score)
+                if drop <= -2:
+                    entry_alert = {**meta, "score": new_score,
+                                   "decision": res.get("_c",{}).get("decision",""),
+                                   "prev_score": int(prev_score)}
+                    try:
+                        send_score_drop_alert(entry_alert, int(prev_score), alert_email)
+                    except Exception:
+                        pass
+
         except Exception as e:
             schedule[sid]["last_error"] = str(e)
             schedule[sid]["last_run"]   = now.strftime("%d/%m/%Y %H:%M")
@@ -649,6 +665,27 @@ def run_scheduled_audits():
     if ran_any:
         save_schedule(schedule)
         st.session_state.schedule = schedule
+
+        # ── Digest hebdomadaire (si ≥ 2 pages monitorées) ────
+        digest_email = os.getenv("LRS_DIGEST_EMAIL", "")
+        try:
+            digest_email = digest_email or st.secrets.get("LRS_DIGEST_EMAIL", "")
+        except Exception:
+            pass
+        if digest_email and len(schedule) >= 1:
+            digest_entries = []
+            for sid2, sched2 in schedule.items():
+                entry_d = {
+                    "url":      sched2.get("url",""),
+                    "score":    sched2.get("last_score", 0),
+                    "decision": "",
+                    "timestamp":sched2.get("last_run",""),
+                }
+                digest_entries.append(entry_d)
+            try:
+                send_monitoring_digest(digest_entries, digest_email)
+            except Exception:
+                pass
 
 def compute_score_alerts(history):
     """
@@ -2063,6 +2100,694 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         st.error(str(e))
 
 
+# ── REWRITE TRACKER ──────────────────────────────────────────
+REWRITES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_rewrites.json")
+
+def load_rewrites():
+    try:
+        if os.path.exists(REWRITES_FILE):
+            with open(REWRITES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_rewrites(data):
+    try:
+        with open(REWRITES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def render_rewrite_tracker(result, meta, key_prefix="rwt"):
+    """
+    Permet de marquer des rewrites comme 'appliqués' et programme un re-audit
+    automatique dans 7 jours pour mesurer l'impact.
+    """
+    rewrites_all = result.get("rewrites", {})
+    hl_rewrite   = rewrites_all.get("headline", "")
+    cta_rewrite  = rewrites_all.get("cta", "")
+    hook_rewrite = rewrites_all.get("hook_angle", "")
+    fp           = result.get("fix_plan", {})
+    qws          = fp.get("quick_wins", [])
+
+    url_key = meta.get("url", meta.get("offer_type", "unknown"))
+    stored  = load_rewrites()
+    page_data = stored.get(url_key, {})
+
+    with st.expander("✍️ Rewrite Tracker — Suivre mes corrections", expanded=False):
+        st.caption("Cochez les corrections que vous avez appliquées. LRS vous rappellera de re-auditer dans 7 jours.")
+
+        changed = False
+        items_to_track = []
+        if hl_rewrite:
+            items_to_track.append(("headline", "📰 Headline rewrite", hl_rewrite))
+        if cta_rewrite:
+            items_to_track.append(("cta", "🎯 CTA rewrite", cta_rewrite))
+        if hook_rewrite:
+            items_to_track.append(("hook", "🪝 Hook angle", hook_rewrite))
+        for i, qw in enumerate(qws[:5]):
+            items_to_track.append((f"qw_{i}", f"⚡ {qw.get('what','Quick win')[:60]}", qw.get('impact','')))
+
+        if not items_to_track:
+            st.info("Lancez un audit pour voir les rewrites disponibles.")
+            return
+
+        for item_key, item_label, item_detail in items_to_track:
+            col_check, col_text = st.columns([1, 8])
+            current_val = page_data.get(item_key, {}).get("applied", False)
+            applied_date = page_data.get(item_key, {}).get("date", "")
+            with col_check:
+                new_val = st.checkbox("", value=current_val, key=f"{key_prefix}_{item_key}")
+                if new_val != current_val:
+                    changed = True
+                    if item_key not in page_data:
+                        page_data[item_key] = {}
+                    page_data[item_key]["applied"] = new_val
+                    page_data[item_key]["date"] = datetime.datetime.now().strftime("%d/%m/%Y") if new_val else ""
+                    page_data[item_key]["label"] = item_label
+            with col_text:
+                color = "#22c55e" if (page_data.get(item_key,{}).get("applied")) else "#aaa"
+                suffix = f" ✅ *appliqué le {applied_date}*" if applied_date and page_data.get(item_key,{}).get("applied") else ""
+                st.markdown(f"<span style='color:{color};font-size:0.88rem'>{item_label}</span>{suffix}", unsafe_allow_html=True)
+                if item_detail:
+                    st.caption(item_detail[:120])
+
+        if changed:
+            stored[url_key] = page_data
+            save_rewrites(stored)
+
+        # Combien appliqués ?
+        n_applied = sum(1 for v in page_data.values() if isinstance(v,dict) and v.get("applied"))
+        n_total   = len(items_to_track)
+
+        if n_applied > 0:
+            pct = int(n_applied / n_total * 100)
+            st.progress(pct / 100, text=f"{n_applied}/{n_total} corrections appliquées ({pct}%)")
+
+            # Calculer date re-audit suggérée
+            dates = [v.get("date","") for v in page_data.values() if isinstance(v,dict) and v.get("applied") and v.get("date")]
+            if dates:
+                try:
+                    last_applied = max(datetime.datetime.strptime(d, "%d/%m/%Y") for d in dates)
+                    reaudit_due  = last_applied + datetime.timedelta(days=7)
+                    today        = datetime.datetime.now()
+                    days_left    = (reaudit_due - today).days
+                    if days_left <= 0:
+                        st.success("✅ **Re-audit recommandé !** 7 jours se sont écoulés depuis vos corrections. Vos changements ont eu le temps d'être indexés.")
+                        if st.button("🔁 Re-auditer maintenant", key=f"{key_prefix}_reaudit_now", type="primary"):
+                            st.session_state.reaudit_url = url_key
+                            st.rerun()
+                    else:
+                        st.info(f"📅 Re-audit recommandé dans **{days_left} jour(s)** (le {reaudit_due.strftime('%d/%m/%Y')})")
+                except Exception:
+                    pass
+
+
+# ── DASHBOARD VUE D'ENSEMBLE ─────────────────────────────────
+
+def _score_color(score):
+    if score <= 9:  return "#ef4444"
+    if score <= 14: return "#f59e0b"
+    return "#22c55e"
+
+def _score_emoji(score):
+    if score <= 9:  return "🔴"
+    if score <= 14: return "🟡"
+    return "🟢"
+
+def render_dashboard():
+    """
+    Dashboard portfolio — vue santé de tous les audits/projets.
+    Affiché comme premier onglet quand l'utilisateur a de l'historique.
+    """
+    history  = st.session_state.audit_history
+    projects = st.session_state.projects
+    light    = st.session_state.get("light_mode", False)
+    bg_card  = "#ffffff" if light else "#0f0f1a"
+    border   = "#e5e7eb" if light else "#1e1e3a"
+    txt      = "#1a1a2e" if light else "#e0e0e0"
+    txt2     = "#6b7280" if light else "#888"
+    plan_key = _get_plan()
+
+    st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>📊 Portfolio — Vue d'ensemble</h3>", unsafe_allow_html=True)
+    st.caption(f"Plan actif : **{PLAN_LIMITS[plan_key]['label']}** · {len(history)} audits au total")
+    st.markdown("---")
+
+    if not history:
+        st.markdown(
+            f"<div style='background:{bg_card};border:1px solid {border};border-radius:12px;"
+            f"padding:40px;text-align:center'>"
+            f"<div style='font-size:2.5rem'>🚀</div>"
+            f"<div style='color:{txt};font-size:1.1rem;font-weight:700;margin:12px 0 6px'>Aucun audit pour l'instant</div>"
+            f"<div style='color:{txt2};font-size:0.9rem'>Lancez votre premier audit dans l'onglet <strong>Audit</strong></div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    # ── KPIs globaux ──────────────────────────────────────────
+    all_scores  = [e.get("score", 0) for e in history if e.get("score")]
+    avg_score   = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
+    best_score  = max(all_scores) if all_scores else 0
+    worst_score = min(all_scores) if all_scores else 0
+    danger_count = sum(1 for s in all_scores if s <= 9)
+    ready_count  = sum(1 for s in all_scores if s >= 15)
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    for col, label, val, sub, color in [
+        (k1, "Audits total",    len(history),    "",           txt),
+        (k2, "Score moyen",     f"{avg_score}/20","",          _score_color(avg_score)),
+        (k3, "Meilleur score",  f"{best_score}/20","",         "#22c55e"),
+        (k4, "Pages en danger", danger_count,    "score ≤ 9",  "#ef4444"),
+        (k5, "Prêtes à scaler", ready_count,     "score ≥ 15", "#22c55e"),
+    ]:
+        with col:
+            st.markdown(
+                f"<div style='background:{bg_card};border:1px solid {border};border-radius:10px;"
+                f"padding:16px;text-align:center'>"
+                f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>{label}</div>"
+                f"<div style='color:{color};font-size:1.8rem;font-weight:800;line-height:1.2'>{val}</div>"
+                f"<div style='color:{txt2};font-size:0.72rem'>{sub}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("")
+
+    # ── Pages en danger ───────────────────────────────────────
+    danger_pages = [e for e in history if e.get("score", 20) <= 9]
+    if danger_pages:
+        st.markdown(f"<div style='color:#ef4444;font-weight:700;font-size:0.95rem;margin-bottom:8px'>🔴 Pages en danger immédiat ({len(danger_pages)})</div>", unsafe_allow_html=True)
+        for e in danger_pages[:5]:
+            url_d = str(e.get("url","") or e.get("offer_type",""))[:55]
+            sc    = e.get("score", 0)
+            ts    = e.get("timestamp", "")
+            c1, c2, c3, c4 = st.columns([5, 1, 2, 2])
+            with c1: st.markdown(f"<span style='color:{txt};font-size:0.88rem'>{url_d}</span>", unsafe_allow_html=True)
+            with c2: st.markdown(f"<span style='color:#ef4444;font-weight:700'>{sc}/20</span>", unsafe_allow_html=True)
+            with c3: st.caption(ts)
+            with c4:
+                if st.button("🔁 Re-auditer", key=f"dash_reaudit_{url_d[:20]}", use_container_width=True):
+                    st.session_state.reaudit_url = e.get("url","")
+                    st.rerun()
+        st.markdown("")
+
+    # ── Évolution score (derniers 10 audits) ──────────────────
+    if len(history) >= 3:
+        st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:8px'>📈 Évolution des scores (derniers 10 audits)</div>", unsafe_allow_html=True)
+        recent = list(reversed(history[:10]))
+        chart_data = []
+        for i, e in enumerate(recent):
+            chart_data.append({
+                "Audit #": i + 1,
+                "Score":   e.get("score", 0),
+                "URL":     str(e.get("url","") or e.get("offer_type",""))[:30],
+            })
+        import pandas as pd
+        df = pd.DataFrame(chart_data)
+        st.line_chart(df.set_index("Audit #")["Score"], use_container_width=True, height=180)
+        st.markdown("")
+
+    # ── Derniers audits ───────────────────────────────────────
+    st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:8px'>🕒 Derniers audits</div>", unsafe_allow_html=True)
+    for i, e in enumerate(history[:8]):
+        url_v  = str(e.get("url","") or e.get("offer_type",""))
+        sc     = e.get("score", 0)
+        ts     = e.get("timestamp","")
+        mode_v = e.get("mode","")
+        plat   = e.get("platform","")
+        emoji  = _score_emoji(sc)
+        color  = _score_color(sc)
+        dec    = e.get("decision","")
+
+        st.markdown(
+            f"<div style='background:{bg_card};border:1px solid {border};border-radius:8px;"
+            f"padding:12px 16px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>"
+            f"<span style='font-size:1.2rem'>{emoji}</span>"
+            f"<span style='color:{color};font-size:1.3rem;font-weight:800;min-width:42px'>{sc}/20</span>"
+            f"<div style='flex:1'>"
+            f"  <div style='color:{txt};font-size:0.88rem;font-weight:600'>{url_v[:60]}</div>"
+            f"  <div style='color:{txt2};font-size:0.75rem'>{ts} · {mode_v} · {plat}</div>"
+            f"</div>"
+            f"<span style='color:{color};font-size:0.78rem;font-weight:600'>{dec}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Quick wins non appliqués ──────────────────────────────
+    if history:
+        latest = history[0]
+        latest_result = latest.get("result", {})
+        fp = latest_result.get("fix_plan", {})
+        qws = fp.get("quick_wins", [])
+        if qws:
+            st.markdown("")
+            st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:8px'>⚡ Quick wins — dernier audit</div>", unsafe_allow_html=True)
+            for qw in qws[:3]:
+                what   = qw.get("what", "")
+                impact = qw.get("impact", "")
+                effort = qw.get("effort", "")
+                tag_c  = "#22c55e" if effort == "Faible" else "#f59e0b"
+                st.markdown(
+                    f"<div style='background:{bg_card};border-left:3px solid {tag_c};"
+                    f"border:1px solid {border};border-left:3px solid {tag_c};"
+                    f"border-radius:8px;padding:10px 14px;margin-bottom:5px'>"
+                    f"<div style='color:{txt};font-size:0.86rem'>{what}</div>"
+                    f"<div style='color:{txt2};font-size:0.75rem;margin-top:2px'>"
+                    f"Impact: {impact} · Effort: <span style='color:{tag_c}'>{effort}</span></div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+    # ── Projets résumé ────────────────────────────────────────
+    if projects:
+        st.markdown("")
+        st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:8px'>🗂️ Projets actifs ({len(projects)})</div>", unsafe_allow_html=True)
+        p_cols = st.columns(min(len(projects), 4))
+        for idx, (pname, pdata) in enumerate(list(projects.items())[:4]):
+            pages = pdata.get("pages", [])
+            with p_cols[idx]:
+                st.markdown(
+                    f"<div style='background:{bg_card};border:1px solid {border};border-radius:8px;"
+                    f"padding:12px;text-align:center'>"
+                    f"<div style='color:{txt};font-weight:700;font-size:0.88rem'>{pname[:20]}</div>"
+                    f"<div style='color:{txt2};font-size:0.75rem;margin-top:4px'>{len(pages)} page(s)</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+
+# ── EMAILS AUTOMATIQUES DE MONITORING ────────────────────────
+
+def send_monitoring_digest(monitored_entries, to_email):
+    """
+    Envoie un digest hebdomadaire des pages surveillées avec scores actuels.
+    Appelé automatiquement lors du run des audits planifiés.
+    """
+    host, port, user, password = _get_smtp_config()
+    if not host or not user or not to_email:
+        return False
+
+    light_mode = False
+    now_str = datetime.datetime.now().strftime("%d/%m/%Y")
+
+    rows_html = ""
+    for entry in monitored_entries:
+        url_v  = str(entry.get("url","") or entry.get("offer_type",""))[:60]
+        sc     = entry.get("score", 0)
+        dec    = entry.get("decision", "")
+        ts     = entry.get("timestamp","")
+        prev_sc = entry.get("prev_score")
+        sc_color = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+        delta_html = ""
+        if prev_sc is not None:
+            delta = sc - prev_sc
+            delta_color = "#22c55e" if delta>0 else "#ef4444" if delta<0 else "#888"
+            delta_arrow = "▲" if delta>0 else "▼" if delta<0 else "="
+            delta_html = f"<span style='color:{delta_color};margin-left:8px;font-size:0.8rem'>{delta_arrow} {abs(delta)} pts</span>"
+        rows_html += f"""
+        <tr>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#333;font-size:0.85rem'>{url_v}</td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;text-align:center'>
+            <span style='color:{sc_color};font-weight:800;font-size:1.1rem'>{sc}/20</span>{delta_html}
+          </td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#555;font-size:0.82rem'>{dec}</td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#999;font-size:0.78rem'>{ts}</td>
+        </tr>"""
+
+    danger_count = sum(1 for e in monitored_entries if e.get("score",20)<=9)
+    alert_banner = ""
+    if danger_count > 0:
+        alert_banner = f"""
+        <div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:6px;
+                    padding:12px 16px;margin-bottom:20px'>
+          <strong style='color:#ef4444'>⚠️ {danger_count} page(s) en danger</strong>
+          <div style='color:#555;font-size:0.85rem;margin-top:4px'>Score ≤ 9/20 — action requise immédiatement.</div>
+        </div>"""
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.2rem;font-weight:800'>📊 LRS™ — Digest Hebdomadaire</div>
+    <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{now_str} · {len(monitored_entries)} pages surveillées</div>
+  </div>
+  <div style='padding:24px 28px'>
+    {alert_banner}
+    <table style='width:100%;border-collapse:collapse'>
+      <thead>
+        <tr style='background:#f8f8fc'>
+          <th style='padding:8px 12px;text-align:left;font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px'>Page</th>
+          <th style='padding:8px 12px;text-align:center;font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px'>Score</th>
+          <th style='padding:8px 12px;text-align:left;font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px'>Décision</th>
+          <th style='padding:8px 12px;text-align:left;font-size:0.75rem;color:#888;text-transform:uppercase;letter-spacing:0.5px'>Dernier audit</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;
+                color:#aaa;font-size:0.78rem;text-align:center'>
+      Généré par LRS™ V{APP_VERSION} — Launch Risk System
+    </div>
+  </div>
+</div>
+</body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"LRS™ Digest — {len(monitored_entries)} pages · {now_str}"
+        msg["From"]    = user
+        msg["To"]      = to_email
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(user, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+def send_score_drop_alert(entry, prev_score, to_email):
+    """
+    Envoie une alerte immédiate quand un score baisse de plus de 2 points.
+    """
+    host, port, user, password = _get_smtp_config()
+    if not host or not user or not to_email:
+        return False
+
+    url_v  = str(entry.get("url","") or entry.get("offer_type",""))[:80]
+    sc     = entry.get("score", 0)
+    delta  = sc - prev_score
+    sc_col = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+    now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:580px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:#1a0a0a;border-top:4px solid #ef4444;padding:20px 24px'>
+    <div style='color:#ef4444;font-size:1.1rem;font-weight:800'>⚠️ Alerte chute de score</div>
+    <div style='color:#aaa;font-size:0.82rem;margin-top:4px'>{now_str}</div>
+  </div>
+  <div style='padding:24px 28px'>
+    <div style='font-size:0.85rem;color:#888;margin-bottom:4px'>Page</div>
+    <div style='font-size:0.95rem;color:#1a1a2e;font-weight:600;margin-bottom:20px'>{url_v}</div>
+    <div style='display:flex;gap:16px;margin-bottom:20px'>
+      <div style='flex:1;background:#f8f8fc;border-radius:8px;padding:16px;text-align:center'>
+        <div style='color:#888;font-size:0.72rem;text-transform:uppercase'>Score précédent</div>
+        <div style='color:#888;font-size:2rem;font-weight:800'>{prev_score}/20</div>
+      </div>
+      <div style='flex:1;background:#fff0f0;border-radius:8px;padding:16px;text-align:center;border:1px solid #fecaca'>
+        <div style='color:#ef4444;font-size:0.72rem;text-transform:uppercase'>Score actuel</div>
+        <div style='color:{sc_col};font-size:2rem;font-weight:800'>{sc}/20</div>
+      </div>
+      <div style='flex:1;background:#fff0f0;border-radius:8px;padding:16px;text-align:center;border:1px solid #fecaca'>
+        <div style='color:#ef4444;font-size:0.72rem;text-transform:uppercase'>Delta</div>
+        <div style='color:#ef4444;font-size:2rem;font-weight:800'>▼ {abs(delta)}</div>
+      </div>
+    </div>
+    <div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:6px;padding:12px 16px'>
+      <strong style='color:#ef4444'>Action recommandée</strong>
+      <div style='color:#555;font-size:0.85rem;margin-top:4px'>
+        Connectez-vous à LRS™ pour voir le plan d'action complet et lancer un re-audit.
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"⚠️ LRS™ Alerte — Score chute de {abs(delta)} pts · {url_v[:40]}"
+        msg["From"]    = user
+        msg["To"]      = to_email
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(user, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+# ── AUDIT CONCURRENTS ─────────────────────────────────────────
+
+def render_competitor_audit(api_key):
+    """
+    Mode comparaison : audite votre page ET celle d'un concurrent.
+    Affiche un rapport côte-à-côte avec les écarts critiques.
+    """
+    light = st.session_state.get("light_mode", False)
+    bg    = "#ffffff" if light else "#0f0f1a"
+    border= "#e5e7eb" if light else "#1e1e3a"
+    txt   = "#1a1a2e" if light else "#e0e0e0"
+    txt2  = "#6b7280" if light else "#888"
+
+    st.markdown(f"<h4 style='color:{txt}'>🥊 Audit Concurrents — Comparaison directe</h4>", unsafe_allow_html=True)
+    st.caption("Comparez votre page avec celle d'un concurrent. LRS score les deux et identifie précisément où vous perdez face à lui.")
+
+    col_you, col_them = st.columns(2)
+    with col_you:
+        st.markdown(f"<div style='color:#6366f1;font-weight:700;font-size:0.85rem;margin-bottom:6px'>🔵 VOTRE PAGE</div>", unsafe_allow_html=True)
+        your_url = st.text_input("Votre URL", placeholder="https://votre-landing.com", key="comp_your_url")
+    with col_them:
+        st.markdown(f"<div style='color:#f59e0b;font-weight:700;font-size:0.85rem;margin-bottom:6px'>🟡 CONCURRENT</div>", unsafe_allow_html=True)
+        their_url = st.text_input("URL concurrent", placeholder="https://concurrent.com", key="comp_their_url")
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        comp_platform = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"], key="comp_platform")
+    with c2:
+        comp_offer = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="comp_offer")
+    with c3:
+        comp_model = st.selectbox("Modèle IA", ["gpt-4o-mini","gpt-4o"], key="comp_model")
+
+    run_comp = st.button("🥊 Lancer la comparaison", type="primary", use_container_width=True, key="comp_run_btn")
+
+    if not run_comp:
+        return
+
+    if not your_url.strip() or not their_url.strip():
+        st.error("Les deux URLs sont requises.")
+        return
+
+    # ── Quota check ───────────────────────────────────────────
+    _active_plan_c = _get_plan()
+    _allowed_modes_c = PLAN_LIMITS[_active_plan_c]["modes"]
+    if "Funnel Only" not in _allowed_modes_c:
+        st.error(t("mode_locked"))
+        return
+    ok1, used1, lim1 = _check_quota()
+    if not ok1:
+        st.error(t("quota_exhausted"))
+        return
+
+    results = {}
+    errors  = {}
+
+    for side, url in [("you", your_url.strip()), ("them", their_url.strip())]:
+        label = "Votre page" if side=="you" else "Concurrent"
+        with st.status(f"🧠 Analyse : {label}...", expanded=True) as _st:
+            _sp = st.empty()
+            _tp = st.empty()
+            try:
+                content, status, _ = extract_page(url)
+                if not content:
+                    errors[side] = f"Impossible d'extraire {url}"
+                    _st.update(label=f"❌ Erreur extraction", state="error", expanded=False)
+                    continue
+                pt = detect_page_type(content, url)
+                pl = detect_language(content)
+                r  = run_audit_stream("Funnel Only", comp_platform, comp_offer,
+                                      content, "", "", comp_model,
+                                      page_type=pt, page_lang=pl,
+                                      status_stage=_sp, status_tokens=_tp)
+                results[side] = r
+                _st.update(label=f"✅ {label} analysée", state="complete", expanded=False)
+                _increment_usage()
+            except Exception as e:
+                errors[side] = str(e)
+                _st.update(label=f"❌ Erreur", state="error", expanded=False)
+
+    for side, msg in errors.items():
+        st.error(f"{'Votre page' if side=='you' else 'Concurrent'} : {msg}")
+
+    if "you" not in results or "them" not in results:
+        return
+
+    ry = results["you"]
+    rt = results["them"]
+    cy = ry.get("_c", {})
+    ct = rt.get("_c", {})
+
+    # ── Carte scores ──────────────────────────────────────────
+    st.markdown("### 📊 Résultats comparatifs")
+    col_y, col_mid, col_t = st.columns([2, 1, 2])
+
+    sy = cy.get("score", 0)
+    st_ = ct.get("score", 0)
+    winner = "you" if sy >= st_ else "them"
+
+    with col_y:
+        color_y   = _score_color(sy)
+        border_y  = "#6366f1" if winner == "you" else border
+        winner_y  = "<div style='color:#6366f1;font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "you" else ""
+        dec_y     = cy.get("decision", "")
+        st.markdown(
+            f"<div style='background:{bg};border:2px solid {border_y};"
+            f"border-radius:12px;padding:20px;text-align:center'>"
+            f"<div style='color:#6366f1;font-weight:700;font-size:0.8rem;text-transform:uppercase'>🔵 Vous</div>"
+            f"<div style='color:{color_y};font-size:3rem;font-weight:900;line-height:1'>{sy}</div>"
+            f"<div style='color:{txt2};font-size:0.85rem'>/20</div>"
+            f"<div style='color:{color_y};font-weight:600;margin-top:6px'>{dec_y}</div>"
+            f"{winner_y}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col_mid:
+        delta_vs  = sy - st_
+        delta_col = "#22c55e" if delta_vs > 0 else "#ef4444" if delta_vs < 0 else "#888"
+        delta_sym = "▲" if delta_vs > 0 else "▼" if delta_vs < 0 else "="
+        st.markdown(
+            f"<div style='text-align:center;padding:20px 0'>"
+            f"<div style='color:{txt2};font-size:0.75rem;text-transform:uppercase'>Écart</div>"
+            f"<div style='color:{delta_col};font-size:2rem;font-weight:800'>{delta_sym}{abs(delta_vs)}</div>"
+            f"<div style='color:{txt2};font-size:0.75rem'>pts</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with col_t:
+        color_t   = _score_color(st_)
+        border_t  = "#f59e0b" if winner == "them" else border
+        winner_t  = "<div style='color:#f59e0b;font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "them" else ""
+        dec_t     = ct.get("decision", "")
+        st.markdown(
+            f"<div style='background:{bg};border:2px solid {border_t};"
+            f"border-radius:12px;padding:20px;text-align:center'>"
+            f"<div style='color:#f59e0b;font-weight:700;font-size:0.8rem;text-transform:uppercase'>🟡 Concurrent</div>"
+            f"<div style='color:{color_t};font-size:3rem;font-weight:900;line-height:1'>{st_}</div>"
+            f"<div style='color:{txt2};font-size:0.85rem'>/20</div>"
+            f"<div style='color:{color_t};font-weight:600;margin-top:6px'>{dec_t}</div>"
+            f"{winner_t}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Tableau critères ──────────────────────────────────────
+    st.markdown("#### 🔍 Analyse critère par critère")
+    for crit, label, icon in [
+        ("hook",    "Hook & Headline", "🪝"),
+        ("offer",   "Offre",           "💎"),
+        ("trust",   "Trust",           "🛡️"),
+        ("friction","Friction",        "⚡"),
+    ]:
+        vy = cy.get(crit, 0)
+        vt = ct.get(crit, 0)
+        diff = vy - vt
+        diff_col = "#22c55e" if diff > 0 else "#ef4444" if diff < 0 else "#888"
+        diff_sym = f"▲ +{diff}" if diff > 0 else f"▼ {diff}" if diff < 0 else "="
+        bar_y_pct = int(vy / 5 * 100)
+        bar_t_pct = int(vt / 5 * 100)
+        st.markdown(
+            f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
+            f"padding:14px 18px;margin-bottom:6px'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px'>"
+            f"  <span style='color:{txt};font-weight:600'>{icon} {label}</span>"
+            f"  <span style='color:{diff_col};font-size:0.85rem;font-weight:700'>{diff_sym} pts</span>"
+            f"</div>"
+            f"<div style='display:flex;gap:8px;align-items:center'>"
+            f"  <span style='color:#6366f1;font-size:0.78rem;min-width:30px'>🔵 {vy}/5</span>"
+            f"  <div style='flex:1;background:#1e1e3a;border-radius:4px;height:8px'>"
+            f"    <div style='background:#6366f1;width:{bar_y_pct}%;height:8px;border-radius:4px'></div></div>"
+            f"  <span style='color:{txt2};font-size:0.78rem'>vs</span>"
+            f"  <div style='flex:1;background:#1e1e3a;border-radius:4px;height:8px'>"
+            f"    <div style='background:#f59e0b;width:{bar_t_pct}%;height:8px;border-radius:4px'></div></div>"
+            f"  <span style='color:#f59e0b;font-size:0.78rem;min-width:30px'>{vt}/5 🟡</span>"
+            f"</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Gaps d'opportunité ────────────────────────────────────
+    gaps = [(c, cy.get(c,0) - ct.get(c,0)) for c in ["hook","offer","trust","friction"]]
+    worst_gap = min(gaps, key=lambda x: x[1])
+    if worst_gap[1] < 0:
+        labels_map = {"hook":"Hook & Headline","offer":"Offre","trust":"Trust","friction":"Friction"}
+        st.markdown(
+            f"<div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:8px;"
+            f"padding:14px 18px;margin-top:12px'>"
+            f"<strong style='color:#ef4444'>📌 Priorité absolue : {labels_map[worst_gap[0]]}</strong>"
+            f"<div style='color:#555;font-size:0.87rem;margin-top:6px'>"
+            f"Votre concurrent vous dépasse de {abs(worst_gap[1])} points sur ce critère. "
+            f"C'est votre levier n°1 pour inverser le rapport de force.</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+
+# ── RAPPORT AGENCY BRANDÉ ─────────────────────────────────────
+
+def render_agency_report_widget(result, meta, key_prefix="agency"):
+    """
+    Widget rapport client white-label Agency.
+    Génère un PDF avec branding client personnalisé et langage non-technique.
+    Disponible uniquement plan Agency.
+    """
+    plan = _get_plan()
+    if not PLAN_LIMITS[plan].get("white_label", False):
+        return
+
+    with st.expander("👔 Rapport Agency — White-label client"):
+        st.caption("Rapport PDF professionnel avec votre branding et langage adapté au client (sans jargon technique).")
+        ag1, ag2 = st.columns(2)
+        with ag1:
+            agency_name   = st.text_input("Nom de votre agence", placeholder="Growth Agency", key=f"{key_prefix}_agency")
+            client_name   = st.text_input("Nom du client", placeholder="Startup XYZ", key=f"{key_prefix}_client")
+        with ag2:
+            agency_color  = st.color_picker("Couleur principale", "#6366f1", key=f"{key_prefix}_color")
+            exec_summary  = st.text_area("Introduction personnalisée (optionnel)",
+                                          placeholder="Cher client, suite à notre audit...",
+                                          height=80, key=f"{key_prefix}_intro")
+
+        if st.button("📄 Générer rapport Agency", key=f"{key_prefix}_gen", type="primary"):
+            if not PDF_AVAILABLE:
+                st.error("Module PDF non disponible. Vérifiez lrs_pdf_report.py")
+                return
+            try:
+                from lrs_pdf_report import generate_pdf_report
+                ts = meta.get("timestamp", datetime.datetime.now().strftime("%d/%m/%Y %H:%M"))
+                meta_agency = {
+                    **meta,
+                    "version":       APP_VERSION,
+                    "client_name":   client_name or "Client",
+                    "agency_name":   agency_name or "Agence",
+                    "agency_color":  agency_color,
+                    "exec_summary":  exec_summary,
+                    "report_mode":   "agency",
+                }
+                pdf_bytes = generate_pdf_report(result, meta_agency)
+                fname = f"LRS_Agency_{(client_name or 'client').replace(' ','_')}_{ts.replace('/','-').replace(':','-').replace(' ','_')}.pdf"
+                st.download_button(
+                    "⬇️ Télécharger le rapport",
+                    data=pdf_bytes,
+                    file_name=fname,
+                    mime="application/pdf",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"{key_prefix}_dl"
+                )
+            except Exception as e:
+                st.error(f"Erreur génération : {e}")
+
+
 def render_email_widget(result, meta, key_prefix="email"):
     """Widget compact pour envoyer le rapport par email — utilisable partout."""
     host, _, user, _ = _get_smtp_config()
@@ -2846,23 +3571,31 @@ def render_monitoring(api_key):
             sc_offer  = st.selectbox("Offre", ["Digital product","Ecom (produit physique)"], key="sc_offer")
             sc_brand  = st.radio("Marque", ["Nouveau lancement","Marque etablie"], key="sc_brand", horizontal=True)
 
+        sc_alert_email = st.text_input(
+            "📧 Email alerte (optionnel)",
+            placeholder="vous@email.com — reçoit une alerte si le score chute de ≥2 pts",
+            key="sc_alert_email"
+        )
+        st.caption("Laissez vide pour désactiver les alertes email. SMTP doit être configuré.")
+
         if st.button("⏰ Planifier", type="primary", key="btn_schedule"):
             if not sc_url.strip():
                 st.error("Renseignez une URL.")
             else:
                 sid = "sc_" + str(int(time.time()))
                 schedule[sid] = {
-                    "url":        sc_url.strip(),
-                    "freq_days":  freq_map[sc_freq],
-                    "mode":       sc_mode,
-                    "platform":   sc_plat,
-                    "offer_type": sc_offer,
-                    "brand_type": sc_brand,
-                    "enabled":    True,
-                    "last_run":   "",
-                    "last_score": None,
-                    "last_error": "",
-                    "created":    datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "url":         sc_url.strip(),
+                    "freq_days":   freq_map[sc_freq],
+                    "mode":        sc_mode,
+                    "platform":    sc_plat,
+                    "offer_type":  sc_offer,
+                    "brand_type":  sc_brand,
+                    "enabled":     True,
+                    "last_run":    "",
+                    "last_score":  None,
+                    "last_error":  "",
+                    "alert_email": sc_alert_email.strip(),
+                    "created":     datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
                 }
                 save_schedule(schedule)
                 st.session_state.schedule = schedule
@@ -2950,6 +3683,47 @@ def render_monitoring(api_key):
                         st.rerun()
     else:
         st.caption("Aucun audit planifié.")
+
+    # ── Digest hebdomadaire ───────────────────────────────────
+    st.markdown("---")
+    with st.expander("📧 Digest hebdomadaire automatique", expanded=False):
+        st.caption(
+            "Recevez chaque semaine un email récapitulatif de toutes vos pages surveillées avec "
+            "scores actuels et évolution. Configurez `LRS_DIGEST_EMAIL` dans Streamlit Secrets ou `.env`."
+        )
+        _digest_env = os.getenv("LRS_DIGEST_EMAIL","")
+        try:
+            _digest_env = _digest_env or st.secrets.get("LRS_DIGEST_EMAIL","")
+        except Exception:
+            pass
+        if _digest_env:
+            st.success(f"✅ Digest configuré → {_digest_env}")
+        else:
+            st.info("Ajoutez `LRS_DIGEST_EMAIL = \"vous@email.com\"` dans Streamlit Secrets pour activer le digest.")
+
+        host_d, _, user_d, _ = _get_smtp_config()
+        if not host_d or not user_d:
+            st.warning("SMTP non configuré — requis pour les emails automatiques.")
+
+        # Test manuel du digest
+        if schedule and st.button("📤 Tester le digest maintenant", key="test_digest_btn"):
+            test_email_d = st.session_state.get("test_digest_email","")
+            entries_d = [{
+                "url": s.get("url",""),
+                "score": s.get("last_score",0),
+                "decision": "",
+                "timestamp": s.get("last_run",""),
+            } for s in schedule.values()]
+            if entries_d:
+                test_to = _digest_env
+                if test_to:
+                    ok = send_monitoring_digest(entries_d, test_to)
+                    if ok:
+                        st.success(f"Digest envoyé à {test_to}")
+                    else:
+                        st.error("Erreur envoi — vérifiez la config SMTP.")
+                else:
+                    st.warning("Configurez LRS_DIGEST_EMAIL d'abord.")
 
 # ── PROJETS MULTI-PAGES ──────────────────────────────────────
 def render_projects(api_key):
@@ -4240,10 +5014,15 @@ def main():
     n_alerts   = len(alerts)
     suivi_label = f"Suivi 🔴" if n_alerts > 0 else "Suivi"
 
-    # ── 5 onglets ────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources"
+    # ── 6 onglets ────────────────────────────────────────────
+    _has_history = len(st.session_state.audit_history) > 0
+    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🏠 Dashboard", "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources"
     ])
+
+    # ── tab0 : Dashboard ─────────────────────────────────────
+    with tab0:
+        render_dashboard()
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
@@ -4558,9 +5337,15 @@ def main():
                 # Integrations widget (Slack / Sheets / Notion) — Pro/Agency only
                 render_integrations_widget(result, meta, key_prefix="tab1_integ")
 
-    # ── tab2 : Multi-Audit (Bulk + Comparaison) ──────────────
+                # Rewrite tracker — suivi des corrections appliquées
+                render_rewrite_tracker(result, meta, key_prefix="tab1_rwt")
+
+                # Agency branded report — white-label (Agency plan only)
+                render_agency_report_widget(result, meta, key_prefix="tab1_agency")
+
+    # ── tab2 : Multi-Audit (Bulk + Comparaison + Concurrents) ─
     with tab2:
-        sub1, sub2 = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages"])
+        sub1, sub2, sub3 = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages", "🥊 Audit Concurrents"])
         with sub1:
             if PLAN_LIMITS[_get_plan()].get("bulk", False):
                 render_bulk(api_key)
@@ -4568,6 +5353,8 @@ def main():
                 st.info("⚡ **Bulk audit** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
         with sub2:
             render_comparison(api_key)
+        with sub3:
+            render_competitor_audit(api_key)
 
     # ── tab3 : Suivi (Projets + Monitoring) ──────────────────
     with tab3:
