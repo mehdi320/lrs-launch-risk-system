@@ -7023,6 +7023,509 @@ def check_access():
     return False
 
 
+# ── ANTI-CHURN : Auto-email post-audit ──────────────────────
+
+POST_AUDIT_EMAIL_KEY = "post_audit_last_sent"
+
+def send_post_audit_email_auto(result, meta):
+    """
+    Envoie automatiquement un email de résumé après chaque audit,
+    si SMTP est configuré et que l'utilisateur a renseigné son email.
+    Rate-limit : 1 envoi max par session (evite spam si l'user recharge).
+    """
+    # Guard : déjà envoyé dans cette session ?
+    if st.session_state.get(POST_AUDIT_EMAIL_KEY):
+        return
+    # SMTP configuré ?
+    host, port, user, password = _get_smtp_config()
+    if not host or not user:
+        return
+    # Email utilisateur disponible ?
+    drip_data = load_drip_data()
+    to_email  = drip_data.get("email", "")
+    if not to_email:
+        return
+
+    name  = drip_data.get("name", "")
+    c     = result.get("_c", {})
+    score = c.get("score", 0)
+    risk  = c.get("risk", "High")
+    dec   = c.get("decision", "")
+    url   = meta.get("url", meta.get("offer_type", "Votre page"))
+    ts    = meta.get("timestamp", "")
+    fp    = result.get("fix_plan", {})
+    top   = fp.get("top_priority_action", {})
+    qws   = fp.get("quick_wins", [])[:2]
+
+    sc_color = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+    risk_emoji = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
+
+    action_html = ""
+    if top and top.get("what"):
+        action_html = f"""
+        <div style='background:#fff8f8;border-left:4px solid #FF4444;border-radius:6px;
+             padding:14px 18px;margin:16px 0'>
+          <div style='color:#FF4444;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+               letter-spacing:1px;margin-bottom:6px'>🎯 Action prioritaire #1</div>
+          <div style='color:#1a1a2e;font-weight:700'>{top.get('what','')}</div>
+          <div style='color:#555;font-size:0.88rem;margin-top:6px'>{top.get('how_exactly','')}</div>
+        </div>"""
+
+    qws_html = ""
+    for qw in qws:
+        qws_html += f"<li style='margin:6px 0;color:#555'>{qw.get('what','')}</li>"
+
+    next_step_html = ""
+    if score >= 10:
+        next_step_html = "<p style='color:#22c55e;font-weight:700'>✅ Bon score ! Appliquez le plan et re-auditez dans 7 jours pour mesurer votre progression.</p>"
+    else:
+        next_step_html = "<p style='color:#FF4444;font-weight:700'>⚠️ Score critique — appliquez les actions prioritaires avant de lancer vos campagnes.</p>"
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px;margin:0'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;
+            box-shadow:0 4px 20px rgba(0,0,0,0.08)'>
+
+  <div style='background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px'>
+    <div style='color:#6366f1;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+         letter-spacing:1.5px;margin-bottom:6px'>🚦 LRS™ — Launch Risk System</div>
+    <div style='color:#fff;font-size:1.4rem;font-weight:800'>Votre audit est prêt{", " + name if name else ""}</div>
+    <div style='color:#888;font-size:0.82rem;margin-top:4px'>{ts}</div>
+  </div>
+
+  <div style='padding:28px'>
+    <div style='color:#888;font-size:0.78rem;margin-bottom:6px'>Page auditée</div>
+    <div style='color:#1a1a2e;font-size:0.9rem;font-weight:600;margin-bottom:20px'>{str(url)[:80]}</div>
+
+    <div style='background:#f8f8fc;border-radius:12px;padding:20px;text-align:center;margin-bottom:20px;
+                border-top:4px solid {sc_color}'>
+      <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px'>
+        Score LRS
+      </div>
+      <div style='color:{sc_color};font-size:4rem;font-weight:900;line-height:1'>{score}</div>
+      <div style='color:#aaa;font-size:1rem'>/20</div>
+      <div style='color:{sc_color};font-size:1.1rem;font-weight:700;margin-top:10px'>
+        {risk_emoji} {dec}
+      </div>
+    </div>
+
+    {action_html}
+
+    {"<div style='margin-bottom:16px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>⚡ Quick Wins</div><ul style='padding-left:18px;margin:0'>" + qws_html + "</ul></div>" if qws_html else ""}
+
+    {next_step_html}
+
+    <div style='background:#f0f0ff;border-radius:10px;padding:16px 20px;margin-top:20px;text-align:center'>
+      <div style='color:#6366f1;font-weight:700;margin-bottom:6px'>📅 Rappel re-audit dans 7 jours</div>
+      <div style='color:#555;font-size:0.85rem'>
+        Appliquez vos corrections, puis re-lancez l'audit pour mesurer votre progression.
+        LRS vous enverra votre score mis à jour.
+      </div>
+    </div>
+  </div>
+
+  <div style='background:#f4f4f8;padding:14px 28px;text-align:center;border-top:1px solid #eee'>
+    <span style='color:#aaa;font-size:0.75rem'>LRS™ V{APP_VERSION} · Launch Risk System</span>
+  </div>
+</div>
+</body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"🚦 LRS Audit — {score}/20 · {dec} · Top action disponible"
+        msg["From"]    = user
+        msg["To"]      = to_email
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo(); server.starttls(); server.login(user, password)
+            server.sendmail(user, to_email, msg.as_string())
+        # Marquer envoyé dans la session
+        st.session_state[POST_AUDIT_EMAIL_KEY] = True
+    except Exception:
+        pass  # Silencieux — ne pas bloquer l'UX
+
+
+def send_weekly_digest_email():
+    """
+    Email de bilan hebdomadaire si l'utilisateur a audité cette semaine.
+    Appelé au startup (check_and_send_drip) si >7j depuis dernier digest.
+    """
+    # Guard : uniquement si SMTP + email disponible
+    host, port, user, password = _get_smtp_config()
+    if not host or not user:
+        return
+    drip_data = load_drip_data()
+    to_email  = drip_data.get("email", "")
+    if not to_email:
+        return
+
+    # Guard : dernier digest envoyé il y a <7j ?
+    last_digest_str = drip_data.get("last_weekly_digest", "")
+    if last_digest_str:
+        try:
+            last_digest = datetime.datetime.strptime(last_digest_str, "%d/%m/%Y %H:%M")
+            if (datetime.datetime.now() - last_digest).days < 7:
+                return
+        except Exception:
+            pass
+
+    history = st.session_state.audit_history
+    if not history:
+        return
+
+    # Audits de la semaine passée
+    one_week_ago = datetime.datetime.now() - datetime.timedelta(days=7)
+    recent = []
+    for e in history:
+        try:
+            e_dt = datetime.datetime.strptime(e.get("timestamp",""), "%d/%m/%Y %H:%M")
+            if e_dt >= one_week_ago:
+                recent.append(e)
+        except Exception:
+            pass
+
+    if not recent:
+        return
+
+    scores = [e.get("score",0) for e in recent]
+    avg    = round(sum(scores)/len(scores), 1)
+    best   = max(recent, key=lambda e: e.get("score",0))
+    name   = drip_data.get("name","")
+
+    best_sc = best.get("score",0)
+    best_sc_color = "#FF4444" if best_sc <= 9 else "#FF8C00" if best_sc <= 14 else "#22c55e"
+
+    rows_html = ""
+    for e in recent[:5]:
+        sc = e.get("score",0)
+        c  = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+        label = str(e.get("url","") or e.get("offer_type",""))[:45]
+        rows_html += f"<tr><td style='padding:8px 12px;color:#555;font-size:0.85rem'>{label}</td><td style='padding:8px 12px;color:{c};font-weight:700'>{sc}/20</td><td style='padding:8px 12px;color:#888;font-size:0.82rem'>{e.get('platform','')}</td></tr>"
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px;margin:0'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:14px;overflow:hidden;
+            box-shadow:0 4px 20px rgba(0,0,0,0.08)'>
+
+  <div style='background:linear-gradient(135deg,#1a1a2e,#0f0f2e);padding:28px'>
+    <div style='color:#6366f1;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px'>📊 LRS™ — Bilan Hebdomadaire</div>
+    <div style='color:#fff;font-size:1.3rem;font-weight:800;margin-top:6px'>Cette semaine{", " + name if name else ""}</div>
+  </div>
+
+  <div style='padding:28px'>
+    <div style='display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px'>
+      <div style='text-align:center;flex:1;min-width:100px;background:#f8f8fc;border-radius:10px;padding:16px'>
+        <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Audits</div>
+        <div style='color:#6366f1;font-size:2.5rem;font-weight:900'>{len(recent)}</div>
+      </div>
+      <div style='text-align:center;flex:1;min-width:100px;background:#f8f8fc;border-radius:10px;padding:16px'>
+        <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Score moyen</div>
+        <div style='color:#1a1a2e;font-size:2.5rem;font-weight:900'>{avg}<span style='font-size:1rem;color:#aaa'>/20</span></div>
+      </div>
+      <div style='text-align:center;flex:1;min-width:100px;background:#f8f8fc;border-radius:10px;padding:16px'>
+        <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Meilleur score</div>
+        <div style='color:{best_sc_color};font-size:2.5rem;font-weight:900'>{best_sc}<span style='font-size:1rem;color:#aaa'>/20</span></div>
+      </div>
+    </div>
+
+    <table style='width:100%;border-collapse:collapse;margin-bottom:20px'>
+      <thead>
+        <tr style='background:#f0f0f8'>
+          <th style='padding:8px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600'>Page</th>
+          <th style='padding:8px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600'>Score</th>
+          <th style='padding:8px 12px;text-align:left;font-size:0.78rem;color:#888;font-weight:600'>Plateforme</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+
+    <div style='background:#f0f8f0;border-radius:10px;padding:16px 20px;text-align:center'>
+      <div style='color:#22c55e;font-weight:700;margin-bottom:6px'>💡 Continuez sur votre lancée</div>
+      <div style='color:#555;font-size:0.85rem'>
+        Re-auditez vos meilleures pages après avoir appliqué les recommandations.
+        Chaque point gagné = plus de budget ROI+.
+      </div>
+    </div>
+  </div>
+
+  <div style='background:#f4f4f8;padding:14px 28px;text-align:center;border-top:1px solid #eee'>
+    <span style='color:#aaa;font-size:0.75rem'>LRS™ V{APP_VERSION} · Launch Risk System</span>
+  </div>
+</div>
+</body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"📊 LRS Bilan — {len(recent)} audits · Score moyen {avg}/20 cette semaine"
+        msg["From"]    = user
+        msg["To"]      = to_email
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo(); server.starttls(); server.login(user, password)
+            server.sendmail(user, to_email, msg.as_string())
+        drip_data["last_weekly_digest"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        save_drip_data(drip_data)
+    except Exception:
+        pass
+
+
+def render_reaudit_reminder():
+    """
+    Bannière de rappel si l'utilisateur n'a pas audité depuis >7 jours.
+    Affiche le bouton de re-audit avec URL pré-remplie.
+    """
+    history = st.session_state.audit_history
+    if not history:
+        return
+    try:
+        last_ts = datetime.datetime.strptime(history[0].get("timestamp",""), "%d/%m/%Y %H:%M")
+        days_since = (datetime.datetime.now() - last_ts).days
+    except Exception:
+        return
+
+    if days_since < 7:
+        return
+
+    last_url = history[0].get("url", "")
+    last_score = history[0].get("score", 0)
+    light = st.session_state.get("light_mode", False)
+    bg    = "#fffbeb" if light else "#1a1400"
+    brd   = "#f59e0b"
+
+    col_msg, col_btn = st.columns([4, 1])
+    with col_msg:
+        st.markdown(
+            f"<div style='background:{bg};border:1px solid {brd};border-radius:8px;"
+            f"padding:10px 16px;font-size:0.87rem'>"
+            f"🔁 <strong>{days_since} jours</strong> sans audit — votre dernier score était "
+            f"<strong>{last_score}/20</strong>. Avez-vous appliqué les corrections ? "
+            f"Re-auditez pour mesurer votre progression.</div>",
+            unsafe_allow_html=True,
+        )
+    with col_btn:
+        if st.button("🔄 Re-auditer", key="reminder_reaudit_btn", type="primary"):
+            if last_url:
+                st.session_state.reaudit_url = last_url
+            st.rerun()
+
+
+def render_score_celebration(current_score, previous_score):
+    """
+    Affiche un badge de célébration si le score a progressé.
+    """
+    delta = current_score - previous_score
+    if delta <= 0:
+        return
+
+    color  = "#22c55e"
+    emoji  = "🎉" if delta >= 5 else "🚀" if delta >= 3 else "✨"
+    msg    = "Excellent travail !" if delta >= 5 else "Belle progression !" if delta >= 3 else "Bonne amélioration !"
+
+    st.markdown(
+        f"""<div style='background:linear-gradient(135deg,#0a2010,#0d2b14);border:2px solid {color};
+            border-radius:14px;padding:20px 24px;text-align:center;margin:12px 0'>
+          <div style='font-size:2.5rem'>{emoji}</div>
+          <div style='color:{color};font-size:1.3rem;font-weight:800;margin:6px 0'>{msg}</div>
+          <div style='color:#aaa;font-size:0.9rem'>
+            +{delta} pts · {previous_score}/20 → {current_score}/20
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    st.balloons()
+
+
+QUICK_AUDIT_PROMPT = (
+    "Tu es LRS Express — auditeur paid traffic ultra-rapide.\n"
+    "Analyse UNIQUEMENT Hook, Offer, Trust sur /5 chacun.\n"
+    "Score total /15 (pas /20). 1 seule action prioritaire avec how_exactly.\n"
+    "Retourne UNIQUEMENT ce JSON minimal :\n"
+    '{"hook":0,"offer":0,"trust":0,"score15":0,"risk":"High","decision":"Do NOT launch",'
+    '"action":{"what":"","how_exactly":"","impact":"","time":""},'
+    '"headline_rewrite":"","cta_rewrite":""}'
+)
+
+def run_quick_audit(landing_content, platform, offer_type, model="gpt-4o-mini"):
+    """Audit express — 3 critères, ~5s, prompt ultra-court."""
+    if OpenAI is None:
+        raise ValueError("Librairie openai non installée.")
+    api_key = get_api_key()
+    if not api_key:
+        raise ValueError("Clé API OpenAI manquante.")
+    client = OpenAI(api_key=api_key)
+    content_short = landing_content[:3000] if landing_content else "(pas de contenu)"
+    user_msg = (
+        f"Plateforme : {platform} | Offre : {offer_type}\n\n"
+        f"CONTENU PAGE :\n{content_short}\n\n"
+        "Score Hook/Offer/Trust et 1 action prioritaire. JSON uniquement."
+    )
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": QUICK_AUDIT_PROMPT},
+            {"role": "user",   "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.3,
+        max_tokens=400,
+    )
+    raw = resp.choices[0].message.content or "{}"
+    return json.loads(raw)
+
+
+def render_quick_audit_result(qr):
+    """Affiche le résultat d'un Quick Audit."""
+    score15  = qr.get("score15", 0)
+    risk     = qr.get("risk", "High")
+    dec      = qr.get("decision", "Do NOT launch")
+    sc_color = "#FF4444" if risk == "High" else "#FF8C00" if risk == "Moderate" else "#22c55e"
+
+    st.markdown(
+        f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-top:4px solid {sc_color};
+            border-radius:12px;padding:20px 24px;margin:12px 0 16px'>
+          <div style='display:flex;align-items:center;gap:32px;flex-wrap:wrap'>
+            <div style='text-align:center'>
+              <div style='color:{sc_color};font-size:3.5rem;font-weight:900;line-height:1'>{score15}</div>
+              <div style='color:#555;font-size:0.85rem'>/15 Express</div>
+            </div>
+            <div>
+              <div style='color:{sc_color};font-size:1.3rem;font-weight:800'>{dec}</div>
+              <div style='color:#888;font-size:0.82rem;margin-top:4px'>Risk : {risk}</div>
+            </div>
+          </div>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+
+    qa1, qa2, qa3 = st.columns(3)
+    for col, lbl, key in [(qa1, "🪝 Hook", "hook"), (qa2, "🎁 Offer", "offer"), (qa3, "🛡️ Trust", "trust")]:
+        val = qr.get(key, 0)
+        c   = "#FF4444" if val <= 1 else "#FF8C00" if val <= 3 else "#22c55e"
+        with col:
+            st.markdown(
+                f"<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:8px;"
+                f"padding:12px;text-align:center'>"
+                f"<div style='color:{c};font-size:2rem;font-weight:800'>{val}/5</div>"
+                f"<div style='color:#888;font-size:0.78rem'>{lbl}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    action = qr.get("action", {})
+    if action.get("what"):
+        st.markdown(
+            f"""<div style='background:#0a0a14;border:1px solid #FF4444;border-left:4px solid #FF4444;
+                border-radius:8px;padding:14px 18px;margin-top:14px'>
+              <div style='color:#FF4444;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+                   letter-spacing:1px;margin-bottom:4px'>⚡ Action prioritaire</div>
+              <div style='color:#fff;font-weight:700;font-size:0.93rem'>{action.get('what','')}</div>
+              <div style='color:#aaa;font-size:0.84rem;margin-top:6px'>{action.get('how_exactly','')}</div>
+              <div style='color:#555;font-size:0.78rem;margin-top:6px'>
+                Impact : {action.get('impact','')} &nbsp;·&nbsp; Temps : {action.get('time','')}
+              </div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+    if qr.get("headline_rewrite") or qr.get("cta_rewrite"):
+        with st.expander("✍️ Rewrites express"):
+            if qr.get("headline_rewrite"):
+                st.markdown("**Headline :**")
+                st.info(qr["headline_rewrite"])
+            if qr.get("cta_rewrite"):
+                st.markdown(f"**CTA :** `{qr['cta_rewrite']}`")
+
+    st.caption("⚡ Audit Express — 3 critères seulement. Lancez un Audit complet pour le plan d'action détaillé.")
+
+
+def render_admin_view():
+    """Vue admin — métriques d'usage (accès protégé par mot de passe admin)."""
+    import hashlib as _hashlib
+
+    admin_pw = ""
+    try:
+        admin_pw = st.secrets.get("admin_password", "")
+    except Exception:
+        admin_pw = os.getenv("LRS_ADMIN_PW", "")
+
+    if not admin_pw:
+        st.warning("Aucun mot de passe admin configuré (LRS_ADMIN_PW ou admin_password dans secrets).")
+        return
+
+    pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
+    if not pw_input:
+        st.stop()
+    if pw_input != admin_pw:
+        st.error("Mot de passe incorrect.")
+        st.stop()
+
+    st.success("✅ Accès admin autorisé")
+    st.markdown("### 📊 Métriques d'usage LRS")
+
+    # Lecture fichier usage
+    usage_data = {}
+    if os.path.exists(USAGE_FILE):
+        try:
+            with open(USAGE_FILE) as f:
+                usage_data = json.load(f)
+        except Exception:
+            usage_data = {}
+
+    current_month = datetime.datetime.now().strftime("%Y-%m")
+    monthly_counts = usage_data.get("monthly", {})
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total = sum(monthly_counts.values())
+        st.metric("Total audits (toutes périodes)", total)
+    with col2:
+        this_month = monthly_counts.get(current_month, 0)
+        st.metric("Audits ce mois", this_month)
+    with col3:
+        plan = _get_plan()
+        st.metric("Plan actif", PLAN_LIMITS[plan]["label"])
+
+    # Historique mensuel
+    if monthly_counts:
+        st.markdown("#### 📈 Audits par mois")
+        import pandas as pd
+        months_sorted = sorted(monthly_counts.keys())
+        df_usage = pd.DataFrame({
+            "Mois": months_sorted,
+            "Audits": [monthly_counts[m] for m in months_sorted],
+        })
+        st.bar_chart(df_usage.set_index("Mois"))
+
+    # Historique des audits
+    history = st.session_state.audit_history
+    if history:
+        st.markdown(f"#### 🗂️ {len(history)} audit(s) en session")
+        scores = [e.get("score", 0) for e in history]
+        avg = round(sum(scores) / len(scores), 1) if scores else 0
+        col_a, col_b, col_c = st.columns(3)
+        with col_a: st.metric("Score moyen", f"{avg}/20")
+        with col_b: st.metric("Score max", f"{max(scores)}/20")
+        with col_c: st.metric("Score min", f"{min(scores)}/20")
+
+        st.markdown("##### Répartition par risque")
+        risks = {"Low": 0, "Moderate": 0, "High": 0}
+        for e in history:
+            r = e.get("result", {}).get("_c", {}).get("risk", "High")
+            risks[r] = risks.get(r, 0) + 1
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1: st.metric("🟢 Low",      risks["Low"])
+        with rc2: st.metric("🟡 Moderate", risks["Moderate"])
+        with rc3: st.metric("🔴 High",     risks["High"])
+
+    # Notifications log
+    notifs = load_notifications()
+    if notifs:
+        st.markdown(f"#### 🔔 {len(notifs)} notification(s)")
+        for n in notifs[:10]:
+            st.caption(f"{'🔵' if n.get('read') else '⚪'} {n.get('ts','')} — {n.get('msg','')}")
+
+
 def main():
     init_session()
     light_mode = st.session_state.get("light_mode", False)
@@ -7116,10 +7619,21 @@ def main():
         )
         st.stop()
 
+    # ── Vue Admin (URL param ?view=admin) ────────────────────
+    try:
+        _qparams = st.query_params
+        if _qparams.get("view") == "admin":
+            st.markdown("## 🔐 Vue Admin LRS")
+            render_admin_view()
+            st.stop()
+    except Exception:
+        pass
+
     # ── Scheduler au démarrage ────────────────────────────────
     if not st.session_state.get("scheduled_ran"):
         run_scheduled_audits()
-        check_and_send_drip()   # séquence email drip
+        check_and_send_drip()        # séquence email drip
+        send_weekly_digest_email()   # digest hebdomadaire si >7j
         st.session_state.scheduled_ran = True
 
     # ── Onboarding + capture email ────────────────────────────
@@ -7145,6 +7659,9 @@ def main():
             f"padding:10px 16px;margin-bottom:12px;font-size:0.87rem'>{_msg_b}</div>",
             unsafe_allow_html=True,
         )
+
+    # ── Rappel re-audit (si inactif >7j) ─────────────────────
+    render_reaudit_reminder()
 
     # ── Calcul alertes (pour badge onglet) ───────────────────
     alerts     = compute_score_alerts(st.session_state.audit_history)
@@ -7266,7 +7783,10 @@ def main():
             ])
 
             st.markdown("")
-            run_btn = st.button(t("run_btn"), type="primary", use_container_width=True)
+            run_btn         = st.button(t("run_btn"), type="primary", use_container_width=True)
+            quick_audit_btn = st.button("⚡ Audit Express (~5s)", key="quick_audit_btn",
+                                        use_container_width=True,
+                                        help="Score rapide : Hook/Offer/Trust + 1 action. Idéal pour un premier diagnostic.")
 
         with col_r:
             if st.session_state.loaded_result and not run_btn:
@@ -7323,6 +7843,20 @@ def main():
                                 </div>""",
                                 unsafe_allow_html=True,
                             )
+                st.stop()
+
+            # ── Audit Express (Quick Audit) ───────────────────────
+            if quick_audit_btn and not run_btn:
+                if not landing_url.strip():
+                    st.error("URL de la page requise pour l'Audit Express.")
+                    st.stop()
+                with st.spinner("⚡ Analyse express en cours..."):
+                    try:
+                        qa_content, _, _ = extract_page(landing_url.strip())
+                        qr = run_quick_audit(qa_content, platform, offer_type, model="gpt-4o-mini")
+                        render_quick_audit_result(qr)
+                    except Exception as qe:
+                        st.error(f"Erreur Audit Express : {qe}")
                 st.stop()
 
             errors = []
@@ -7428,6 +7962,16 @@ def main():
                     f"Audit terminé — Score {_score_r}/20 ({_risk_r})",
                     icon="🚦", notif_type="audit"
                 )
+                # Auto-email post-audit (silencieux, si SMTP + email configurés)
+                try:
+                    send_post_audit_email_auto(result, meta)
+                except Exception:
+                    pass
+                # Célébration progression si score > audit précédent
+                _cur_hist = st.session_state.audit_history
+                if len(_cur_hist) >= 2:
+                    _prev_score_cel = _cur_hist[1].get("score", 0)
+                    render_score_celebration(_score_r, _prev_score_cel)
                 st.session_state.loaded_result = None
                 if st.session_state.get("reaudit_url"):
                     st.session_state.reaudit_url = ""
