@@ -3725,6 +3725,59 @@ def render_dashboard():
                 unsafe_allow_html=True,
             )
 
+    # ── Streak & prochain objectif ───────────────────────────
+    _streak_days = 0
+    _today = datetime.datetime.now().date()
+    _checked_days = set()
+    for _e in history:
+        try:
+            _e_date = datetime.datetime.strptime(_e.get("timestamp",""), "%d/%m/%Y %H:%M").date()
+            _checked_days.add(_e_date)
+        except Exception:
+            pass
+    if _today in _checked_days or (_today - datetime.timedelta(days=1)) in _checked_days:
+        _check_day = _today if _today in _checked_days else _today - datetime.timedelta(days=1)
+        while _check_day in _checked_days:
+            _streak_days += 1
+            _check_day -= datetime.timedelta(days=1)
+
+    _latest_score = all_scores[0] if all_scores else 0
+    if _latest_score <= 9:
+        _next_thresh, _next_label, _next_color = 10, "Test small budget", "#FF8C00"
+    elif _latest_score <= 14:
+        _next_thresh, _next_label, _next_color = 15, "Ready to scale 🚀", "#22c55e"
+    else:
+        _next_thresh, _next_label, _next_color = 20, "Score parfait !", "#6366f1"
+    _gap = max(0, _next_thresh - _latest_score)
+
+    streak_html = ""
+    if _streak_days > 0:
+        streak_emoji = "🔥" if _streak_days >= 3 else "⚡"
+        streak_html = (
+            f"<div style='text-align:center;flex:1;min-width:120px;background:{bg_card};"
+            f"border:1px solid {border};border-radius:10px;padding:14px'>"
+            f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Streak</div>"
+            f"<div style='color:#f59e0b;font-size:1.8rem;font-weight:800'>{streak_emoji} {_streak_days}j</div>"
+            f"<div style='color:{txt2};font-size:0.72rem'>consécutifs</div></div>"
+        )
+
+    obj_html = ""
+    if _gap > 0:
+        obj_html = (
+            f"<div style='text-align:center;flex:1;min-width:160px;background:{bg_card};"
+            f"border:1px solid {border};border-radius:10px;padding:14px'>"
+            f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Prochain objectif</div>"
+            f"<div style='color:{_next_color};font-size:1.5rem;font-weight:800;margin:4px 0'>+{_gap} pts</div>"
+            f"<div style='color:{txt2};font-size:0.78rem'>{_next_label}</div></div>"
+        )
+
+    if streak_html or obj_html:
+        st.markdown(
+            f"<div style='display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px'>"
+            f"{streak_html}{obj_html}</div>",
+            unsafe_allow_html=True,
+        )
+
     st.markdown("")
 
     # ── Pages en danger ───────────────────────────────────────
@@ -3811,6 +3864,42 @@ def render_dashboard():
                     f"</div>",
                     unsafe_allow_html=True,
                 )
+
+    # ── Checklist d'activation (gamification onboarding) ─────
+    st.markdown("")
+    drip_data   = load_drip_data()
+    _email_ok   = bool(drip_data.get("email"))
+    _smtp_h, _, _smtp_u, _ = _get_smtp_config()
+    _smtp_ok    = bool(_smtp_h and _smtp_u)
+    _profile_ok = len(st.session_state.get("profiles",{})) > 0
+    _rewrite_ok = len(history) > 0 and bool(history[0].get("result",{}).get("rewrite",{}).get("headline"))
+    _monitoring_ok = bool(st.session_state.get("schedule",{}))
+    _intel_ok   = len(history) >= 3
+
+    _chk_items = [
+        (_email_ok,      "✉️  Email enregistré pour les alertes"),
+        (len(history)>0, "🚦  Premier audit lancé"),
+        (_rewrite_ok,    "✍️  Rewrite généré (headline + CTA)"),
+        (_profile_ok,    "📂  Profil sauvegardé"),
+        (_monitoring_ok, "📡  Monitoring activé"),
+        (_smtp_ok,       "📬  SMTP configuré (emails automatiques)"),
+        (_intel_ok,      "🧠  Intelligence cumulative (3+ audits)"),
+    ]
+    _done_count = sum(1 for ok, _ in _chk_items if ok)
+    _total      = len(_chk_items)
+    _pct        = int(_done_count / _total * 100)
+
+    with st.expander(f"🎯 Activation LRS — {_done_count}/{_total} étapes ({_pct}%)", expanded=(_pct < 50)):
+        st.progress(_pct / 100)
+        for ok, label in _chk_items:
+            icon = "✅" if ok else "⬜"
+            c_l  = "#22c55e" if ok else txt2
+            st.markdown(
+                f"<div style='color:{c_l};font-size:0.87rem;padding:3px 0'>{icon} {label}</div>",
+                unsafe_allow_html=True,
+            )
+        if _pct == 100:
+            st.success("🏆 Configuration complète — vous tirez le maximum de LRS !")
 
     # ── Projets résumé ────────────────────────────────────────
     if projects:
