@@ -283,57 +283,79 @@ PROJECTS_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
 SCHEDULE_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_schedule.json")
 ONBOARDING_FILE= os.path.join(os.path.dirname(__file__), ".lrs_onboarded.json")
 USAGE_FILE     = os.path.join(os.path.dirname(__file__), ".lrs_usage.json")
+DRIP_FILE      = os.path.join(os.path.dirname(__file__), ".lrs_drip.json")
+ADS_CREDS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_ads_creds.json")
 
 # ── PLAN / QUOTA SYSTEM ──────────────────────────────────────
 PLAN_LIMITS = {
-    "starter": {
-        "label":             "Starter",
-        "audits_per_month":  10,
+    "free": {
+        "label":             "Free",
+        "audits_per_month":  3,
         "modes":             ["Funnel Only"],
         "bulk":              False,
         "monitoring":        False,
         "ads_library":       False,
         "integrations":      False,
         "white_label":       False,
+        "drip_emails":       False,
+        "ads_api":           False,
+        "price":             "Gratuit",
+        "badge_color":       "#6b7280",
+    },
+    "starter": {
+        "label":             "Starter",
+        "audits_per_month":  20,
+        "modes":             ["Funnel Only"],
+        "bulk":              False,
+        "monitoring":        True,
+        "ads_library":       False,
+        "integrations":      False,
+        "white_label":       False,
+        "drip_emails":       True,
+        "ads_api":           False,
         "price":             "19€/mois",
         "badge_color":       "#6b7280",
     },
     "pro": {
         "label":             "Pro",
-        "audits_per_month":  999,   # unlimited
+        "audits_per_month":  999,
         "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
         "bulk":              True,
         "monitoring":        True,
         "ads_library":       True,
         "integrations":      True,
         "white_label":       False,
+        "drip_emails":       True,
+        "ads_api":           True,
         "price":             "49€/mois",
         "badge_color":       "#6366f1",
     },
     "agency": {
         "label":             "Agency",
-        "audits_per_month":  999,   # unlimited
+        "audits_per_month":  999,
         "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
         "bulk":              True,
         "monitoring":        True,
         "ads_library":       True,
         "integrations":      True,
         "white_label":       True,
+        "drip_emails":       True,
+        "ads_api":           True,
         "price":             "99€/mois",
         "badge_color":       "#f59e0b",
     },
 }
 
 def _get_plan():
-    """Retourne le plan actif ('starter'|'pro'|'agency')."""
+    """Retourne le plan actif ('free'|'starter'|'pro'|'agency')."""
     try:
         plan = st.secrets.get("license", {}).get("plan", "")
         if plan in PLAN_LIMITS:
             return plan
     except Exception:
         pass
-    plan = os.getenv("LRS_PLAN", "starter").lower()
-    return plan if plan in PLAN_LIMITS else "starter"
+    plan = os.getenv("LRS_PLAN", "free").lower()
+    return plan if plan in PLAN_LIMITS else "free"
 
 def _load_usage():
     """Charge les données d'usage depuis .lrs_usage.json."""
@@ -383,6 +405,620 @@ def get_remaining_audits():
     usage = _load_usage()
     used  = usage.get(month_key, 0)
     return max(0, limit - used), limit
+
+
+# ══════════════════════════════════════════════════════════════
+# ── DRIP EMAIL ONBOARDING ─────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+
+DRIP_SEQUENCE = [
+    {
+        "day": 0,
+        "key": "welcome",
+        "subject": "🚦 Bienvenue sur LRS™ — Votre premier audit en 2 minutes",
+        "body_fn": lambda email, name: f"""
+<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:28px'>
+    <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 Bienvenue sur LRS™</div>
+    <div style='color:rgba(255,255,255,0.75);font-size:0.85rem;margin-top:4px'>Launch Risk System — Audit paid traffic pre-launch</div>
+  </div>
+  <div style='padding:28px'>
+    <p style='color:#1a1a2e;font-size:0.95rem'>Bonjour{' ' + name if name else ''} 👋</p>
+    <p style='color:#555;font-size:0.9rem;line-height:1.7'>
+      LRS™ analyse votre landing page en 15 secondes et vous dit exactement pourquoi elle va
+      convertir — ou pas — avant que vous dépensiez un seul euro de pub.
+    </p>
+    <div style='background:#f8f8fc;border-radius:10px;padding:20px;margin:20px 0'>
+      <div style='font-weight:700;color:#1a1a2e;margin-bottom:12px'>Pour démarrer :</div>
+      <div style='color:#555;font-size:0.88rem;line-height:2'>
+        <span style='color:#6366f1;font-weight:700'>① </span>Collez l'URL de votre landing page<br>
+        <span style='color:#6366f1;font-weight:700'>② </span>Choisissez votre plateforme (Meta / TikTok / Google)<br>
+        <span style='color:#6366f1;font-weight:700'>③ </span>Cliquez <strong>🚀 Run Audit</strong> — résultats en 15s<br>
+      </div>
+    </div>
+    <p style='color:#888;font-size:0.82rem'>
+      Score sur 20 · Plan d'action prioritaire · Rewrites headline & CTA · Prédiction de score corrigé
+    </p>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:0.75rem;text-align:center'>
+      LRS™ V{APP_VERSION} — vous recevrez 4 emails sur 14 jours pour tirer le maximum du produit.
+    </div>
+  </div>
+</div></body></html>""",
+    },
+    {
+        "day": 3,
+        "key": "quick_wins",
+        "subject": "⚡ LRS™ — Avez-vous appliqué vos quick wins ?",
+        "body_fn": lambda email, name: f"""
+<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.1rem;font-weight:800'>⚡ Quick Wins — J+3</div>
+  </div>
+  <div style='padding:28px'>
+    <p style='color:#1a1a2e'>Bonjour{' ' + name if name else ''} 👋</p>
+    <p style='color:#555;font-size:0.9rem;line-height:1.7'>
+      Lors de votre premier audit, LRS a généré une liste de <strong>quick wins</strong> —
+      des corrections qui prennent moins d'une heure chacune et peuvent
+      augmenter votre score de 2 à 4 points.
+    </p>
+    <div style='background:#fff0f0;border-left:4px solid #6366f1;border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:#6366f1'>💡 Le Rewrite Tracker est là pour ça</strong>
+      <div style='color:#555;font-size:0.88rem;margin-top:8px'>
+        Dans chaque résultat d'audit, ouvrez <strong>✍️ Rewrite Tracker</strong>.
+        Cochez chaque correction appliquée. LRS vous rappellera automatiquement
+        de re-auditer dans 7 jours pour mesurer l'impact.
+      </div>
+    </div>
+    <p style='color:#555;font-size:0.88rem;line-height:1.7'>
+      Les utilisateurs qui appliquent leurs quick wins dans les 72h gagnent en moyenne
+      <strong>+3.2 points</strong> sur leur score LRS.
+    </p>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:0.75rem;text-align:center'>
+      LRS™ V{APP_VERSION} · Prochain email dans 4 jours
+    </div>
+  </div>
+</div></body></html>""",
+    },
+    {
+        "day": 7,
+        "key": "monitoring",
+        "subject": "📡 LRS™ — Activez le monitoring automatique de vos pages",
+        "body_fn": lambda email, name: f"""
+<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.1rem;font-weight:800'>📡 Monitoring — J+7</div>
+  </div>
+  <div style='padding:28px'>
+    <p style='color:#1a1a2e'>Bonjour{' ' + name if name else ''} 👋</p>
+    <p style='color:#555;font-size:0.9rem;line-height:1.7'>
+      Une landing page peut perdre des points de score sans que vous le sachiez :
+      un bug d'affichage, une image cassée, un témoignage supprimé...
+      Chaque point perdu se traduit par un ROAS qui baisse.
+    </p>
+    <div style='background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:#22c55e'>✅ Activez le monitoring en 30 secondes</strong>
+      <div style='color:#555;font-size:0.88rem;margin-top:8px'>
+        <strong>Suivi → Monitoring & Alertes → ➕ Planifier un audit</strong><br>
+        Entrez votre URL, choisissez la fréquence (7 / 14 / 30 jours),
+        ajoutez votre email d'alerte. LRS vérifie automatiquement à chaque ouverture
+        et vous envoie une alerte si le score chute de 2+ points.
+      </div>
+    </div>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:0.75rem;text-align:center'>
+      LRS™ V{APP_VERSION} · Prochain email dans 3 jours
+    </div>
+  </div>
+</div></body></html>""",
+    },
+    {
+        "day": 10,
+        "key": "intel",
+        "subject": "🧠 LRS™ — Votre profil d'optimiseur se construit",
+        "body_fn": lambda email, name: f"""
+<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.1rem;font-weight:800'>🧠 Intelligence Cumulative — J+10</div>
+  </div>
+  <div style='padding:28px'>
+    <p style='color:#1a1a2e'>Bonjour{' ' + name if name else ''} 👋</p>
+    <p style='color:#555;font-size:0.9rem;line-height:1.7'>
+      Après 10 jours, LRS commence à connaître vos patterns.
+      Chaque audit enrichit votre <strong>profil d'optimiseur</strong> :
+      quel est votre critère faible récurrent ? Sur quelle plateforme performez-vous le mieux ?
+      Quelle est votre cadence d'optimisation ?
+    </p>
+    <div style='background:#f8f8fc;border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:#1a1a2e'>📊 Dashboard → Intelligence Cumulative</strong>
+      <div style='color:#555;font-size:0.88rem;margin-top:8px'>
+        À partir de 3 audits, LRS vous donne votre levier n°1 personnalisé :
+        "ton Trust moyen est 2.8/5 — voilà exactement les 3 actions pour le corriger".
+        Plus vous auditez, plus cette intelligence est précise.
+      </div>
+    </div>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:0.75rem;text-align:center'>
+      LRS™ V{APP_VERSION} · Dernier email dans 4 jours
+    </div>
+  </div>
+</div></body></html>""",
+    },
+    {
+        "day": 14,
+        "key": "reaudit",
+        "subject": "🔁 LRS™ — J+14 : mesurez vos progrès avec un re-audit",
+        "body_fn": lambda email, name: f"""
+<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.1rem;font-weight:800'>🔁 Re-audit — J+14</div>
+  </div>
+  <div style='padding:28px'>
+    <p style='color:#1a1a2e'>Bonjour{' ' + name if name else ''} 👋</p>
+    <p style='color:#555;font-size:0.9rem;line-height:1.7'>
+      Ça fait 14 jours. Si vous avez appliqué des corrections depuis votre premier audit,
+      il est temps de mesurer l'impact.
+    </p>
+    <div style='background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:#22c55e'>✅ Comment mesurer votre progression</strong>
+      <div style='color:#555;font-size:0.88rem;margin-top:8px;line-height:1.8'>
+        1. Retournez sur LRS, onglet <strong>Audit</strong><br>
+        2. Re-auditez la même URL qu'il y a 14 jours<br>
+        3. Utilisez <strong>📊 Comparer avec un audit précédent</strong> pour voir le delta<br>
+        4. Votre Dashboard → Intelligence Cumulative montre votre tendance globale
+      </div>
+    </div>
+    <p style='color:#555;font-size:0.88rem;line-height:1.7'>
+      Les utilisateurs qui re-auditent régulièrement améliorent leur score moyen de
+      <strong>+4 points en 30 jours</strong>. C'est la différence entre "Test small budget" et "Ready to scale".
+    </p>
+    <div style='margin-top:20px;padding-top:16px;border-top:1px solid #eee;color:#aaa;font-size:0.75rem;text-align:center'>
+      LRS™ V{APP_VERSION} — Merci de faire confiance à LRS pour optimiser vos campagnes 🚀
+    </div>
+  </div>
+</div></body></html>""",
+    },
+]
+
+
+def load_drip_data():
+    try:
+        if os.path.exists(DRIP_FILE):
+            with open(DRIP_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_drip_data(data):
+    try:
+        with open(DRIP_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def register_drip_email(email, name=""):
+    """Enregistre l'email de l'utilisateur pour la séquence drip."""
+    data = load_drip_data()
+    if not data.get("email"):
+        data["email"]    = email
+        data["name"]     = name
+        data["signup"]   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        data["sent"]     = {}
+        save_drip_data(data)
+    return data
+
+def check_and_send_drip():
+    """
+    Vérifie quels emails drip doivent être envoyés aujourd'hui.
+    Appelé une fois par session au startup.
+    """
+    data = load_drip_data()
+    if not data.get("email"):
+        return
+
+    host, port, user, password = _get_smtp_config()
+    if not host or not user:
+        return
+
+    to_email  = data["email"]
+    name      = data.get("name", "")
+    signup_str = data.get("signup", "")
+    sent      = data.get("sent", {})
+
+    try:
+        signup_dt = datetime.datetime.strptime(signup_str, "%d/%m/%Y %H:%M")
+    except Exception:
+        return
+
+    now = datetime.datetime.now()
+    changed = False
+
+    for step in DRIP_SEQUENCE:
+        key      = step["key"]
+        day_due  = step["day"]
+        if key in sent:
+            continue
+        days_elapsed = (now - signup_dt).days
+        if days_elapsed < day_due:
+            continue
+        # Envoyer cet email
+        try:
+            html_body = step["body_fn"](to_email, name)
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = step["subject"]
+            msg["From"]    = user
+            msg["To"]      = to_email
+            msg.attach(MIMEText(html_body, "html"))
+            with smtplib.SMTP(host, port) as server:
+                server.ehlo(); server.starttls(); server.login(user, password)
+                server.sendmail(user, to_email, msg.as_string())
+            sent[key] = now.strftime("%d/%m/%Y %H:%M")
+            changed = True
+        except Exception:
+            pass
+
+    if changed:
+        data["sent"] = sent
+        save_drip_data(data)
+
+
+def render_email_capture_widget():
+    """
+    Widget de capture email affiché pendant l'onboarding.
+    Enregistre l'email pour la séquence drip automatique.
+    """
+    drip_data = load_drip_data()
+    if drip_data.get("email"):
+        return  # déjà enregistré
+
+    light = st.session_state.get("light_mode", False)
+    bg    = "#1a1a2e" if not light else "#f0f0ff"
+    brd   = "#6366f1"
+
+    st.markdown(
+        f"<div style='background:{bg};border:1px solid {brd};"
+        f"border-radius:10px;padding:16px 20px;margin-bottom:12px'>"
+        f"<div style='color:#6366f1;font-weight:700;font-size:0.88rem;margin-bottom:8px'>"
+        f"📧 Recevez vos rapports & conseils personnalisés</div>"
+        f"<div style='color:#aaa;font-size:0.82rem'>"
+        f"Entrez votre email pour recevoir votre séquence d'onboarding (5 emails sur 14 jours) "
+        f"et les alertes de monitoring automatiques.</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    ec1, ec2, ec3 = st.columns([3, 2, 1])
+    with ec1:
+        drip_email_in = st.text_input("Votre email", placeholder="vous@email.com", key="drip_email_input", label_visibility="collapsed")
+    with ec2:
+        drip_name_in  = st.text_input("Prénom (optionnel)", placeholder="Votre prénom", key="drip_name_input", label_visibility="collapsed")
+    with ec3:
+        if st.button("✅ OK", key="drip_email_save", type="primary"):
+            if drip_email_in and "@" in drip_email_in:
+                register_drip_email(drip_email_in.strip(), drip_name_in.strip())
+                # Envoyer email J0 immédiatement
+                check_and_send_drip()
+                st.success("Email enregistré ! Vérifiez votre boîte.")
+                st.rerun()
+            else:
+                st.error("Email invalide.")
+
+
+# ══════════════════════════════════════════════════════════════
+# ── CONNEXION API PUB — META ADS + TIKTOK ADS ─────────────────
+# ══════════════════════════════════════════════════════════════
+
+def load_ads_creds():
+    try:
+        if os.path.exists(ADS_CREDS_FILE):
+            with open(ADS_CREDS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def save_ads_creds(data):
+    try:
+        with open(ADS_CREDS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def fetch_meta_campaigns(access_token, ad_account_id, date_preset="last_7d"):
+    """
+    Récupère les campagnes Meta Ads avec leurs métriques via Marketing API v19.
+    Retourne une liste de dicts {name, campaign_id, spend, impressions, clicks, ctr, cpc, actions}.
+    """
+    acc_id = ad_account_id.strip().lstrip("act_")
+    url    = f"https://graph.facebook.com/v19.0/act_{acc_id}/campaigns"
+    params = {
+        "access_token": access_token,
+        "fields":       "id,name,status,objective",
+        "limit":        20,
+    }
+    resp = requests.get(url, params=params, timeout=15)
+    if resp.status_code != 200:
+        raise ValueError(f"Meta API {resp.status_code}: {resp.json().get('error',{}).get('message','Erreur inconnue')}")
+
+    campaigns_raw = resp.json().get("data", [])
+    results = []
+
+    for camp in campaigns_raw[:10]:
+        cid   = camp["id"]
+        cname = camp["name"]
+        cstat = camp.get("status","")
+
+        # Insights
+        ins_url = f"https://graph.facebook.com/v19.0/{cid}/insights"
+        ins_params = {
+            "access_token": access_token,
+            "date_preset":  date_preset,
+            "fields":       "spend,impressions,clicks,ctr,cpc,actions,purchase_roas",
+            "level":        "campaign",
+        }
+        ins_resp = requests.get(ins_url, params=ins_params, timeout=15)
+        if ins_resp.status_code != 200:
+            continue
+        ins_data = ins_resp.json().get("data", [])
+        if not ins_data:
+            continue
+        ins = ins_data[0]
+
+        spend       = float(ins.get("spend", 0))
+        impressions = int(ins.get("impressions", 0))
+        clicks      = int(ins.get("clicks", 0))
+        ctr_v       = float(ins.get("ctr", 0))
+        cpc_v       = float(ins.get("cpc", 0))
+
+        # ROAS
+        roas_raw = ins.get("purchase_roas", [])
+        roas_v   = float(roas_raw[0]["value"]) if roas_raw else 0.0
+
+        # Purchases → CPA
+        actions  = ins.get("actions", [])
+        purchases = next((int(a["value"]) for a in actions if a["action_type"] == "purchase"), 0)
+        cpa_v    = round(spend / purchases, 2) if purchases > 0 else 0.0
+
+        results.append({
+            "name":        cname,
+            "campaign_id": cid,
+            "status":      cstat,
+            "spend":       round(spend, 2),
+            "impressions": impressions,
+            "clicks":      clicks,
+            "ctr":         round(ctr_v, 2),
+            "cpc":         round(cpc_v, 2),
+            "roas":        round(roas_v, 2),
+            "cpa":         cpa_v,
+            "purchases":   purchases,
+        })
+
+    return results
+
+
+def fetch_tiktok_campaigns(access_token, advertiser_id, date_range_days=7):
+    """
+    Récupère les campagnes TikTok Ads via Marketing API v1.3.
+    Retourne une liste de dicts similaires à Meta.
+    """
+    end_date   = datetime.datetime.now()
+    start_date = end_date - datetime.timedelta(days=date_range_days)
+
+    headers = {"Access-Token": access_token, "Content-Type": "application/json"}
+
+    # Liste des campagnes
+    camp_url  = "https://business-api.tiktok.com/open_api/v1.3/campaign/get/"
+    camp_resp = requests.get(camp_url, headers=headers, params={
+        "advertiser_id": advertiser_id,
+        "page_size":     10,
+        "fields":        '["campaign_id","campaign_name","status","objective_type"]',
+    }, timeout=15)
+
+    if camp_resp.status_code != 200:
+        raise ValueError(f"TikTok API {camp_resp.status_code}: {camp_resp.text[:200]}")
+
+    data_tt = camp_resp.json()
+    if data_tt.get("code") != 0:
+        raise ValueError(f"TikTok: {data_tt.get('message','Erreur inconnue')}")
+
+    campaigns_tt = data_tt.get("data", {}).get("list", [])[:10]
+    results = []
+
+    for camp in campaigns_tt:
+        cid   = camp["campaign_id"]
+        cname = camp["campaign_name"]
+
+        # Insights
+        ins_url  = "https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/"
+        ins_resp = requests.get(ins_url, headers=headers, params={
+            "advertiser_id":  advertiser_id,
+            "report_type":    "BASIC",
+            "dimensions":     '["campaign_id"]',
+            "metrics":        '["spend","impressions","clicks","ctr","cpc","conversion","cost_per_conversion","real_time_conversion_rate"]',
+            "start_date":     start_date.strftime("%Y-%m-%d"),
+            "end_date":       end_date.strftime("%Y-%m-%d"),
+            "filters":        f'[{{"field_name":"campaign_id","filter_type":"IN","filter_value":"[\\"{cid}\\"]"}}]',
+            "page_size":      1,
+        }, timeout=15)
+
+        if ins_resp.status_code != 200:
+            continue
+        ins_data_tt = ins_resp.json().get("data", {}).get("list", [])
+        if not ins_data_tt:
+            continue
+
+        m       = ins_data_tt[0].get("metrics", {})
+        spend   = float(m.get("spend", 0))
+        clicks  = int(m.get("clicks", 0))
+        ctr_v   = float(m.get("ctr", 0))
+        cpc_v   = float(m.get("cpc", 0))
+        conv    = int(m.get("conversion", 0))
+        cpa_v   = float(m.get("cost_per_conversion", 0))
+        roas_v  = round(spend / cpa_v, 2) if cpa_v > 0 and spend > 0 else 0.0
+
+        results.append({
+            "name":        cname,
+            "campaign_id": str(cid),
+            "status":      camp.get("status",""),
+            "spend":       round(spend, 2),
+            "impressions": int(m.get("impressions", 0)),
+            "clicks":      clicks,
+            "ctr":         round(ctr_v * 100, 2),
+            "cpc":         round(cpc_v, 2),
+            "roas":        roas_v,
+            "cpa":         round(cpa_v, 2),
+            "purchases":   conv,
+        })
+
+    return results
+
+
+def render_ads_connector():
+    """
+    Interface de connexion aux APIs pub Meta Ads et TikTok Ads.
+    Importe automatiquement CTR/CPC/ROAS/CPA dans le Campaign Tracker.
+    Disponible uniquement plan Pro et Agency.
+    """
+    plan = _get_plan()
+    if not PLAN_LIMITS[plan].get("ads_api", False):
+        st.info("🔗 **Connexion API pub** disponible sur les plans **Pro** (49€) et **Agency** (99€).")
+        return
+
+    light  = st.session_state.get("light_mode", False)
+    bg     = "#ffffff" if light else "#0f0f1a"
+    border = "#e5e7eb" if light else "#1e1e3a"
+    txt    = "#1a1a2e" if light else "#e0e0e0"
+    txt2   = "#6b7280" if light else "#888"
+
+    creds = load_ads_creds()
+
+    st.markdown(f"<h4 style='color:{txt}'>🔗 Connexion API Pub — Import automatique</h4>", unsafe_allow_html=True)
+    st.caption("Connectez vos comptes publicitaires pour importer CTR, CPC, ROAS et CPA directement dans le Campaign Tracker. Zéro saisie manuelle.")
+
+    platform_sel = st.radio("Plateforme", ["Meta Ads", "TikTok Ads"], horizontal=True, key="ads_conn_plat")
+
+    if platform_sel == "Meta Ads":
+        st.markdown("##### 🔵 Meta Ads — Marketing API v19")
+        with st.expander("ℹ️ Comment obtenir votre Access Token Meta", expanded=False):
+            st.markdown("""
+1. Allez sur [developers.facebook.com](https://developers.facebook.com)
+2. Créez une app → **Marketing** → **Obtenir un token**
+3. Activez la permission `ads_read`
+4. Copiez le token long-lived (valide 60 jours)
+
+Votre **Ad Account ID** se trouve dans Meta Ads Manager → Paramètres du compte (format: `act_123456789`)
+            """)
+
+        meta_token  = st.text_input("Access Token Meta", value=creds.get("meta_token",""), type="password", key="meta_token_in")
+        meta_acc_id = st.text_input("Ad Account ID", value=creds.get("meta_acc_id",""), placeholder="act_123456789", key="meta_acc_in")
+        meta_period = st.selectbox("Période", ["last_7d","last_14d","last_30d","this_month"], key="meta_period")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 Sauvegarder les identifiants", key="meta_save"):
+                creds["meta_token"]  = meta_token.strip()
+                creds["meta_acc_id"] = meta_acc_id.strip()
+                save_ads_creds(creds)
+                st.success("✅ Identifiants Meta sauvegardés.")
+        with c2:
+            if st.button("📥 Importer les campagnes Meta", key="meta_import", type="primary"):
+                if not meta_token or not meta_acc_id:
+                    st.error("Token et Ad Account ID requis.")
+                else:
+                    with st.spinner("Connexion à Meta Ads..."):
+                        try:
+                            camps = fetch_meta_campaigns(meta_token.strip(), meta_acc_id.strip(), meta_period)
+                            if not camps:
+                                st.warning("Aucune campagne trouvée avec des données sur cette période.")
+                            else:
+                                existing = load_campaigns()
+                                imported = 0
+                                for c in camps:
+                                    cname = f"[Meta] {c['name'][:50]}"
+                                    snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
+                                    existing[cname] = {
+                                        "name":         cname,
+                                        "platform":     "Meta",
+                                        "budget_daily": 0,
+                                        "ctr":          c["ctr"],
+                                        "cpc":          c["cpc"],
+                                        "roas":         c["roas"],
+                                        "cpa":          c["cpa"],
+                                        "notes":        f"Importé depuis Meta Ads · {c['spend']}€ dépensés · {c['impressions']} impressions",
+                                        "linked_audit_idx": 0,
+                                        "lrs_score":    None,
+                                        "updated":      datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                                        "history_snaps": {snap_key: {"ctr": c["ctr"], "cpc": c["cpc"], "roas": c["roas"], "cpa": c["cpa"]}},
+                                        "campaign_id":  c["campaign_id"],
+                                        "source":       "meta_api",
+                                    }
+                                    imported += 1
+                                save_campaigns(existing)
+                                st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
+                                st.caption("Allez dans **Suivi → Campagnes en cours** pour voir les diagnostics.")
+                        except Exception as e:
+                            st.error(f"Erreur Meta API : {e}")
+
+    else:  # TikTok Ads
+        st.markdown("##### 🎵 TikTok Ads — Marketing API v1.3")
+        with st.expander("ℹ️ Comment obtenir votre Access Token TikTok", expanded=False):
+            st.markdown("""
+1. Allez sur [ads.tiktok.com/marketing_api](https://ads.tiktok.com/marketing_api/apps/)
+2. Créez une app Developer → **Sandbox** pour tester ou **Production** pour les vraies données
+3. Générez un **Long-term Access Token** depuis votre app
+4. Votre **Advertiser ID** se trouve dans TikTok Ads Manager → Gestion du compte
+            """)
+
+        tt_token  = st.text_input("Access Token TikTok", value=creds.get("tt_token",""), type="password", key="tt_token_in")
+        tt_adv_id = st.text_input("Advertiser ID", value=creds.get("tt_adv_id",""), placeholder="7123456789012345678", key="tt_adv_in")
+        tt_days   = st.selectbox("Période (jours)", [7, 14, 30], key="tt_days")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 Sauvegarder les identifiants", key="tt_save"):
+                creds["tt_token"]  = tt_token.strip()
+                creds["tt_adv_id"] = tt_adv_id.strip()
+                save_ads_creds(creds)
+                st.success("✅ Identifiants TikTok sauvegardés.")
+        with c2:
+            if st.button("📥 Importer les campagnes TikTok", key="tt_import", type="primary"):
+                if not tt_token or not tt_adv_id:
+                    st.error("Token et Advertiser ID requis.")
+                else:
+                    with st.spinner("Connexion à TikTok Ads..."):
+                        try:
+                            camps = fetch_tiktok_campaigns(tt_token.strip(), tt_adv_id.strip(), int(tt_days))
+                            if not camps:
+                                st.warning("Aucune campagne trouvée sur cette période.")
+                            else:
+                                existing = load_campaigns()
+                                imported = 0
+                                for c in camps:
+                                    cname = f"[TikTok] {c['name'][:50]}"
+                                    snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
+                                    existing[cname] = {
+                                        "name":         cname,
+                                        "platform":     "TikTok",
+                                        "budget_daily": 0,
+                                        "ctr":          c["ctr"],
+                                        "cpc":          c["cpc"],
+                                        "roas":         c["roas"],
+                                        "cpa":          c["cpa"],
+                                        "notes":        f"Importé depuis TikTok Ads · {c['spend']}€ dépensés",
+                                        "linked_audit_idx": 0,
+                                        "lrs_score":    None,
+                                        "updated":      datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                                        "history_snaps": {snap_key: {"ctr": c["ctr"], "cpc": c["cpc"], "roas": c["roas"], "cpa": c["cpa"]}},
+                                        "campaign_id":  c["campaign_id"],
+                                        "source":       "tiktok_api",
+                                    }
+                                    imported += 1
+                                save_campaigns(existing)
+                                st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
+                        except Exception as e:
+                            st.error(f"Erreur TikTok API : {e}")
 
 
 # ── TRADUCTIONS (EN / FR) ────────────────────────────────────
@@ -2955,6 +3591,82 @@ def _score_emoji(score):
     if score <= 9:  return "🔴"
     if score <= 14: return "🟡"
     return "🟢"
+
+def render_pricing_page():
+    """
+    Page pricing intégrée — comparaison des 4 plans avec features détaillées.
+    Visible depuis le Dashboard → Plans & Tarifs.
+    """
+    light  = st.session_state.get("light_mode", False)
+    bg     = "#ffffff" if light else "#0f0f1a"
+    bg2    = "#f8f8fc" if light else "#07071a"
+    border = "#e5e7eb" if light else "#1e1e3a"
+    txt    = "#1a1a2e" if light else "#e0e0e0"
+    txt2   = "#6b7280" if light else "#888"
+    cur    = _get_plan()
+
+    st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>💳 Plans & Tarifs</h3>", unsafe_allow_html=True)
+    st.caption("Votre plan actuel est surligné. Pour changer de plan, contactez-nous ou mettez à jour votre licence Lemon Squeezy.")
+    st.markdown("")
+
+    plans_display = [
+        ("free",    "🆓 Free",    "Gratuit",  "#6b7280"),
+        ("starter", "⚡ Starter", "19€/mois", "#6b7280"),
+        ("pro",     "🚀 Pro",     "49€/mois", "#6366f1"),
+        ("agency",  "👔 Agency",  "99€/mois", "#f59e0b"),
+    ]
+
+    cols = st.columns(4)
+    features_rows = [
+        ("Audits / mois",          ["3",           "20",          "Illimité",     "Illimité"]),
+        ("Modes d'audit",          ["Funnel Only", "Funnel Only", "Tous (3)",     "Tous (3)"]),
+        ("Monitoring auto",        ["❌",          "✅",          "✅",           "✅"]),
+        ("Bulk audit",             ["❌",          "❌",          "✅",           "✅"]),
+        ("Ads Library",            ["❌",          "❌",          "✅",           "✅"]),
+        ("Audit concurrents",      ["❌",          "❌",          "✅",           "✅"]),
+        ("Intégrations (Slack…)",  ["❌",          "❌",          "✅",           "✅"]),
+        ("API pub (Meta/TikTok)",  ["❌",          "❌",          "✅",           "✅"]),
+        ("Emails drip auto",       ["❌",          "✅",          "✅",           "✅"]),
+        ("Rapport Agency PDF",     ["❌",          "❌",          "❌",           "✅"]),
+        ("White-label branding",   ["❌",          "❌",          "❌",           "✅"]),
+        ("Projets illimités",      ["❌",          "❌",          "✅",           "✅"]),
+        ("Swipe files privés",     ["✅",          "✅",          "✅",           "✅"]),
+        ("Intelligence cumulative",["✅",          "✅",          "✅",           "✅"]),
+    ]
+
+    for idx, (plan_key, plan_label, price, badge_col) in enumerate(plans_display):
+        with cols[idx]:
+            is_current = (plan_key == cur)
+            brd_col = badge_col if is_current else border
+            brd_w   = "2px" if is_current else "1px"
+            popular = " 🔥" if plan_key == "pro" else ""
+            cur_badge = "<div style='color:#22c55e;font-size:0.72rem;font-weight:700;margin-top:4px'>✅ PLAN ACTUEL</div>" if is_current else ""
+            st.markdown(
+                f"<div style='background:{bg};border:{brd_w} solid {brd_col};border-radius:12px;"
+                f"padding:20px;text-align:center;margin-bottom:12px'>"
+                f"<div style='color:{badge_col};font-weight:800;font-size:0.95rem'>{plan_label}{popular}</div>"
+                f"<div style='color:{txt};font-size:1.8rem;font-weight:900;margin:8px 0 2px'>{price}</div>"
+                f"{cur_badge}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    # Tableau features
+    st.markdown("")
+    for feat_label, feat_vals in features_rows:
+        row_cols = st.columns([2, 1, 1, 1, 1])
+        with row_cols[0]:
+            st.markdown(f"<div style='color:{txt2};font-size:0.83rem;padding:6px 0'>{feat_label}</div>", unsafe_allow_html=True)
+        for i, val in enumerate(feat_vals):
+            with row_cols[i+1]:
+                is_cur_col = (plans_display[i][0] == cur)
+                color = "#22c55e" if val == "✅" else "#ef4444" if val == "❌" else txt
+                weight = "700" if is_cur_col else "400"
+                st.markdown(f"<div style='color:{color};font-size:0.83rem;text-align:center;padding:6px 0;font-weight:{weight}'>{val}</div>", unsafe_allow_html=True)
+
+    st.markdown("")
+    st.info("Pour upgrader votre plan, rendez-vous sur **Lemon Squeezy** ou contactez-nous. Une fois le paiement effectué, ajoutez votre clé de licence dans Streamlit Secrets : `[license] plan = \"pro\"`")
+
 
 def render_dashboard():
     """
@@ -5744,10 +6456,32 @@ def main():
     # ── Scheduler au démarrage ────────────────────────────────
     if not st.session_state.get("scheduled_ran"):
         run_scheduled_audits()
+        check_and_send_drip()   # séquence email drip
         st.session_state.scheduled_ran = True
 
-    # ── Onboarding ────────────────────────────────────────────
+    # ── Onboarding + capture email ────────────────────────────
     render_onboarding_banner()
+    render_email_capture_widget()
+
+    # ── Bannière upgrade Free plan ────────────────────────────
+    _cur_plan = _get_plan()
+    if _cur_plan == "free":
+        _rem_free, _lim_free = get_remaining_audits()
+        _used_free = _lim_free - _rem_free if _rem_free >= 0 else 0
+        _light_b   = st.session_state.get("light_mode", False)
+        _bg_b      = "#fffbeb" if _light_b else "#1a1500"
+        _brd_b     = "#f59e0b"
+        if _rem_free == 0:
+            _msg_b = "🚨 **Vous avez utilisé vos 3 audits gratuits ce mois.** Passez en Starter (19€/mois) pour 20 audits + monitoring + email d'alertes."
+        elif _rem_free <= 1:
+            _msg_b = f"⚠️ **{_rem_free} audit gratuit restant ce mois.** Passez en Starter (19€/mois) pour continuer sans limite mensuelle."
+        else:
+            _msg_b = f"✨ Plan Gratuit — {_rem_free} audits restants ce mois. Passez en **Starter (19€)** pour 20 audits + monitoring, ou **Pro (49€)** pour tout débloquer."
+        st.markdown(
+            f"<div style='background:{_bg_b};border:1px solid {_brd_b};border-radius:8px;"
+            f"padding:10px 16px;margin-bottom:12px;font-size:0.87rem'>{_msg_b}</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── Calcul alertes (pour badge onglet) ───────────────────
     alerts     = compute_score_alerts(st.session_state.audit_history)
@@ -5762,11 +6496,13 @@ def main():
 
     # ── tab0 : Dashboard ─────────────────────────────────────
     with tab0:
-        dash_sub1, dash_sub2 = st.tabs(["📊 Vue d'ensemble", "🧠 Intelligence Cumulative"])
+        dash_sub1, dash_sub2, dash_sub3 = st.tabs(["📊 Vue d'ensemble", "🧠 Intelligence Cumulative", "💳 Plans & Tarifs"])
         with dash_sub1:
             render_dashboard()
         with dash_sub2:
             render_cumulative_intel()
+        with dash_sub3:
+            render_pricing_page()
 
     with tab1:
         col_l, col_r = st.columns([1, 2])
@@ -6107,18 +6843,23 @@ def main():
         with sub3:
             render_competitor_audit(api_key)
 
-    # ── tab3 : Suivi (Projets + Monitoring + Campagnes) ──────
+    # ── tab3 : Suivi (Projets + Monitoring + Campagnes + API Pub) ─
     with tab3:
-        sub3, sub4, sub5_camp = st.tabs(["🗂️ Projets", "📡 Monitoring & Alertes", "📡 Campagnes en cours"])
+        sub3, sub4, sub5_camp, sub6_api = st.tabs([
+            "🗂️ Projets", "📡 Monitoring & Alertes",
+            "📡 Campagnes en cours", "🔗 Connexion API Pub"
+        ])
         with sub3:
             render_projects(api_key)
         with sub4:
             if PLAN_LIMITS[_get_plan()].get("monitoring", False):
                 render_monitoring(api_key)
             else:
-                st.info("📡 **Monitoring & Alertes** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
+                st.info("📡 **Monitoring & Alertes** disponible sur le plan **Starter** (19€/mois) et supérieur.")
         with sub5_camp:
             render_campaign_tracker()
+        with sub6_api:
+            render_ads_connector()
 
     # ── tab4 : Historique ────────────────────────────────────
     with tab4:
