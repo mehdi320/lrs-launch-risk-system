@@ -24,3 +24,12 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+# Tracker local — données sensibles, jamais sur GitHub
+tracker/tracker.db
+tracker/.env
+meta-tracker/tracker.db
+meta-tracker/.env
+tracker.log
+.lrs_history.json
+.lrs_campaign_links.json

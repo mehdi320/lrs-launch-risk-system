@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "LRS Dashboard",
+      "runtimeExecutable": "C:\\Users\\pc\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\streamlit.exe",
+      "runtimeArgs": ["run", "app.py"],
+      "port": 8501
+    },
+    {
+      "name": "ROAS Tracker (standalone)",
+      "runtimeExecutable": "C:\\Users\\pc\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\streamlit.exe",
+      "runtimeArgs": ["run", "tracker/app.py", "--server.port", "8502"],
+      "port": 8502
+    },
+    {
+      "name": "Webhook Systeme.io",
+      "runtimeExecutable": "C:\\Users\\pc\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+      "runtimeArgs": ["tracker/webhook_server.py"],
+      "port": 5000
+    }
+  ]
+}
