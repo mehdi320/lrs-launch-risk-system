@@ -1,0 +1,282 @@
+"""Couche repository : CRUD SQLite <-> dataclasses de creative_studio.core.
+
+Chaque repository est volontairement une classe fine autour de requêtes
+SQL explicites (pas d'ORM) — c'est la seule couche qui connaît le
+schéma SQLite. Une migration vers Postgres en V2 se fait en réécrivant
+cette couche seule, sans toucher à core/.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict
+
+from creative_studio.core.variants import (
+    ABTest,
+    CopyBlock,
+    EmailSequence,
+    Event,
+    Framework,
+    Product,
+    TestResult,
+    TestStatus,
+    Variant,
+    VariantKind,
+    VariantStatus,
+)
+from creative_studio.storage.db import db_session
+
+
+class ProductRepository:
+    def create(self, product: Product) -> Product:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO products
+                   (id, tenant_id, name, description, price_cents, currency,
+                    stripe_payment_link, audience, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    product.id, product.tenant_id, product.name, product.description,
+                    product.price_cents, product.currency, product.stripe_payment_link,
+                    product.audience, product.created_at,
+                ),
+            )
+        return product
+
+    def get(self, product_id: str) -> Product | None:
+        with db_session() as conn:
+            row = conn.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
+        return self._from_row(row) if row else None
+
+    def list(self, tenant_id: str = "local") -> list[Product]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM products WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
+            ).fetchall()
+        return [self._from_row(r) for r in rows]
+
+    @staticmethod
+    def _from_row(row) -> Product:
+        return Product(
+            id=row["id"], tenant_id=row["tenant_id"], name=row["name"],
+            description=row["description"], price_cents=row["price_cents"],
+            currency=row["currency"], stripe_payment_link=row["stripe_payment_link"],
+            audience=row["audience"], created_at=row["created_at"],
+        )
+
+
+class VariantRepository:
+    def create(self, variant: Variant) -> Variant:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO variants
+                   (id, tenant_id, product_id, kind, framework, copy_json,
+                    lrs_score, status, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    variant.id, variant.tenant_id, variant.product_id, variant.kind.value,
+                    variant.framework.value, json.dumps(asdict(variant.copy), ensure_ascii=False),
+                    variant.lrs_score, variant.status.value, variant.created_at,
+                ),
+            )
+        return variant
+
+    def get(self, variant_id: str) -> Variant | None:
+        with db_session() as conn:
+            row = conn.execute("SELECT * FROM variants WHERE id = ?", (variant_id,)).fetchone()
+        return self._from_row(row) if row else None
+
+    def list_by_product(self, product_id: str) -> list[Variant]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM variants WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+            ).fetchall()
+        return [self._from_row(r) for r in rows]
+
+    def update_status(self, variant_id: str, status: VariantStatus) -> None:
+        with db_session() as conn:
+            conn.execute("UPDATE variants SET status = ? WHERE id = ?", (status.value, variant_id))
+
+    def update_lrs_score(self, variant_id: str, score: int) -> None:
+        with db_session() as conn:
+            conn.execute("UPDATE variants SET lrs_score = ? WHERE id = ?", (score, variant_id))
+
+    @staticmethod
+    def _from_row(row) -> Variant:
+        copy_data = json.loads(row["copy_json"])
+        return Variant(
+            id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
+            kind=VariantKind(row["kind"]), framework=Framework(row["framework"]),
+            copy=CopyBlock(**copy_data), lrs_score=row["lrs_score"],
+            status=VariantStatus(row["status"]), created_at=row["created_at"],
+        )
+
+
+class ABTestRepository:
+    def create(self, test: ABTest) -> ABTest:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO ab_tests
+                   (id, tenant_id, product_id, name, status, winner_variant_id,
+                    created_at, concluded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    test.id, test.tenant_id, test.product_id, test.name, test.status.value,
+                    test.winner_variant_id, test.created_at, test.concluded_at,
+                ),
+            )
+            conn.executemany(
+                "INSERT INTO ab_test_variants (test_id, variant_id) VALUES (?, ?)",
+                [(test.id, vid) for vid in test.variant_ids],
+            )
+        return test
+
+    def get(self, test_id: str) -> ABTest | None:
+        with db_session() as conn:
+            row = conn.execute("SELECT * FROM ab_tests WHERE id = ?", (test_id,)).fetchone()
+            if not row:
+                return None
+            variant_rows = conn.execute(
+                "SELECT variant_id FROM ab_test_variants WHERE test_id = ?", (test_id,)
+            ).fetchall()
+        return self._from_row(row, [r["variant_id"] for r in variant_rows])
+
+    def list_by_product(self, product_id: str) -> list[ABTest]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM ab_tests WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+            ).fetchall()
+            tests = []
+            for row in rows:
+                variant_rows = conn.execute(
+                    "SELECT variant_id FROM ab_test_variants WHERE test_id = ?", (row["id"],)
+                ).fetchall()
+                tests.append(self._from_row(row, [r["variant_id"] for r in variant_rows]))
+        return tests
+
+    def conclude(self, test_id: str, winner_variant_id: str, concluded_at: str) -> None:
+        with db_session() as conn:
+            conn.execute(
+                """UPDATE ab_tests SET status = ?, winner_variant_id = ?, concluded_at = ?
+                   WHERE id = ?""",
+                (TestStatus.CONCLUDED.value, winner_variant_id, concluded_at, test_id),
+            )
+
+    @staticmethod
+    def _from_row(row, variant_ids: list[str]) -> ABTest:
+        return ABTest(
+            id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
+            name=row["name"], variant_ids=variant_ids, status=TestStatus(row["status"]),
+            winner_variant_id=row["winner_variant_id"], created_at=row["created_at"],
+            concluded_at=row["concluded_at"],
+        )
+
+
+class AssignmentRepository:
+    def get_or_assign(self, test_id: str, visitor_id: str, variant_id_if_new: str, assigned_at: str) -> str:
+        """Retourne la variante déjà assignée à ce visiteur, ou l'assigne si absente."""
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT variant_id FROM assignments WHERE test_id = ? AND visitor_id = ?",
+                (test_id, visitor_id),
+            ).fetchone()
+            if row:
+                return row["variant_id"]
+            conn.execute(
+                """INSERT INTO assignments (test_id, visitor_id, variant_id, assigned_at)
+                   VALUES (?, ?, ?, ?)""",
+                (test_id, visitor_id, variant_id_if_new, assigned_at),
+            )
+        return variant_id_if_new
+
+
+class EventRepository:
+    def record(self, event: Event) -> None:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO events
+                   (tenant_id, test_id, variant_id, visitor_id, event_type, amount_cents, ts)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    event.tenant_id, event.test_id, event.variant_id, event.visitor_id,
+                    event.event_type.value, event.amount_cents, event.ts,
+                ),
+            )
+
+    def counts_by_variant(self, test_id: str, event_type: str) -> dict[str, int]:
+        with db_session() as conn:
+            rows = conn.execute(
+                """SELECT variant_id, COUNT(DISTINCT visitor_id) AS n
+                   FROM events WHERE test_id = ? AND event_type = ?
+                   GROUP BY variant_id""",
+                (test_id, event_type),
+            ).fetchall()
+        return {r["variant_id"]: r["n"] for r in rows}
+
+
+class TestResultRepository:
+    def save(self, result: TestResult) -> None:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO test_results
+                   (test_id, variant_id, exposures, conversions, conversion_rate,
+                    p_value, is_significant, is_winner, computed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    result.test_id, result.variant_id, result.exposures, result.conversions,
+                    result.conversion_rate, result.p_value, int(result.is_significant),
+                    int(result.is_winner), result.computed_at,
+                ),
+            )
+
+    def latest_for_test(self, test_id: str) -> list[TestResult]:
+        with db_session() as conn:
+            latest_ts = conn.execute(
+                "SELECT MAX(computed_at) AS ts FROM test_results WHERE test_id = ?", (test_id,)
+            ).fetchone()["ts"]
+            if not latest_ts:
+                return []
+            rows = conn.execute(
+                "SELECT * FROM test_results WHERE test_id = ? AND computed_at = ?",
+                (test_id, latest_ts),
+            ).fetchall()
+        return [
+            TestResult(
+                test_id=r["test_id"], variant_id=r["variant_id"], exposures=r["exposures"],
+                conversions=r["conversions"], conversion_rate=r["conversion_rate"],
+                p_value=r["p_value"], is_significant=bool(r["is_significant"]),
+                is_winner=bool(r["is_winner"]), computed_at=r["computed_at"],
+            )
+            for r in rows
+        ]
+
+
+class EmailSequenceRepository:
+    def create(self, sequence: EmailSequence) -> EmailSequence:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO email_sequences
+                   (id, tenant_id, product_id, angle, length, emails_json, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    sequence.id, sequence.tenant_id, sequence.product_id, sequence.angle,
+                    sequence.length, json.dumps(sequence.emails, ensure_ascii=False),
+                    sequence.created_at,
+                ),
+            )
+        return sequence
+
+    def list_by_product(self, product_id: str) -> list[EmailSequence]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM email_sequences WHERE product_id = ? ORDER BY created_at DESC",
+                (product_id,),
+            ).fetchall()
+        return [
+            EmailSequence(
+                id=r["id"], tenant_id=r["tenant_id"], product_id=r["product_id"],
+                angle=r["angle"], length=r["length"], emails=json.loads(r["emails_json"]),
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]

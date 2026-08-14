@@ -6,6 +6,11 @@
 # Streamlit secrets locaux
 .streamlit/secrets.toml
 
+# Creative Studio — données locales (mode local, non versionnées)
+.lrs_creative_studio.db
+.lrs_creative_studio.db-wal
+.lrs_creative_studio.db-shm
+
 # Python
 __pycache__/
 *.py[cod]

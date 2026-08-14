@@ -28,6 +28,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from creative_studio.ui.streamlit_tab import render_creative_studio
+    CREATIVE_STUDIO_AVAILABLE = True
+except ImportError:
+    CREATIVE_STUDIO_AVAILABLE = False
+
 APP_VERSION    = "3.5"
 MAX_PAGE_CHARS = 8000
 
@@ -7615,6 +7621,15 @@ def render_admin_view():
             st.caption(f"{'🔵' if n.get('read') else '⚪'} {n.get('ts','')} — {n.get('msg','')}")
 
 
+def _creative_studio_lrs_audit(page_text: str) -> int:
+    """Wrapper injecté dans l'onglet Creative Studio pour réutiliser l'audit
+    LRS existant (Funnel Only) sur le copy d'une variante générée."""
+    result = run_audit_stream(
+        "Funnel Only", "Meta", "Digital product", page_text, "", "", "gpt-4o-mini"
+    )
+    return result.get("_c", {}).get("score", 0)
+
+
 def main():
     init_session()
     light_mode = st.session_state.get("light_mode", False)
@@ -7759,8 +7774,8 @@ def main():
 
     # ── 6 onglets ────────────────────────────────────────────
     _has_history = len(st.session_state.audit_history) > 0
-    tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🏠 Dashboard", "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources"
+    tab0, tab1, tab2, tab3, tab4, tab5, tab_cs = st.tabs([
+        "🏠 Dashboard", "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources", "🎨 Creative Studio"
     ])
 
     # ── tab0 : Dashboard ─────────────────────────────────────
@@ -8211,6 +8226,15 @@ def main():
             render_benchmark_tab()
         with sub8:
             render_changelog()
+
+    with tab_cs:
+        if CREATIVE_STUDIO_AVAILABLE:
+            render_creative_studio(run_lrs_audit_fn=_creative_studio_lrs_audit)
+        else:
+            st.info(
+                "Module Creative Studio indisponible — installez les dépendances : "
+                "`pip install -r requirements.txt` (anthropic, fastapi, uvicorn, stripe)."
+            )
 
 
 if __name__ == "__main__":
