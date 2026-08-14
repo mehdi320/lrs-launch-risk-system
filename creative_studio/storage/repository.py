@@ -174,20 +174,24 @@ class ABTestRepository:
 
 class AssignmentRepository:
     def get_or_assign(self, test_id: str, visitor_id: str, variant_id_if_new: str, assigned_at: str) -> str:
-        """Retourne la variante déjà assignée à ce visiteur, ou l'assigne si absente."""
+        """Retourne la variante déjà assignée à ce visiteur, ou l'assigne si absente.
+
+        Utilise INSERT OR IGNORE plutôt qu'un SELECT-puis-INSERT : deux requêtes
+        concurrentes pour le même (test_id, visitor_id) ne lèvent jamais
+        d'IntegrityError, et le SELECT final fait toujours foi sur la variante
+        réellement stockée (la première des deux à committer).
+        """
         with db_session() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO assignments (test_id, visitor_id, variant_id, assigned_at)
+                   VALUES (?, ?, ?, ?)""",
+                (test_id, visitor_id, variant_id_if_new, assigned_at),
+            )
             row = conn.execute(
                 "SELECT variant_id FROM assignments WHERE test_id = ? AND visitor_id = ?",
                 (test_id, visitor_id),
             ).fetchone()
-            if row:
-                return row["variant_id"]
-            conn.execute(
-                """INSERT INTO assignments (test_id, visitor_id, variant_id, assigned_at)
-                   VALUES (?, ?, ?, ?)""",
-                (test_id, visitor_id, variant_id_if_new, assigned_at),
-            )
-        return variant_id_if_new
+        return row["variant_id"]
 
 
 class EventRepository:

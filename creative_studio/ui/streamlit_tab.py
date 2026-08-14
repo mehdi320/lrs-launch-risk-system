@@ -31,6 +31,7 @@ from creative_studio.storage.repository import (
     EmailSequenceRepository,
     EventRepository,
     ProductRepository,
+    TestResultRepository,
     VariantRepository,
 )
 
@@ -38,6 +39,7 @@ _SERVING_BASE_URL_DEFAULT = "http://localhost:8000"
 
 _products = ProductRepository()
 _variants = VariantRepository()
+_test_results = TestResultRepository()
 _tests = ABTestRepository()
 _events = EventRepository()
 _sequences = EmailSequenceRepository()
@@ -218,12 +220,18 @@ def _render_tests_tab() -> None:
     for test in _tests.list_by_product(product.id):
         with st.expander(f"🧪 {test.name} — {test.status.value}"):
             st.code(f"{base_url}/v/{test.id}", language=None)
-            if st.button("🔄 Rafraîchir", key=f"recompute_{test.id}"):
-                st.rerun()
 
-            # Recalcul automatique à chaque affichage — pas d'intervention
-            # manuelle nécessaire pour détecter un gagnant significatif.
-            results = compute_and_save_results(test.id)
+            # Ne recalcule (et ne réécrit un instantané en base) que sur clic
+            # explicite ou lors du tout premier affichage — sinon Streamlit
+            # relancerait ce calcul à chaque interaction ailleurs dans l'appli
+            # et ferait grossir test_results indéfiniment sans raison.
+            if st.button("🔄 Recalculer les résultats", key=f"recompute_{test.id}"):
+                results = compute_and_save_results(test.id)
+            else:
+                results = _test_results.latest_for_test(test.id)
+                if not results:
+                    results = compute_and_save_results(test.id)
+
             if not any(r.exposures for r in results):
                 st.caption("Pas encore de trafic enregistré sur ce test.")
                 continue
@@ -266,8 +274,14 @@ def _render_emails_tab() -> None:
         length = st.selectbox("Longueur de la séquence", [5, 7, 14], index=1)
         variant_labels = {"— Aucune —": None}
         variant_labels.update({f"[{v.framework.value}] {v.copy.headline}": v for v in variants})
+        options = list(variant_labels.keys())
+        default_label = (
+            f"[{winning_variant.framework.value}] {winning_variant.copy.headline}"
+            if winning_variant is not None
+            else options[0]
+        )
         selected_variant_label = st.selectbox(
-            "Ancrer sur le copy gagnant (optionnel)", list(variant_labels.keys())
+            "Ancrer sur le copy gagnant (optionnel)", options, index=options.index(default_label)
         )
         submitted = st.form_submit_button("Générer la séquence", type="primary")
 

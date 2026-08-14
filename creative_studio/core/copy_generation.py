@@ -9,10 +9,14 @@ appel à l'autre.
 
 from __future__ import annotations
 
-import json
 import os
 
-from creative_studio.core.llm_client import GenerationRefused, build_client, get_anthropic_api_key
+from creative_studio.core.llm_client import (
+    GenerationRefused,
+    build_client,
+    get_anthropic_api_key,
+    parse_structured_json_response,
+)
 from creative_studio.core.variants import CopyBlock, Framework, Product, Variant, VariantKind
 
 _METHODOLOGY_PATH = os.path.join(
@@ -106,12 +110,7 @@ def generate_variant(
         messages=[{"role": "user", "content": user_prompt}],
     )
 
-    if response.stop_reason == "refusal":
-        category = getattr(response.stop_details, "category", None) if response.stop_details else None
-        raise GenerationRefused(f"Génération refusée par Claude (catégorie: {category})")
-
-    text_block = next(b for b in response.content if b.type == "text")
-    data = json.loads(text_block.text)
+    data = parse_structured_json_response(response)
     copy = CopyBlock(**data)
 
     return Variant(product_id=product.id, kind=kind, framework=framework, copy=copy)

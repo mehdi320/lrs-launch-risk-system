@@ -8,11 +8,10 @@ tout parsing fragile.
 
 from __future__ import annotations
 
-import json
 from typing import Literal
 
 from creative_studio.core.copy_generation import DEFAULT_MODEL
-from creative_studio.core.llm_client import GenerationRefused, build_client
+from creative_studio.core.llm_client import build_client, parse_structured_json_response
 from creative_studio.core.variants import EmailSequence, Product, Variant
 
 SequenceLength = Literal[5, 7, 14]
@@ -112,12 +111,7 @@ def generate_email_sequence(
         messages=[{"role": "user", "content": "\n".join(context_lines)}],
     )
 
-    if response.stop_reason == "refusal":
-        category = getattr(response.stop_details, "category", None) if response.stop_details else None
-        raise GenerationRefused(f"Génération refusée par Claude (catégorie: {category})")
-
-    text_block = next(b for b in response.content if b.type == "text")
-    data = json.loads(text_block.text)
+    data = parse_structured_json_response(response)
 
     return EmailSequence(
         product_id=product.id,

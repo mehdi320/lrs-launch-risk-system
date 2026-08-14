@@ -4,6 +4,7 @@ partagées entre copy_generation.py et email_sequences.py.
 
 from __future__ import annotations
 
+import json
 import os
 
 try:
@@ -42,3 +43,32 @@ def build_client() -> "anthropic.Anthropic":
 
 class GenerationRefused(RuntimeError):
     """Levée quand Claude refuse la génération (stop_reason == 'refusal')."""
+
+
+def parse_structured_json_response(response) -> dict:
+    """Valide stop_reason puis parse le premier bloc texte comme JSON.
+
+    Centralise la gestion des cas d'échec d'une réponse à sortie structurée :
+    refus (stop_reason == 'refusal'), troncature (stop_reason == 'max_tokens',
+    la réponse JSON est alors incomplète), et tout JSON malformé/absent —
+    pour ne jamais laisser une exception brute (StopIteration,
+    JSONDecodeError) remonter jusqu'à l'UI.
+    """
+    if response.stop_reason == "refusal":
+        category = getattr(response.stop_details, "category", None) if response.stop_details else None
+        raise GenerationRefused(f"Génération refusée par Claude (catégorie: {category})")
+
+    if response.stop_reason == "max_tokens":
+        raise RuntimeError(
+            "Réponse tronquée (limite de tokens atteinte) — la génération est incomplète. "
+            "Réessayez, ou réduisez la longueur demandée."
+        )
+
+    text_block = next((b for b in response.content if b.type == "text"), None)
+    if text_block is None:
+        raise RuntimeError(f"Réponse inattendue de Claude (stop_reason={response.stop_reason!r}, aucun texte).")
+
+    try:
+        return json.loads(text_block.text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Réponse JSON invalide reçue de Claude : {exc}") from exc

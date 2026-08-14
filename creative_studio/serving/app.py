@@ -22,7 +22,7 @@ try:
 except ImportError:  # dépendance optionnelle tant que le webhook n'est pas utilisé
     stripe = None
 
-from creative_studio.core.variants import Event, EventType
+from creative_studio.core.variants import Event, EventType, utcnow_iso
 from creative_studio.storage.db import init_db
 from creative_studio.storage.repository import (
     ABTestRepository,
@@ -36,6 +36,7 @@ from creative_studio.serving.templates import render_variant_page
 
 VISITOR_COOKIE = "lrs_visitor_id"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+ALLOW_UNVERIFIED_WEBHOOK = os.environ.get("LRS_CS_ALLOW_UNVERIFIED_WEBHOOK", "").lower() == "true"
 
 app = FastAPI(title="LRS Creative Studio — Serving")
 
@@ -85,7 +86,7 @@ def serve_variant(test_id: str, request: Request):
         test_id=test.id,
         visitor_id=visitor_id,
         variant_id_if_new=fallback_variant_id,
-        assigned_at=_now_iso(),
+        assigned_at=utcnow_iso(),
     )
 
     variant = variants.get(variant_id)
@@ -124,7 +125,7 @@ def go_to_payment(test_id: str, request: Request):
             test_id=test.id,
             visitor_id=visitor_id,
             variant_id_if_new=pick_variant_for_new_visitor(test, visitor_id),
-            assigned_at=_now_iso(),
+            assigned_at=utcnow_iso(),
         )
 
     events.record(
@@ -156,11 +157,20 @@ async def stripe_webhook(request: Request):
             event_data = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
         except Exception as exc:  # signature invalide ou payload corrompu
             return PlainTextResponse(f"Webhook invalide: {exc}", status_code=400)
-    else:
-        # Mode dev sans vérification de signature — ne jamais utiliser en production.
+    elif ALLOW_UNVERIFIED_WEBHOOK:
+        # Mode dev explicite, sans vérification de signature — n'importe qui
+        # peut fabriquer un faux achat. Activé uniquement via opt-in explicite
+        # (LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true), jamais par défaut.
         import json
 
         event_data = json.loads(payload)
+    else:
+        return PlainTextResponse(
+            "STRIPE_WEBHOOK_SECRET manquant — webhook refusé par défaut. "
+            "Pour du dev local sans Stripe réel, définis "
+            "LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true explicitement.",
+            status_code=503,
+        )
 
     if event_data.get("type") != "checkout.session.completed":
         return PlainTextResponse("ignoré", status_code=200)
@@ -184,9 +194,3 @@ async def stripe_webhook(request: Request):
         )
     )
     return PlainTextResponse("ok", status_code=200)
-
-
-def _now_iso() -> str:
-    from datetime import datetime, timezone
-
-    return datetime.now(timezone.utc).isoformat()

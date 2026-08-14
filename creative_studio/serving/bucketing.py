@@ -10,11 +10,18 @@ from __future__ import annotations
 
 import hashlib
 
-from creative_studio.core.variants import ABTest
+from creative_studio.core.variants import ABTest, TestStatus
 
 
 def pick_variant_for_new_visitor(test: ABTest, visitor_id: str) -> str:
-    """Répartition uniforme et déterministe sur les variantes actives du test."""
+    """Répartition uniforme et déterministe sur les variantes du test.
+
+    Une fois le test conclu avec un gagnant statistiquement significatif,
+    tout nouveau visiteur reçoit directement la variante gagnante — inutile
+    de continuer à envoyer du trafic vers les variantes perdantes.
+    """
+    if test.status == TestStatus.CONCLUDED and test.winner_variant_id:
+        return test.winner_variant_id
     if not test.variant_ids:
         raise ValueError(f"Le test {test.id} n'a aucune variante.")
     digest = hashlib.sha256(f"{test.id}:{visitor_id}".encode("utf-8")).hexdigest()
