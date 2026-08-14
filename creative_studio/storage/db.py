@@ -31,15 +31,17 @@ CREATE TABLE IF NOT EXISTS products (
 );
 
 CREATE TABLE IF NOT EXISTS variants (
-    id           TEXT PRIMARY KEY,
-    tenant_id    TEXT NOT NULL DEFAULT 'local',
-    product_id   TEXT NOT NULL REFERENCES products(id),
-    kind         TEXT NOT NULL CHECK (kind IN ('advertorial', 'sales_page')),
-    framework    TEXT NOT NULL CHECK (framework IN ('AIDA', 'PAS', 'hormozi')),
-    copy_json    TEXT NOT NULL,
-    lrs_score    INTEGER,
-    status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'testing', 'archived', 'killed')),
-    created_at   TEXT NOT NULL
+    id               TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL DEFAULT 'local',
+    product_id       TEXT NOT NULL REFERENCES products(id),
+    kind             TEXT NOT NULL CHECK (kind IN ('advertorial', 'sales_page')),
+    framework        TEXT NOT NULL CHECK (framework IN ('AIDA', 'PAS', 'hormozi')),
+    copy_json        TEXT NOT NULL,
+    lrs_score        INTEGER,
+    status           TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'testing', 'archived', 'killed')),
+    source_mode      TEXT NOT NULL DEFAULT 'from_scratch' CHECK (source_mode IN ('from_scratch', 'optimize_existing')),
+    varied_dimension TEXT CHECK (varied_dimension IN ('hook', 'social_proof', 'urgency', 'cta')),
+    created_at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS ab_tests (
@@ -126,6 +128,8 @@ _MIGRATIONS = [
     "ALTER TABLE ab_tests ADD COLUMN conclusion_reason TEXT",
     "ALTER TABLE test_results ADD COLUMN alpha_used REAL NOT NULL DEFAULT 0.05",
     "ALTER TABLE test_results ADD COLUMN n_looks INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE variants ADD COLUMN source_mode TEXT NOT NULL DEFAULT 'from_scratch'",
+    "ALTER TABLE variants ADD COLUMN varied_dimension TEXT",
 ]
 
 

@@ -18,12 +18,14 @@ from creative_studio.core.variants import (
     EmailSequence,
     Event,
     Framework,
+    GenerationMode,
     Product,
     TestResult,
     TestStatus,
     Variant,
     VariantKind,
     VariantStatus,
+    VaryDimension,
 )
 from creative_studio.storage.db import db_session
 
@@ -72,12 +74,14 @@ class VariantRepository:
             conn.execute(
                 """INSERT INTO variants
                    (id, tenant_id, product_id, kind, framework, copy_json,
-                    lrs_score, status, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    lrs_score, status, source_mode, varied_dimension, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     variant.id, variant.tenant_id, variant.product_id, variant.kind.value,
                     variant.framework.value, json.dumps(asdict(variant.copy), ensure_ascii=False),
-                    variant.lrs_score, variant.status.value, variant.created_at,
+                    variant.lrs_score, variant.status.value, variant.source_mode.value,
+                    variant.varied_dimension.value if variant.varied_dimension else None,
+                    variant.created_at,
                 ),
             )
         return variant
@@ -105,11 +109,17 @@ class VariantRepository:
     @staticmethod
     def _from_row(row) -> Variant:
         copy_data = json.loads(row["copy_json"])
+        row_keys = row.keys()
+        source_mode = row["source_mode"] if "source_mode" in row_keys else GenerationMode.FROM_SCRATCH.value
+        varied_dimension = row["varied_dimension"] if "varied_dimension" in row_keys else None
         return Variant(
             id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
             kind=VariantKind(row["kind"]), framework=Framework(row["framework"]),
             copy=CopyBlock(**copy_data), lrs_score=row["lrs_score"],
-            status=VariantStatus(row["status"]), created_at=row["created_at"],
+            status=VariantStatus(row["status"]),
+            source_mode=GenerationMode(source_mode),
+            varied_dimension=VaryDimension(varied_dimension) if varied_dimension else None,
+            created_at=row["created_at"],
         )
 
 

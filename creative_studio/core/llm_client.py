@@ -12,6 +12,11 @@ try:
 except ImportError:  # SDK optionnel tant que le module n'est pas utilisé
     anthropic = None
 
+# Défini ici (plutôt que dans copy_generation.py) pour que copy_generation.py
+# et reference_extraction.py puissent tous les deux l'importer sans créer de
+# cycle d'import entre eux.
+DEFAULT_MODEL = "claude-opus-5"
+
 
 def get_anthropic_api_key() -> str:
     """Résout la clé API Claude — variable d'env d'abord, puis st.secrets.

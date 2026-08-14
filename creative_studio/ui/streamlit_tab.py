@@ -14,18 +14,25 @@ from typing import Callable, Optional
 import streamlit as st
 
 from creative_studio.core.budget_guard import DEFAULT_KILL_EXPOSURE_THRESHOLD
-from creative_studio.core.copy_generation import GenerationRefused, generate_variants
+from creative_studio.core.copy_generation import (
+    GenerationRefused,
+    generate_variants,
+    generate_variants_from_reference,
+)
 from creative_studio.core.email_sequences import generate_email_sequence
 from creative_studio.core.prioritization import rank_variants_for_budget
+from creative_studio.core.reference_extraction import VARY_DIMENSION_LABELS, analyze_existing_copy
 from creative_studio.core.stats import VariantStats
 from creative_studio.core.test_evaluation import compute_and_save_results
 from creative_studio.core.variants import (
     ABTest,
     ConclusionReason,
     Framework,
+    GenerationMode,
     Product,
     VariantKind,
     VariantStatus,
+    VaryDimension,
 )
 from creative_studio.storage.db import init_db
 from creative_studio.storage.repository import (
@@ -82,13 +89,18 @@ def render_creative_studio(
         _render_emails_tab()
 
 
-def _selected_product() -> Product | None:
+def _selected_product(key_suffix: str) -> Product | None:
+    """`key_suffix` doit être unique par onglet appelant : Streamlit rend le
+    corps de tous les onglets à chaque exécution du script (pas seulement
+    celui affiché), donc réutiliser la même clé de widget dans plusieurs
+    onglets lève une StreamlitDuplicateElementKey.
+    """
     products = _products.list()
     if not products:
         st.info("Crée d'abord un produit dans l'onglet 📦 Produits.")
         return None
     labels = {f"{p.name} ({p.price_cents / 100:.2f} {p.currency})": p for p in products}
-    label = st.selectbox("Produit", list(labels.keys()), key="cs_selected_product")
+    label = st.selectbox("Produit", list(labels.keys()), key=f"cs_selected_product_{key_suffix}")
     return labels[label]
 
 
@@ -128,37 +140,28 @@ def _render_products_tab() -> None:
 
 
 def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> None:
-    product = _selected_product()
+    product = _selected_product("variants")
     if product is None:
         return
 
-    col1, col2 = st.columns(2)
-    with col1:
-        kind = st.selectbox(
-            "Type de créatif",
-            [VariantKind.SALES_PAGE, VariantKind.ADVERTORIAL],
-            format_func=lambda k: "Page de vente" if k == VariantKind.SALES_PAGE else "Advertorial",
-        )
-    with col2:
-        frameworks = st.multiselect(
-            "Frameworks",
-            [Framework.AIDA, Framework.PAS, Framework.HORMOZI],
-            default=[Framework.AIDA, Framework.PAS, Framework.HORMOZI],
-            format_func=lambda f: f.value,
-        )
+    mode_label = st.radio(
+        "Mode de génération",
+        ["🆕 Créer depuis zéro", "🔧 Optimiser un existant"],
+        horizontal=True,
+        key="cs_generation_mode",
+        help=(
+            "Créer depuis zéro : input minimal (produit, description, prix, audience), "
+            "aucun advertorial ou funnel existant requis. "
+            "Optimiser un existant : pars d'une publicité ou page de vente déjà en ligne, "
+            "et ne fais varier qu'un seul paramètre à la fois entre les variantes générées."
+        ),
+    )
+    st.divider()
 
-    if st.button("🪄 Générer les variantes avec Claude", type="primary", disabled=not frameworks):
-        try:
-            with st.spinner(f"Génération de {len(frameworks)} variante(s)..."):
-                new_variants = generate_variants(product, kind, frameworks)
-                for v in new_variants:
-                    _variants.create(v)
-            st.success(f"{len(new_variants)} variante(s) générée(s).")
-            st.rerun()
-        except GenerationRefused as exc:
-            st.error(str(exc))
-        except RuntimeError as exc:
-            st.error(f"Impossible de générer : {exc}")
+    if mode_label == "🆕 Créer depuis zéro":
+        _render_from_scratch_generation(product)
+    else:
+        _render_optimize_existing_generation(product)
 
     st.markdown("#### Variantes existantes")
     existing = _variants.list_by_product(product.id)
@@ -167,7 +170,12 @@ def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> No
         return
 
     for v in existing:
-        with st.expander(f"[{v.framework.value}] {v.copy.headline} — statut: {v.status.value}"):
+        if v.source_mode == GenerationMode.OPTIMIZE_EXISTING:
+            dim_label = VARY_DIMENSION_LABELS.get(v.varied_dimension.value) if v.varied_dimension else None
+            mode_badge = f" · 🔧 optimisée ({dim_label})" if dim_label else " · 🔧 optimisée"
+        else:
+            mode_badge = " · 🆕 depuis zéro"
+        with st.expander(f"[{v.framework.value}] {v.copy.headline} — statut: {v.status.value}{mode_badge}"):
             st.markdown(f"**Hook** : {v.copy.hook}")
             for section in v.copy.body_sections:
                 st.write(section)
@@ -185,8 +193,106 @@ def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> No
                     st.rerun()
 
 
+def _render_from_scratch_generation(product: Product) -> None:
+    """Mode "Créer depuis zéro" — comportement historique du Creative Studio,
+    inchangé : input minimal produit, aucune référence requise."""
+    st.caption(
+        "Génère des variantes uniquement à partir de la fiche produit ci-dessus "
+        "(nom, description, prix, audience) — pas d'advertorial ni de funnel existant requis."
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        kind = st.selectbox(
+            "Type de créatif",
+            [VariantKind.SALES_PAGE, VariantKind.ADVERTORIAL],
+            format_func=lambda k: "Page de vente" if k == VariantKind.SALES_PAGE else "Advertorial",
+            key="cs_scratch_kind",
+        )
+    with col2:
+        frameworks = st.multiselect(
+            "Frameworks",
+            [Framework.AIDA, Framework.PAS, Framework.HORMOZI],
+            default=[Framework.AIDA, Framework.PAS, Framework.HORMOZI],
+            format_func=lambda f: f.value,
+            key="cs_scratch_frameworks",
+        )
+
+    if st.button("🪄 Générer les variantes avec Claude", type="primary", disabled=not frameworks, key="cs_scratch_generate"):
+        try:
+            with st.spinner(f"Génération de {len(frameworks)} variante(s)..."):
+                new_variants = generate_variants(product, kind, frameworks)
+                for v in new_variants:
+                    _variants.create(v)
+            st.success(f"{len(new_variants)} variante(s) générée(s).")
+            st.rerun()
+        except GenerationRefused as exc:
+            st.error(str(exc))
+        except RuntimeError as exc:
+            st.error(f"Impossible de générer : {exc}")
+
+
+def _render_optimize_existing_generation(product: Product) -> None:
+    """Mode "Optimiser un existant" — analyse un advertorial/page de vente
+    déjà en ligne puis génère des variantes à un seul paramètre variable,
+    en réutilisant le même moteur de génération (copy_generation.py) et le
+    même pipeline de test A/B que le mode "Créer depuis zéro"."""
+    st.caption(
+        "Colle le texte d'une publicité ou d'une page de vente déjà existante (ou son URL). "
+        "Claude en extrait l'angle et le framework, puis génère une variante par paramètre "
+        "coché ci-dessous — en gardant tout le reste identique, pour isoler ce qui améliore "
+        "la conversion."
+    )
+    reference_input = st.text_area(
+        "Advertorial / page de vente existante (texte collé ou URL)",
+        height=140,
+        placeholder="Colle ici le texte de la pub, ou https://...",
+        key="cs_reference_input",
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        kind = st.selectbox(
+            "Type de créatif",
+            [VariantKind.SALES_PAGE, VariantKind.ADVERTORIAL],
+            format_func=lambda k: "Page de vente" if k == VariantKind.SALES_PAGE else "Advertorial",
+            key="cs_optimize_kind",
+        )
+    with col2:
+        dimensions = st.multiselect(
+            "Paramètres à faire varier (une variante par paramètre)",
+            [VaryDimension.HOOK, VaryDimension.SOCIAL_PROOF, VaryDimension.URGENCY, VaryDimension.CTA],
+            default=[VaryDimension.HOOK, VaryDimension.SOCIAL_PROOF, VaryDimension.URGENCY, VaryDimension.CTA],
+            format_func=lambda d: VARY_DIMENSION_LABELS[d.value],
+            key="cs_optimize_dimensions",
+        )
+
+    if st.button(
+        "🔍 Analyser puis générer les variantes",
+        type="primary",
+        disabled=not (reference_input.strip() and dimensions),
+        key="cs_optimize_generate",
+    ):
+        try:
+            with st.spinner("Analyse de la publicité existante..."):
+                analysis = analyze_existing_copy(reference_input)
+            st.info(
+                f"**Framework détecté** : {analysis.detected_framework.value}"
+                + (f" (hybride — {analysis.hybrid_notes})" if analysis.is_hybrid else "")
+                + f"  \n**Angle** : {analysis.angle}"
+            )
+            with st.spinner(f"Génération de {len(dimensions)} variante(s)..."):
+                new_variants = generate_variants_from_reference(product, kind, analysis, dimensions)
+                for v in new_variants:
+                    _variants.create(v)
+            st.success(f"{len(new_variants)} variante(s) générée(s) à partir de l'existant.")
+            st.rerun()
+        except GenerationRefused as exc:
+            st.error(str(exc))
+        except (RuntimeError, ValueError) as exc:
+            st.error(f"Impossible de générer : {exc}")
+
+
 def _render_tests_tab() -> None:
-    product = _selected_product()
+    product = _selected_product("tests")
     if product is None:
         return
 
@@ -291,7 +397,7 @@ def _render_tests_tab() -> None:
 
 
 def _render_emails_tab() -> None:
-    product = _selected_product()
+    product = _selected_product("emails")
     if product is None:
         return
 

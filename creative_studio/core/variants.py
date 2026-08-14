@@ -56,6 +56,23 @@ class EventType(str, Enum):
     PURCHASE = "purchase"
 
 
+class GenerationMode(str, Enum):
+    """D'où vient une variante : générée librement, ou dérivée d'un
+    advertorial/page de vente existant en ne faisant varier qu'un paramètre."""
+    FROM_SCRATCH = "from_scratch"
+    OPTIMIZE_EXISTING = "optimize_existing"
+
+
+class VaryDimension(str, Enum):
+    """Le seul paramètre autorisé à changer par rapport à la référence
+    d'origine, en mode Optimisation — pour isoler ce qui améliore la
+    conversion plutôt que de réécrire tout le copy à chaque variante."""
+    HOOK = "hook"
+    SOCIAL_PROOF = "social_proof"
+    URGENCY = "urgency"
+    CTA = "cta"
+
+
 @dataclass
 class Product:
     name: str
@@ -88,6 +105,8 @@ class Variant:
     id: str = field(default_factory=lambda: new_id("var"))
     lrs_score: int | None = None
     status: VariantStatus = VariantStatus.DRAFT
+    source_mode: GenerationMode = GenerationMode.FROM_SCRATCH
+    varied_dimension: VaryDimension | None = None
     created_at: str = field(default_factory=utcnow_iso)
 
 
