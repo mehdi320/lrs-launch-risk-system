@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS variants (
     framework    TEXT NOT NULL CHECK (framework IN ('AIDA', 'PAS', 'hormozi')),
     copy_json    TEXT NOT NULL,
     lrs_score    INTEGER,
-    status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'testing', 'archived')),
+    status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'testing', 'archived', 'killed')),
     created_at   TEXT NOT NULL
 );
 
@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS ab_tests (
     name              TEXT NOT NULL,
     status            TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'concluded', 'paused')),
     winner_variant_id TEXT REFERENCES variants(id),
+    conclusion_reason TEXT CHECK (conclusion_reason IN ('statistical_significance', 'budget_stop_loss')),
     created_at        TEXT NOT NULL,
     concluded_at      TEXT
 );
@@ -91,6 +92,8 @@ CREATE TABLE IF NOT EXISTS test_results (
     p_value           REAL,
     is_significant    INTEGER NOT NULL DEFAULT 0,
     is_winner         INTEGER NOT NULL DEFAULT 0,
+    alpha_used        REAL NOT NULL DEFAULT 0.05,
+    n_looks           INTEGER NOT NULL DEFAULT 1,
     computed_at       TEXT NOT NULL,
     PRIMARY KEY (test_id, variant_id, computed_at)
 );
@@ -115,10 +118,26 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+# Colonnes ajoutées après la création initiale du schéma — appliquées via
+# ALTER TABLE pour les bases locales déjà existantes (CREATE TABLE IF NOT
+# EXISTS ne touche pas une table déjà créée). Idempotent : les erreurs
+# "duplicate column" sont ignorées.
+_MIGRATIONS = [
+    "ALTER TABLE ab_tests ADD COLUMN conclusion_reason TEXT",
+    "ALTER TABLE test_results ADD COLUMN alpha_used REAL NOT NULL DEFAULT 0.05",
+    "ALTER TABLE test_results ADD COLUMN n_looks INTEGER NOT NULL DEFAULT 1",
+]
+
+
 def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        for statement in _MIGRATIONS:
+            try:
+                conn.execute(statement)
+            except sqlite3.OperationalError:
+                pass  # colonne déjà présente
         conn.commit()
     finally:
         conn.close()

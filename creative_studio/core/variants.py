@@ -36,12 +36,18 @@ class VariantStatus(str, Enum):
     DRAFT = "draft"
     TESTING = "testing"
     ARCHIVED = "archived"
+    KILLED = "killed"  # coupée automatiquement par le garde-fou de budget
 
 
 class TestStatus(str, Enum):
     RUNNING = "running"
     CONCLUDED = "concluded"
     PAUSED = "paused"
+
+
+class ConclusionReason(str, Enum):
+    STATISTICAL_SIGNIFICANCE = "statistical_significance"
+    BUDGET_STOP_LOSS = "budget_stop_loss"  # une seule variante active restante après coupes budget
 
 
 class EventType(str, Enum):
@@ -94,8 +100,16 @@ class ABTest:
     id: str = field(default_factory=lambda: new_id("test"))
     status: TestStatus = TestStatus.RUNNING
     winner_variant_id: str | None = None
+    killed_variant_ids: list[str] = field(default_factory=list)
+    conclusion_reason: ConclusionReason | None = None
     created_at: str = field(default_factory=utcnow_iso)
     concluded_at: str | None = None
+
+    @property
+    def active_variant_ids(self) -> list[str]:
+        """Variantes encore éligibles au trafic (ni coupées budget, ni exclues)."""
+        killed = set(self.killed_variant_ids)
+        return [vid for vid in self.variant_ids if vid not in killed]
 
 
 @dataclass
@@ -119,6 +133,8 @@ class TestResult:
     p_value: float | None
     is_significant: bool
     is_winner: bool
+    alpha_used: float
+    n_looks: int
     computed_at: str = field(default_factory=utcnow_iso)
 
 

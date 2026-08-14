@@ -14,16 +14,19 @@ from creative_studio.core.variants import ABTest, TestStatus
 
 
 def pick_variant_for_new_visitor(test: ABTest, visitor_id: str) -> str:
-    """Répartition uniforme et déterministe sur les variantes du test.
+    """Répartition uniforme et déterministe sur les variantes encore actives.
 
-    Une fois le test conclu avec un gagnant statistiquement significatif,
-    tout nouveau visiteur reçoit directement la variante gagnante — inutile
-    de continuer à envoyer du trafic vers les variantes perdantes.
+    Une fois le test conclu (significativité statistique ou stop-loss
+    budget), tout nouveau visiteur reçoit directement la variante gagnante —
+    inutile de continuer à envoyer du trafic vers les variantes perdantes.
+    Tant que le test tourne, les variantes coupées par le garde-fou de
+    budget (core.budget_guard) sont exclues de la répartition.
     """
     if test.status == TestStatus.CONCLUDED and test.winner_variant_id:
         return test.winner_variant_id
-    if not test.variant_ids:
-        raise ValueError(f"Le test {test.id} n'a aucune variante.")
+    active_ids = test.active_variant_ids
+    if not active_ids:
+        raise ValueError(f"Le test {test.id} n'a aucune variante active.")
     digest = hashlib.sha256(f"{test.id}:{visitor_id}".encode("utf-8")).hexdigest()
-    bucket = int(digest, 16) % len(test.variant_ids)
-    return sorted(test.variant_ids)[bucket]
+    bucket = int(digest, 16) % len(active_ids)
+    return sorted(active_ids)[bucket]

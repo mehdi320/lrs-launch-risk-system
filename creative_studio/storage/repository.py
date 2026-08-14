@@ -13,6 +13,7 @@ from dataclasses import asdict
 
 from creative_studio.core.variants import (
     ABTest,
+    ConclusionReason,
     CopyBlock,
     EmailSequence,
     Event,
@@ -118,11 +119,13 @@ class ABTestRepository:
             conn.execute(
                 """INSERT INTO ab_tests
                    (id, tenant_id, product_id, name, status, winner_variant_id,
-                    created_at, concluded_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    conclusion_reason, created_at, concluded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     test.id, test.tenant_id, test.product_id, test.name, test.status.value,
-                    test.winner_variant_id, test.created_at, test.concluded_at,
+                    test.winner_variant_id,
+                    test.conclusion_reason.value if test.conclusion_reason else None,
+                    test.created_at, test.concluded_at,
                 ),
             )
             conn.executemany(
@@ -137,9 +140,9 @@ class ABTestRepository:
             if not row:
                 return None
             variant_rows = conn.execute(
-                "SELECT variant_id FROM ab_test_variants WHERE test_id = ?", (test_id,)
+                "SELECT variant_id, weight FROM ab_test_variants WHERE test_id = ?", (test_id,)
             ).fetchall()
-        return self._from_row(row, [r["variant_id"] for r in variant_rows])
+        return self._from_row(row, variant_rows)
 
     def list_by_product(self, product_id: str) -> list[ABTest]:
         with db_session() as conn:
@@ -149,26 +152,44 @@ class ABTestRepository:
             tests = []
             for row in rows:
                 variant_rows = conn.execute(
-                    "SELECT variant_id FROM ab_test_variants WHERE test_id = ?", (row["id"],)
+                    "SELECT variant_id, weight FROM ab_test_variants WHERE test_id = ?", (row["id"],)
                 ).fetchall()
-                tests.append(self._from_row(row, [r["variant_id"] for r in variant_rows]))
+                tests.append(self._from_row(row, variant_rows))
         return tests
 
-    def conclude(self, test_id: str, winner_variant_id: str, concluded_at: str) -> None:
+    def conclude(
+        self,
+        test_id: str,
+        winner_variant_id: str,
+        concluded_at: str,
+        reason: ConclusionReason = ConclusionReason.STATISTICAL_SIGNIFICANCE,
+    ) -> None:
         with db_session() as conn:
             conn.execute(
-                """UPDATE ab_tests SET status = ?, winner_variant_id = ?, concluded_at = ?
-                   WHERE id = ?""",
-                (TestStatus.CONCLUDED.value, winner_variant_id, concluded_at, test_id),
+                """UPDATE ab_tests SET status = ?, winner_variant_id = ?,
+                   conclusion_reason = ?, concluded_at = ? WHERE id = ?""",
+                (TestStatus.CONCLUDED.value, winner_variant_id, reason.value, concluded_at, test_id),
+            )
+
+    def kill_variant(self, test_id: str, variant_id: str) -> None:
+        """Coupe une variante du trafic (poids à 0) — garde-fou de budget."""
+        with db_session() as conn:
+            conn.execute(
+                "UPDATE ab_test_variants SET weight = 0 WHERE test_id = ? AND variant_id = ?",
+                (test_id, variant_id),
             )
 
     @staticmethod
-    def _from_row(row, variant_ids: list[str]) -> ABTest:
+    def _from_row(row, variant_rows) -> ABTest:
+        variant_ids = [r["variant_id"] for r in variant_rows]
+        killed_variant_ids = [r["variant_id"] for r in variant_rows if r["weight"] == 0]
+        reason = row["conclusion_reason"] if "conclusion_reason" in row.keys() else None
         return ABTest(
             id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
             name=row["name"], variant_ids=variant_ids, status=TestStatus(row["status"]),
-            winner_variant_id=row["winner_variant_id"], created_at=row["created_at"],
-            concluded_at=row["concluded_at"],
+            winner_variant_id=row["winner_variant_id"], killed_variant_ids=killed_variant_ids,
+            conclusion_reason=ConclusionReason(reason) if reason else None,
+            created_at=row["created_at"], concluded_at=row["concluded_at"],
         )
 
 
@@ -224,12 +245,12 @@ class TestResultRepository:
             conn.execute(
                 """INSERT INTO test_results
                    (test_id, variant_id, exposures, conversions, conversion_rate,
-                    p_value, is_significant, is_winner, computed_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    p_value, is_significant, is_winner, alpha_used, n_looks, computed_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     result.test_id, result.variant_id, result.exposures, result.conversions,
                     result.conversion_rate, result.p_value, int(result.is_significant),
-                    int(result.is_winner), result.computed_at,
+                    int(result.is_winner), result.alpha_used, result.n_looks, result.computed_at,
                 ),
             )
 
@@ -249,10 +270,25 @@ class TestResultRepository:
                 test_id=r["test_id"], variant_id=r["variant_id"], exposures=r["exposures"],
                 conversions=r["conversions"], conversion_rate=r["conversion_rate"],
                 p_value=r["p_value"], is_significant=bool(r["is_significant"]),
-                is_winner=bool(r["is_winner"]), computed_at=r["computed_at"],
+                is_winner=bool(r["is_winner"]), alpha_used=r["alpha_used"], n_looks=r["n_looks"],
+                computed_at=r["computed_at"],
             )
             for r in rows
         ]
+
+    def count_prior_looks(self, test_id: str) -> int:
+        """Nombre d'évaluations déjà effectuées sur ce test (peeks passés).
+
+        Sert à la correction de Bonferroni dynamique dans core.stats —
+        chaque consultation des résultats compte comme une comparaison
+        supplémentaire et durcit le seuil de significativité exigé.
+        """
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT computed_at) AS n FROM test_results WHERE test_id = ?",
+                (test_id,),
+            ).fetchone()
+        return row["n"] or 0
 
 
 class EmailSequenceRepository:

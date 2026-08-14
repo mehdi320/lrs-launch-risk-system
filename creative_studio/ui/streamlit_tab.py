@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 import streamlit as st
 
+from creative_studio.core.budget_guard import DEFAULT_KILL_EXPOSURE_THRESHOLD
 from creative_studio.core.copy_generation import GenerationRefused, generate_variants
 from creative_studio.core.email_sequences import generate_email_sequence
 from creative_studio.core.prioritization import rank_variants_for_budget
@@ -20,6 +21,7 @@ from creative_studio.core.stats import VariantStats
 from creative_studio.core.test_evaluation import compute_and_save_results
 from creative_studio.core.variants import (
     ABTest,
+    ConclusionReason,
     Framework,
     Product,
     VariantKind,
@@ -215,6 +217,13 @@ def _render_tests_tab() -> None:
     base_url = st.text_input(
         "URL du service de diffusion", value=_SERVING_BASE_URL_DEFAULT, key="cs_serving_base_url"
     )
+    kill_exposure_threshold = st.number_input(
+        "Seuil de coupe budget (expositions par variante à la traîne)",
+        min_value=100, value=DEFAULT_KILL_EXPOSURE_THRESHOLD, step=100,
+        help="Au-delà de ce nombre d'expositions, une variante qui n'a toujours pas dépassé "
+             "la variante en tête est coupée automatiquement pour ne plus gaspiller de budget.",
+        key="cs_kill_threshold",
+    )
     variant_by_id = {v.id: v for v in variants}
 
     for test in _tests.list_by_product(product.id):
@@ -226,11 +235,20 @@ def _render_tests_tab() -> None:
             # relancerait ce calcul à chaque interaction ailleurs dans l'appli
             # et ferait grossir test_results indéfiniment sans raison.
             if st.button("🔄 Recalculer les résultats", key=f"recompute_{test.id}"):
-                results = compute_and_save_results(test.id)
+                results = compute_and_save_results(test.id, kill_exposure_threshold=kill_exposure_threshold)
             else:
                 results = _test_results.latest_for_test(test.id)
                 if not results:
-                    results = compute_and_save_results(test.id)
+                    results = compute_and_save_results(test.id, kill_exposure_threshold=kill_exposure_threshold)
+
+            # Le calcul peut avoir conclu le test ou coupé des variantes —
+            # on relit l'état à jour plutôt que la valeur capturée avant l'appel.
+            test = _tests.get(test.id)
+
+            if test.conclusion_reason == ConclusionReason.BUDGET_STOP_LOSS:
+                st.warning("⛔ Test conclu par garde-fou budget — les autres variantes ont été coupées.")
+            elif test.conclusion_reason == ConclusionReason.STATISTICAL_SIGNIFICANCE:
+                st.success("✅ Test conclu — gagnant statistiquement significatif.")
 
             if not any(r.exposures for r in results):
                 st.caption("Pas encore de trafic enregistré sur ce test.")
@@ -239,19 +257,31 @@ def _render_tests_tab() -> None:
             for r in sorted(results, key=lambda r: r.conversion_rate, reverse=True):
                 variant = variant_by_id.get(r.variant_id)
                 label = f"[{variant.framework.value}] {variant.copy.headline}" if variant else r.variant_id
-                winner_badge = " 🏆 GAGNANTE" if r.is_winner else ""
+                if r.is_winner:
+                    badge = " 🏆 GAGNANTE"
+                elif r.variant_id in test.killed_variant_ids:
+                    badge = " ⛔ COUPÉE (budget)"
+                else:
+                    badge = ""
                 st.markdown(
-                    f"**{label}**{winner_badge}  \n"
+                    f"**{label}**{badge}  \n"
                     f"Expositions : {r.exposures} · Conversions : {r.conversions} · "
                     f"Taux : {r.conversion_rate * 100:.2f}%"
-                    + (f" · p-value vs meilleure variante : {r.p_value:.4f}" if r.p_value is not None else "")
+                    + (
+                        f" · p-value vs meilleure variante : {r.p_value:.4f} "
+                        f"(seuil {r.alpha_used:.4f} après {r.n_looks} consultation(s))"
+                        if r.p_value is not None else ""
+                    )
                 )
 
             lrs_scores = {v.id: v.lrs_score for v in variants if v.lrs_score is not None}
             if lrs_scores:
+                # Les variantes déjà coupées ne reçoivent plus de trafic —
+                # inutile de leur attribuer une priorité de budget.
                 stats = [
                     VariantStats(variant_id=r.variant_id, exposures=r.exposures, conversions=r.conversions)
                     for r in results
+                    if r.variant_id not in test.killed_variant_ids
                 ]
                 st.markdown("##### Priorité de budget (score LRS x traction observée)")
                 for p in rank_variants_for_budget(stats, lrs_scores):
