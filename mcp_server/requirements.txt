@@ -1,0 +1,10 @@
+# Dépendances du serveur MCP — volontairement séparées de requirements.txt
+# à la racine du dépôt (l'app Streamlit principale n'a pas besoin du SDK MCP,
+# et inversement). Installe ces deux fichiers dans le même environnement
+# Python (ou un venv dédié, recommandé) puisque le serveur MCP importe
+# creative_studio.* directement.
+#
+# Pin < 2.0 : la branche 2.x du SDK MCP a réorganisé son API
+# (FastMCP -> MCPServer sous un autre module) et n'est pas ce que ce code
+# utilise. Rester sur la ligne 1.x (FastMCP), stable et documentée.
+mcp>=1.2.0,<2.0.0
