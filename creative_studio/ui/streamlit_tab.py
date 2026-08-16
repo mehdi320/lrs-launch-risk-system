@@ -13,6 +13,8 @@ from typing import Callable, Optional
 
 import streamlit as st
 
+from datetime import datetime, timedelta, timezone
+
 from creative_studio.core.budget_guard import DEFAULT_KILL_EXPOSURE_THRESHOLD
 from creative_studio.core.copy_generation import (
     KIND_LABELS,
@@ -22,9 +24,18 @@ from creative_studio.core.copy_generation import (
 )
 from creative_studio.core.email_sequences import generate_email_sequence
 from creative_studio.core.funnel_builder import FUNNEL_OBJECTIVE_LABELS, FUNNEL_STEP_TEMPLATES, generate_funnel
+from creative_studio.core.funnel_elements import (
+    ELEMENT_TYPE_LABELS,
+    ElementType,
+    render_element_text,
+)
 from creative_studio.core.pdf_export import build_funnel_pdf_filename, build_pdf_filename, generate_funnel_pdf, generate_variant_pdf
 from creative_studio.core.prioritization import rank_variants_for_budget
-from creative_studio.core.reference_extraction import VARY_DIMENSION_LABELS, analyze_existing_copy
+from creative_studio.core.reference_extraction import (
+    VARY_DIMENSION_LABELS,
+    analyze_existing_copy,
+    analyze_existing_copy_pdf_bytes,
+)
 from creative_studio.core.stats import VariantStats
 from creative_studio.core.test_evaluation import compute_and_save_results
 from creative_studio.core.variants import (
@@ -33,18 +44,26 @@ from creative_studio.core.variants import (
     Framework,
     FunnelObjective,
     FunnelStep,
+    FunnelStepElement,
+    FunnelStepMedia,
     GenerationMode,
+    MediaPlacement,
+    MediaSourceType,
+    MediaType,
     Product,
     VariantKind,
     VariantStatus,
     VaryDimension,
 )
 from creative_studio.storage.db import init_db
+from creative_studio.storage.media import save_uploaded_media
 from creative_studio.storage.repository import (
     ABTestRepository,
     EmailSequenceRepository,
     EventRepository,
     FunnelRepository,
+    FunnelStepElementRepository,
+    FunnelStepMediaRepository,
     ProductRepository,
     TestResultRepository,
     VariantRepository,
@@ -59,6 +78,8 @@ _tests = ABTestRepository()
 _events = EventRepository()
 _sequences = EmailSequenceRepository()
 _funnels = FunnelRepository()
+_funnel_media = FunnelStepMediaRepository()
+_funnel_elements = FunnelStepElementRepository()
 
 
 def render_creative_studio(
@@ -304,6 +325,15 @@ def _render_optimize_existing_generation(product: Product) -> None:
             st.error(f"Impossible de générer : {exc}")
 
 
+_MEDIA_PLACEMENT_LABELS = {
+    MediaPlacement.HERO: "Héros (haut de page)",
+    MediaPlacement.DEMO: "Démonstration produit",
+    MediaPlacement.PROOF: "Preuve sociale",
+}
+
+_ELEMENT_TYPES_ORDERED = [ElementType.COUNTDOWN_TIMER, ElementType.LIMITED_DISCOUNT, ElementType.STOCK_COUNTER]
+
+
 def _render_funnel_builder_generation(product: Product) -> None:
     """Mode "Funnel Builder" — génère la structure complète d'un funnel
     (capture/advertorial -> vente -> confirmation/upsell selon l'objectif)
@@ -331,15 +361,50 @@ def _render_funnel_builder_generation(product: Product) -> None:
             [Framework.AIDA, Framework.PAS, Framework.HORMOZI],
             format_func=lambda f: f.value,
             key="cs_funnel_framework",
+            help="Ignoré si une base de référence est fournie ci-dessous : le framework "
+                 "détecté dans la référence prime alors.",
         )
 
     steps_preview = " → ".join(KIND_LABELS[k] for k in FUNNEL_STEP_TEMPLATES[objective])
     st.caption(f"Structure générée pour cet objectif : {steps_preview}")
 
+    st.markdown("##### Base de référence (optionnel)")
+    st.caption(
+        "Construis le funnel autour d'un advert/page déjà gagnant (ex : le PDF exporté "
+        "depuis l'onglet 🧪 Tests A/B) plutôt que d'un angle inventé."
+    )
+    reference_mode = st.radio(
+        "Référence",
+        ["Aucune", "🔗 Lien (PDF, URL ou texte collé)", "📤 Uploader un PDF"],
+        horizontal=True,
+        key="cs_funnel_reference_mode",
+    )
+    reference_link = ""
+    uploaded_pdf = None
+    if reference_mode == "🔗 Lien (PDF, URL ou texte collé)":
+        reference_link = st.text_input(
+            "Lien PDF gagnant, URL de la page, ou texte collé",
+            placeholder="https://... (lien PDF ou page web) ou texte collé",
+            key="cs_funnel_reference_link",
+        )
+    elif reference_mode == "📤 Uploader un PDF":
+        uploaded_pdf = st.file_uploader("PDF gagnant", type=["pdf"], key="cs_funnel_reference_upload")
+
     if st.button("🧭 Générer le funnel avec Claude", type="primary", key="cs_funnel_generate"):
         try:
-            with st.spinner("Génération du brief puis des pages du funnel..."):
-                funnel, funnel_variants = generate_funnel(product, objective, framework)
+            reference = None
+            reference_label = None
+            with st.spinner("Génération du funnel..."):
+                if reference_mode == "🔗 Lien (PDF, URL ou texte collé)" and reference_link.strip():
+                    reference = analyze_existing_copy(reference_link)
+                    reference_label = reference_link.strip()
+                elif reference_mode == "📤 Uploader un PDF" and uploaded_pdf is not None:
+                    reference = analyze_existing_copy_pdf_bytes(uploaded_pdf.getvalue())
+                    reference_label = f"Upload : {uploaded_pdf.name}"
+
+                funnel, funnel_variants = generate_funnel(
+                    product, objective, framework, reference=reference, reference_label=reference_label,
+                )
                 for v in funnel_variants:
                     _variants.create(v)
                 steps = [
@@ -351,7 +416,7 @@ def _render_funnel_builder_generation(product: Product) -> None:
             st.rerun()
         except GenerationRefused as exc:
             st.error(str(exc))
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             st.error(f"Impossible de générer : {exc}")
 
     st.markdown("#### Funnels existants")
@@ -362,13 +427,29 @@ def _render_funnel_builder_generation(product: Product) -> None:
 
     for funnel in funnels:
         steps = _funnels.list_steps(funnel.id)
-        step_variants = [v for v in (_variants.get(s.variant_id) for s in steps) if v is not None]
-        with st.expander(f"🧭 {FUNNEL_OBJECTIVE_LABELS[funnel.objective]} — {funnel.angle[:60]}"):
+        step_variant_by_id = {s.id: _variants.get(s.variant_id) for s in steps}
+        ref_badge = f" · 📎 base : {funnel.source_reference[:40]}" if funnel.source_reference else ""
+        with st.expander(f"🧭 {FUNNEL_OBJECTIVE_LABELS[funnel.objective]} — {funnel.angle[:60]}{ref_badge}"):
             st.caption(f"Ton : {funnel.tone}  \nPromesse : {funnel.promise}")
-            for i, v in enumerate(step_variants, start=1):
-                st.markdown(f"**{i}. [{KIND_LABELS[v.kind]}] {v.copy.headline}** — statut : {v.status.value}")
-            if step_variants:
-                pdf_bytes = generate_funnel_pdf(product, funnel, step_variants)
+
+            media_by_variant_id: dict[str, list[FunnelStepMedia]] = {}
+            elements_by_variant_id: dict[str, list[FunnelStepElement]] = {}
+            all_variants = []
+            for i, step in enumerate(steps, start=1):
+                variant = step_variant_by_id.get(step.id)
+                if variant is None:
+                    continue
+                all_variants.append(variant)
+                st.markdown(
+                    f"**{i}. [{KIND_LABELS[variant.kind]}] {variant.copy.headline}** — statut : {variant.status.value}"
+                )
+                media_by_variant_id[variant.id] = _render_funnel_step_media(step)
+                elements_by_variant_id[variant.id] = _render_funnel_step_elements(step)
+
+            if all_variants:
+                pdf_bytes = generate_funnel_pdf(
+                    product, funnel, all_variants, media_by_variant_id, elements_by_variant_id
+                )
                 st.download_button(
                     "📄 Télécharger le funnel en PDF",
                     data=pdf_bytes,
@@ -376,6 +457,146 @@ def _render_funnel_builder_generation(product: Product) -> None:
                     mime="application/pdf",
                     key=f"funnel_pdf_{funnel.id}",
                 )
+
+
+def _render_funnel_step_media(step: FunnelStep) -> list[FunnelStepMedia]:
+    """Gestion des médias (photos/vidéos) attachés à un maillon de funnel —
+    le système ne les génère pas, il les intègre à l'emplacement choisi dans
+    la page rendue/exportée. Retourne la liste à jour pour l'export PDF."""
+    existing = _funnel_media.list_by_step(step.id)
+    with st.container(border=True):
+        st.caption("🖼️ Médias")
+        if not existing:
+            st.caption("Aucun média attaché.")
+        for m in existing:
+            icon = "🎥" if m.media_type == MediaType.VIDEO else "🖼️"
+            col_a, col_b = st.columns([5, 1])
+            col_a.caption(f"{icon} {_MEDIA_PLACEMENT_LABELS[m.placement]} — {m.location[:50]}")
+            if col_b.button("🗑️", key=f"del_media_{m.id}"):
+                _funnel_media.delete(m.id)
+                st.rerun()
+
+        with st.form(f"cs_add_media_{step.id}", clear_on_submit=True):
+            media_kind = st.radio("Type", ["Image", "Vidéo"], horizontal=True, key=f"media_kind_{step.id}")
+            placement = st.selectbox(
+                "Emplacement",
+                [MediaPlacement.HERO, MediaPlacement.DEMO, MediaPlacement.PROOF],
+                format_func=lambda p: _MEDIA_PLACEMENT_LABELS[p],
+                key=f"media_placement_{step.id}",
+            )
+            url_input = st.text_input("URL (laisser vide si upload)", key=f"media_url_{step.id}")
+            upload_input = st.file_uploader(
+                "Ou uploader un fichier",
+                type=["jpg", "jpeg", "png", "gif", "webp", "mp4", "webm", "mov"],
+                key=f"media_upload_{step.id}",
+            )
+            add_media_submitted = st.form_submit_button("Ajouter le média")
+
+        if add_media_submitted:
+            media_type = MediaType.VIDEO if media_kind == "Vidéo" else MediaType.IMAGE
+            try:
+                if upload_input is not None:
+                    generated_name = save_uploaded_media(upload_input.name, upload_input.getvalue())
+                    _funnel_media.create(
+                        FunnelStepMedia(
+                            step_id=step.id, media_type=media_type, source_type=MediaSourceType.UPLOAD,
+                            location=generated_name, placement=placement,
+                        )
+                    )
+                    st.rerun()
+                elif url_input.strip():
+                    _funnel_media.create(
+                        FunnelStepMedia(
+                            step_id=step.id, media_type=media_type, source_type=MediaSourceType.URL,
+                            location=url_input.strip(), placement=placement,
+                        )
+                    )
+                    st.rerun()
+                else:
+                    st.error("Fournis une URL ou un fichier à uploader.")
+            except ValueError as exc:
+                st.error(str(exc))
+
+    return existing
+
+
+def _render_funnel_step_elements(step: FunnelStep) -> list[FunnelStepElement]:
+    """Gestion des éléments de conversion (timer, réduction limitée, stock)
+    attachés à un maillon de funnel — ne passent jamais par la génération
+    Claude, uniquement par la couche de rendu (core.funnel_elements).
+    Retourne la liste à jour pour l'export PDF."""
+    existing = _funnel_elements.list_by_step(step.id)
+    with st.container(border=True):
+        st.caption("⏱️ Éléments de conversion")
+        if not existing:
+            st.caption("Aucun élément attaché.")
+        for el in existing:
+            try:
+                el_type = ElementType(el.element_type)
+                label = ELEMENT_TYPE_LABELS[el_type]
+            except ValueError:
+                label = el.element_type
+            text = render_element_text(el.element_type, el.config) or "(config invalide)"
+            col_a, col_b, col_c = st.columns([4, 1, 1])
+            col_a.caption(f"**{label}** — {text}")
+            new_enabled = col_b.checkbox("Actif", value=el.enabled, key=f"toggle_elem_{el.id}")
+            if new_enabled != el.enabled:
+                _funnel_elements.set_enabled(el.id, new_enabled)
+                st.rerun()
+            if col_c.button("🗑️", key=f"del_elem_{el.id}"):
+                _funnel_elements.delete(el.id)
+                st.rerun()
+
+        element_type = st.selectbox(
+            "Type d'élément à ajouter",
+            _ELEMENT_TYPES_ORDERED,
+            format_func=lambda e: ELEMENT_TYPE_LABELS[e],
+            key=f"new_elem_type_{step.id}",
+        )
+        with st.form(f"cs_add_element_{step.id}", clear_on_submit=True):
+            config = _render_element_config_form(element_type, step.id)
+            add_element_submitted = st.form_submit_button("Ajouter l'élément")
+
+        if add_element_submitted:
+            _funnel_elements.create(
+                FunnelStepElement(step_id=step.id, element_type=element_type.value, config=config)
+            )
+            st.rerun()
+
+    return existing
+
+
+def _render_element_config_form(element_type: ElementType, step_id: str) -> dict:
+    """Champs de config spécifiques à un type d'élément — utilisé pour
+    initialiser le formulaire d'ajout. Étendre à un nouveau type = ajouter
+    un cas ici + une config/renderer dans core.funnel_elements, jamais de
+    migration de schéma (config stockée en JSON libre)."""
+    default_deadline = datetime.now(timezone.utc) + timedelta(days=3)
+
+    if element_type == ElementType.COUNTDOWN_TIMER:
+        end_date = st.date_input("Date de fin", value=default_deadline.date(), key=f"cd_date_{step_id}")
+        end_time = st.time_input("Heure de fin", value=default_deadline.time(), key=f"cd_time_{step_id}")
+        label = st.text_input("Libellé", value="Offre expire dans", key=f"cd_label_{step_id}")
+        return {"end_at": datetime.combine(end_date, end_time, tzinfo=timezone.utc).isoformat(), "label": label}
+
+    if element_type == ElementType.LIMITED_DISCOUNT:
+        col1, col2 = st.columns(2)
+        with col1:
+            original = st.number_input("Prix original", min_value=0.0, step=1.0, key=f"disc_orig_{step_id}")
+        with col2:
+            discounted = st.number_input("Prix réduit", min_value=0.0, step=1.0, key=f"disc_new_{step_id}")
+        end_date = st.date_input("Expire le", value=default_deadline.date(), key=f"disc_date_{step_id}")
+        end_time = st.time_input("À", value=default_deadline.time(), key=f"disc_time_{step_id}")
+        return {
+            "original_price_cents": int(round(original * 100)),
+            "discounted_price_cents": int(round(discounted * 100)),
+            "expires_at": datetime.combine(end_date, end_time, tzinfo=timezone.utc).isoformat(),
+        }
+
+    # STOCK_COUNTER — valeur toujours saisie manuellement, jamais générée/estimée.
+    remaining = st.number_input("Places / stock restant", min_value=0, step=1, value=10, key=f"stock_rem_{step_id}")
+    label = st.text_input("Libellé", value="places restantes", key=f"stock_label_{step_id}")
+    return {"remaining": int(remaining), "label": label}
 
 
 def _render_tests_tab() -> None:

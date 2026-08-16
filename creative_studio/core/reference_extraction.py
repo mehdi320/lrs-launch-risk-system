@@ -14,12 +14,20 @@ qui l'importe, pas l'inverse, pour éviter tout cycle d'import.
 
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
+
+import requests
 
 try:
     import trafilatura
 except ImportError:  # dépendance optionnelle tant que l'extraction d'URL n'est pas utilisée
     trafilatura = None
+
+try:
+    import pypdf
+except ImportError:  # dépendance optionnelle tant que l'extraction PDF n'est pas utilisée
+    pypdf = None
 
 from creative_studio.core.llm_client import DEFAULT_MODEL, build_client, parse_structured_json_response
 from creative_studio.core.variants import Framework
@@ -112,13 +120,39 @@ class ExistingCopyAnalysis:
     cta: str
 
 
+def extract_pdf_text(pdf_bytes: bytes) -> str:
+    """Extrait le texte brut d'un PDF (ex : l'export "variante gagnante" du
+    point 1) — chaque page est concaténée dans l'ordre. C'est la seule
+    fonction du module qui parle à pypdf ; fetch_reference_text() et le mode
+    upload du Funnel Builder passent tous les deux par elle.
+    """
+    if pypdf is None:
+        raise RuntimeError("Le package 'pypdf' n'est pas installé (pip install pypdf).")
+    reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+    pages_text = [page.extract_text() or "" for page in reader.pages]
+    text = "\n\n".join(p for p in pages_text if p.strip())
+    if not text.strip():
+        raise RuntimeError("Aucun texte exploitable extrait du PDF (PDF scanné/image sans texte ?).")
+    return text
+
+
+def _looks_like_pdf_url(url: str) -> bool:
+    return url.lower().split("?")[0].endswith(".pdf")
+
+
 def fetch_reference_text(raw_text_or_url: str) -> str:
-    """Si l'entrée ressemble à une URL, en extrait le contenu texte (via
-    trafilatura) ; sinon la retourne telle quelle, comme texte brut déjà collé
-    par l'utilisateur.
+    """Si l'entrée ressemble à une URL, en extrait le contenu texte — via
+    pypdf si le lien pointe vers un PDF (ex : export "variante gagnante" du
+    point 1), via trafilatura sinon (page web classique) ; si ce n'est pas
+    une URL, la retourne telle quelle, comme texte brut déjà collé par
+    l'utilisateur.
     """
     candidate = raw_text_or_url.strip()
     if candidate.startswith("http://") or candidate.startswith("https://"):
+        if _looks_like_pdf_url(candidate):
+            response = requests.get(candidate, timeout=20)
+            response.raise_for_status()
+            return extract_pdf_text(response.content)
         if trafilatura is None:
             raise RuntimeError("Le package 'trafilatura' n'est pas installé (pip install trafilatura).")
         downloaded = trafilatura.fetch_url(candidate)
@@ -134,11 +168,25 @@ def fetch_reference_text(raw_text_or_url: str) -> str:
 
 
 def analyze_existing_copy(raw_text_or_url: str, model: str = DEFAULT_MODEL) -> ExistingCopyAnalysis:
-    """Analyse un advertorial/page de vente existant (texte brut ou URL) et
-    en extrait l'angle, le framework et la structure — étape 1 du mode
-    "Optimiser un existant".
+    """Analyse un advertorial/page de vente existant (texte brut, URL web ou
+    lien PDF) et en extrait l'angle, le framework et la structure — étape 1
+    du mode "Optimiser un existant", et étape optionnelle du Funnel Builder
+    quand un lien de référence est fourni.
     """
-    text = fetch_reference_text(raw_text_or_url)[:MAX_REFERENCE_CHARS]
+    text = fetch_reference_text(raw_text_or_url)
+    return _analyze_text(text, model)
+
+
+def analyze_existing_copy_pdf_bytes(pdf_bytes: bytes, model: str = DEFAULT_MODEL) -> ExistingCopyAnalysis:
+    """Même analyse que analyze_existing_copy(), pour un PDF déjà en mémoire
+    (upload direct depuis le Funnel Builder) plutôt qu'un lien à télécharger.
+    """
+    text = extract_pdf_text(pdf_bytes)
+    return _analyze_text(text, model)
+
+
+def _analyze_text(text: str, model: str) -> ExistingCopyAnalysis:
+    text = text[:MAX_REFERENCE_CHARS]
 
     client = build_client()
     response = client.messages.create(

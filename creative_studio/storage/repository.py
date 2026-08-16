@@ -21,7 +21,12 @@ from creative_studio.core.variants import (
     Funnel,
     FunnelObjective,
     FunnelStep,
+    FunnelStepElement,
+    FunnelStepMedia,
     GenerationMode,
+    MediaPlacement,
+    MediaSourceType,
+    MediaType,
     Product,
     TestResult,
     TestStatus,
@@ -312,11 +317,11 @@ class FunnelRepository:
         with db_session() as conn:
             conn.execute(
                 """INSERT INTO funnels
-                   (id, tenant_id, product_id, objective, angle, tone, promise, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (id, tenant_id, product_id, objective, angle, tone, promise, source_reference, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     funnel.id, funnel.tenant_id, funnel.product_id, funnel.objective.value,
-                    funnel.angle, funnel.tone, funnel.promise, funnel.created_at,
+                    funnel.angle, funnel.tone, funnel.promise, funnel.source_reference, funnel.created_at,
                 ),
             )
             conn.executemany(
@@ -342,21 +347,107 @@ class FunnelRepository:
             rows = conn.execute(
                 "SELECT * FROM funnel_steps WHERE funnel_id = ? ORDER BY step_order ASC", (funnel_id,)
             ).fetchall()
+        return [self._step_from_row(r) for r in rows]
+
+    def get_step_by_variant(self, variant_id: str) -> FunnelStep | None:
+        """Résout le maillon de funnel (s'il existe) auquel appartient une
+        variante — utilisé par le service de diffusion pour savoir si la
+        page servie doit inclure des médias/éléments de conversion, sans
+        que serving/app.py n'ait à connaître le pipeline de génération."""
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT * FROM funnel_steps WHERE variant_id = ?", (variant_id,)
+            ).fetchone()
+        return self._step_from_row(row) if row else None
+
+    @staticmethod
+    def _step_from_row(row) -> FunnelStep:
+        return FunnelStep(
+            id=row["id"], tenant_id=row["tenant_id"], funnel_id=row["funnel_id"],
+            variant_id=row["variant_id"], step_order=row["step_order"], created_at=row["created_at"],
+        )
+
+    @staticmethod
+    def _from_row(row) -> Funnel:
+        row_keys = row.keys()
+        source_reference = row["source_reference"] if "source_reference" in row_keys else None
+        return Funnel(
+            id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
+            objective=FunnelObjective(row["objective"]), angle=row["angle"], tone=row["tone"],
+            promise=row["promise"], source_reference=source_reference, created_at=row["created_at"],
+        )
+
+
+class FunnelStepMediaRepository:
+    def create(self, media: FunnelStepMedia) -> FunnelStepMedia:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO funnel_step_media
+                   (id, tenant_id, step_id, media_type, source_type, location, placement, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    media.id, media.tenant_id, media.step_id, media.media_type.value,
+                    media.source_type.value, media.location, media.placement.value, media.created_at,
+                ),
+            )
+        return media
+
+    def list_by_step(self, step_id: str) -> list[FunnelStepMedia]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM funnel_step_media WHERE step_id = ? ORDER BY created_at ASC", (step_id,)
+            ).fetchall()
         return [
-            FunnelStep(
-                id=r["id"], tenant_id=r["tenant_id"], funnel_id=r["funnel_id"],
-                variant_id=r["variant_id"], step_order=r["step_order"], created_at=r["created_at"],
+            FunnelStepMedia(
+                id=r["id"], tenant_id=r["tenant_id"], step_id=r["step_id"],
+                media_type=MediaType(r["media_type"]), source_type=MediaSourceType(r["source_type"]),
+                location=r["location"], placement=MediaPlacement(r["placement"]), created_at=r["created_at"],
             )
             for r in rows
         ]
 
-    @staticmethod
-    def _from_row(row) -> Funnel:
-        return Funnel(
-            id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
-            objective=FunnelObjective(row["objective"]), angle=row["angle"], tone=row["tone"],
-            promise=row["promise"], created_at=row["created_at"],
-        )
+    def delete(self, media_id: str) -> None:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_media WHERE id = ?", (media_id,))
+
+
+class FunnelStepElementRepository:
+    def create(self, element: FunnelStepElement) -> FunnelStepElement:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO funnel_step_elements
+                   (id, tenant_id, step_id, element_type, config_json, enabled, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    element.id, element.tenant_id, element.step_id, element.element_type,
+                    json.dumps(element.config, ensure_ascii=False), int(element.enabled), element.created_at,
+                ),
+            )
+        return element
+
+    def list_by_step(self, step_id: str) -> list[FunnelStepElement]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM funnel_step_elements WHERE step_id = ? ORDER BY created_at ASC", (step_id,)
+            ).fetchall()
+        return [
+            FunnelStepElement(
+                id=r["id"], tenant_id=r["tenant_id"], step_id=r["step_id"],
+                element_type=r["element_type"], config=json.loads(r["config_json"]),
+                enabled=bool(r["enabled"]), created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    def set_enabled(self, element_id: str, enabled: bool) -> None:
+        with db_session() as conn:
+            conn.execute(
+                "UPDATE funnel_step_elements SET enabled = ? WHERE id = ?", (int(enabled), element_id)
+            )
+
+    def delete(self, element_id: str) -> None:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_elements WHERE id = ?", (element_id,))
 
 
 class EmailSequenceRepository:

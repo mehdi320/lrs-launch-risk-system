@@ -16,6 +16,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 try:
     import stripe
@@ -24,10 +25,14 @@ except ImportError:  # dépendance optionnelle tant que le webhook n'est pas uti
 
 from creative_studio.core.variants import Event, EventType, utcnow_iso
 from creative_studio.storage.db import init_db
+from creative_studio.storage.media import MEDIA_DIR, ensure_media_dir
 from creative_studio.storage.repository import (
     ABTestRepository,
     AssignmentRepository,
     EventRepository,
+    FunnelRepository,
+    FunnelStepElementRepository,
+    FunnelStepMediaRepository,
     ProductRepository,
     VariantRepository,
 )
@@ -40,11 +45,19 @@ ALLOW_UNVERIFIED_WEBHOOK = os.environ.get("LRS_CS_ALLOW_UNVERIFIED_WEBHOOK", "")
 
 app = FastAPI(title="LRS Creative Studio — Serving")
 
+# Sert les médias uploadés (photos/vidéos attachées à une étape de funnel) —
+# le dossier doit exister avant le mount, StaticFiles refuse un dossier absent.
+ensure_media_dir()
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
 products = ProductRepository()
 variants = VariantRepository()
 tests = ABTestRepository()
 assignments = AssignmentRepository()
 events = EventRepository()
+funnels = FunnelRepository()
+funnel_media = FunnelStepMediaRepository()
+funnel_elements = FunnelStepElementRepository()
 
 
 @app.on_event("startup")
@@ -97,8 +110,15 @@ def serve_variant(test_id: str, request: Request):
         Event(test_id=test.id, variant_id=variant.id, visitor_id=visitor_id, event_type=EventType.VIEW)
     )
 
+    # Une variante peut être le maillon d'un funnel (Funnel Builder) — si
+    # c'est le cas, ses médias/éléments de conversion attachés sont inclus
+    # dans le rendu ; sinon (variante A/B classique) ces listes sont vides.
+    funnel_step = funnels.get_step_by_variant(variant.id)
+    step_media = funnel_media.list_by_step(funnel_step.id) if funnel_step else []
+    step_elements = funnel_elements.list_by_step(funnel_step.id) if funnel_step else []
+
     cta_url = f"/v/{test.id}/go"
-    html = render_variant_page(variant, product, cta_url=cta_url)
+    html = render_variant_page(variant, product, cta_url=cta_url, media=step_media, elements=step_elements)
     response = HTMLResponse(content=html)
     if is_new:
         _set_visitor_cookie(response, visitor_id)

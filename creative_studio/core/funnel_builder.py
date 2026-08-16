@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from creative_studio.core.copy_generation import KIND_LABELS, DEFAULT_MODEL, _call_claude_for_copy
 from creative_studio.core.llm_client import build_client, parse_structured_json_response
+from creative_studio.core.reference_extraction import ExistingCopyAnalysis
 from creative_studio.core.variants import (
     Framework,
     Funnel,
@@ -74,14 +75,40 @@ _BRIEF_SCHEMA = {
 }
 
 
+def _reference_block(reference: ExistingCopyAnalysis) -> str:
+    hybrid_note = f" (hybride : {reference.hybrid_notes})" if reference.is_hybrid else ""
+    return (
+        "\n\nBASE DE RÉFÉRENCE — page ou publicité déjà gagnante, validée par un test A/B "
+        "précédent (framework détecté : "
+        f"{reference.detected_framework.value}{hybrid_note}) :\n"
+        f"Angle : {reference.angle}\n"
+        f"Hook : {reference.hook}\n"
+        f"Structure du corps : {reference.body_summary}\n"
+        f"Preuve sociale : {reference.social_proof_notes}\n"
+        f"Urgence : {reference.urgency_notes}\n"
+        f"CTA : {reference.cta}\n\n"
+        "CONSIGNE STRICTE : l'angle et la promesse du funnel doivent être EXACTEMENT ceux de "
+        "cette référence, pas une réinvention — construis le funnel AUTOUR de ce qui gagne déjà. "
+        "Formalise uniquement le ton à partir de ce que tu observes dans la référence."
+    )
+
+
 def generate_funnel_brief(
     product: Product,
     objective: FunnelObjective,
+    reference: ExistingCopyAnalysis | None = None,
     model: str = DEFAULT_MODEL,
 ) -> tuple[str, str, str]:
     """Appel Claude dédié qui fixe angle/ton/promesse AVANT la génération des
     pages — c'est ce brief qui garantit que chaque page du funnel porte la
-    même promesse plutôt que de le vérifier après coup."""
+    même promesse plutôt que de le vérifier après coup.
+
+    Si `reference` est fournie (analyse d'un advert/page gagnant déjà
+    existant, ex: extrait du PDF exporté en fin de test A/B), l'angle et la
+    promesse ne sont plus inventés par Claude mais ancrés sur cette
+    référence — le funnel est alors construit autour d'un mécanisme déjà
+    validé plutôt que d'un pari créatif.
+    """
     client = build_client()
     objective_label = FUNNEL_OBJECTIVE_LABELS[objective]
     user_prompt = (
@@ -89,8 +116,9 @@ def generate_funnel_brief(
         f"Description : {product.description}\n"
         f"Prix : {product.price_cents / 100:.2f} {product.currency}\n"
         f"Cible / audience : {product.audience}\n"
-        f"Objectif du funnel : {objective_label}\n\n"
-        "Définis l'angle marketing, le ton et la promesse centrale qui devront "
+        f"Objectif du funnel : {objective_label}\n"
+        + (_reference_block(reference) if reference is not None else "")
+        + "\n\nDéfinis l'angle marketing, le ton et la promesse centrale qui devront "
         "rester STRICTEMENT identiques sur toutes les pages du funnel qui seront "
         "rédigées séparément ensuite (page de capture/advertorial, page de vente, "
         "page de confirmation/upsell selon l'objectif) — c'est ce brief qui garantit "
@@ -147,6 +175,8 @@ def generate_funnel(
     product: Product,
     objective: FunnelObjective,
     framework: Framework = Framework.AIDA,
+    reference: ExistingCopyAnalysis | None = None,
+    reference_label: str | None = None,
     model: str = DEFAULT_MODEL,
 ) -> tuple[Funnel, list[Variant]]:
     """Génère la structure complète d'un funnel : un appel de brief puis un
@@ -155,9 +185,23 @@ def generate_funnel(
     étapes) sont des Variant standard, sans aucune particularité de
     persistance ou de diffusion — à créer via VariantRepository comme
     n'importe quelle autre variante, puis à lier via FunnelStep.
+
+    `reference` (optionnel) : analyse d'un advert/page déjà gagnant (voir
+    core.reference_extraction.analyze_existing_copy /
+    analyze_existing_copy_pdf_bytes) — quand fournie, le funnel est construit
+    autour de cet angle/promesse déjà validés plutôt que d'un angle inventé,
+    et le framework détecté dans la référence prime sur `framework`.
+    `reference_label` : ce qui est stocké dans Funnel.source_reference pour
+    traçabilité (le lien/texte fourni, ou "Upload : {nom de fichier}").
     """
-    angle, tone, promise = generate_funnel_brief(product, objective, model=model)
-    funnel = Funnel(product_id=product.id, objective=objective, angle=angle, tone=tone, promise=promise)
+    if reference is not None:
+        framework = reference.detected_framework
+
+    angle, tone, promise = generate_funnel_brief(product, objective, reference=reference, model=model)
+    funnel = Funnel(
+        product_id=product.id, objective=objective, angle=angle, tone=tone, promise=promise,
+        source_reference=reference_label,
+    )
 
     kinds = FUNNEL_STEP_TEMPLATES[objective]
     variants: list[Variant] = []

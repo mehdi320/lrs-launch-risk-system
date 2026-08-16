@@ -103,14 +103,15 @@ CREATE TABLE IF NOT EXISTS test_results (
 );
 
 CREATE TABLE IF NOT EXISTS funnels (
-    id          TEXT PRIMARY KEY,
-    tenant_id   TEXT NOT NULL DEFAULT 'local',
-    product_id  TEXT NOT NULL REFERENCES products(id),
-    objective   TEXT NOT NULL CHECK (objective IN ('direct_sale', 'email_capture', 'booking')),
-    angle       TEXT NOT NULL,
-    tone        TEXT NOT NULL,
-    promise     TEXT NOT NULL,
-    created_at  TEXT NOT NULL
+    id               TEXT PRIMARY KEY,
+    tenant_id        TEXT NOT NULL DEFAULT 'local',
+    product_id       TEXT NOT NULL REFERENCES products(id),
+    objective        TEXT NOT NULL CHECK (objective IN ('direct_sale', 'email_capture', 'booking')),
+    angle            TEXT NOT NULL,
+    tone             TEXT NOT NULL,
+    promise          TEXT NOT NULL,
+    source_reference TEXT,
+    created_at       TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS funnel_steps (
@@ -122,6 +123,32 @@ CREATE TABLE IF NOT EXISTS funnel_steps (
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_funnel_steps_funnel ON funnel_steps(funnel_id, step_order);
+
+CREATE TABLE IF NOT EXISTS funnel_step_media (
+    id           TEXT PRIMARY KEY,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
+    step_id      TEXT NOT NULL REFERENCES funnel_steps(id),
+    media_type   TEXT NOT NULL CHECK (media_type IN ('image', 'video')),
+    source_type  TEXT NOT NULL CHECK (source_type IN ('upload', 'url')),
+    location     TEXT NOT NULL,
+    placement    TEXT NOT NULL DEFAULT 'hero' CHECK (placement IN ('hero', 'proof', 'demo')),
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_funnel_step_media_step ON funnel_step_media(step_id);
+
+-- Pas de CHECK sur element_type : l'ensemble des types est volontairement
+-- ouvert (voir core/funnel_elements.py) pour ajouter un nouvel élément de
+-- conversion sans migration de schéma.
+CREATE TABLE IF NOT EXISTS funnel_step_elements (
+    id           TEXT PRIMARY KEY,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
+    step_id      TEXT NOT NULL REFERENCES funnel_steps(id),
+    element_type TEXT NOT NULL,
+    config_json  TEXT NOT NULL,
+    enabled      INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_funnel_step_elements_step ON funnel_step_elements(step_id);
 
 CREATE TABLE IF NOT EXISTS email_sequences (
     id          TEXT PRIMARY KEY,
@@ -153,6 +180,7 @@ _MIGRATIONS = [
     "ALTER TABLE test_results ADD COLUMN n_looks INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE variants ADD COLUMN source_mode TEXT NOT NULL DEFAULT 'from_scratch'",
     "ALTER TABLE variants ADD COLUMN varied_dimension TEXT",
+    "ALTER TABLE funnels ADD COLUMN source_reference TEXT",
 ]
 
 

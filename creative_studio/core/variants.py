@@ -172,6 +172,26 @@ class TestResult:
     computed_at: str = field(default_factory=utcnow_iso)
 
 
+class MediaType(str, Enum):
+    IMAGE = "image"
+    VIDEO = "video"
+
+
+class MediaSourceType(str, Enum):
+    """D'où vient le fichier référencé par FunnelStepMedia.location : un
+    upload stocké sur disque local (storage.media), ou une URL externe déjà
+    hébergée ailleurs — jamais le binaire lui-même en base."""
+    UPLOAD = "upload"
+    URL = "url"
+
+
+class MediaPlacement(str, Enum):
+    """Où le média est injecté dans la page générée."""
+    HERO = "hero"  # en tête de page
+    PROOF = "proof"  # section preuve sociale
+    DEMO = "demo"  # démonstration produit
+
+
 @dataclass
 class Funnel:
     """Le brief de cohérence partagé par toutes les pages d'un funnel généré
@@ -185,6 +205,9 @@ class Funnel:
     promise: str
     tenant_id: str = "local"
     id: str = field(default_factory=lambda: new_id("funnel"))
+    # Lien PDF ou texte utilisé comme base/angle de référence (mode "input par
+    # PDF gagnant"), None si le funnel a été construit sans référence.
+    source_reference: str | None = None
     created_at: str = field(default_factory=utcnow_iso)
 
 
@@ -198,6 +221,41 @@ class FunnelStep:
     step_order: int
     tenant_id: str = "local"
     id: str = field(default_factory=lambda: new_id("fstep"))
+    created_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class FunnelStepMedia:
+    """Une photo ou vidéo attachée à un maillon de funnel — le système ne la
+    génère pas, il l'intègre à l'emplacement pertinent (placement) dans la
+    page rendue/exportée. `location` est soit un nom de fichier généré sous
+    storage.media.MEDIA_DIR (source_type=UPLOAD), soit une URL externe
+    (source_type=URL) — jamais le binaire lui-même en base."""
+    step_id: str
+    media_type: MediaType
+    source_type: MediaSourceType
+    location: str
+    placement: MediaPlacement = MediaPlacement.HERO
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("media"))
+    created_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class FunnelStepElement:
+    """Un élément de conversion modulaire (timer, réduction limitée, stock
+    restant, ...) activable par page — ne passe jamais par
+    core.copy_generation._call_claude_for_copy, uniquement par la couche de
+    rendu (voir core.funnel_elements.render_element_text). `element_type` est
+    une chaîne libre (pas un Enum ici, pas de CHECK en base) : ajouter un
+    nouveau type ne demande qu'une nouvelle config + un nouveau renderer
+    dans core.funnel_elements, jamais de migration de schéma."""
+    step_id: str
+    element_type: str
+    config: dict
+    enabled: bool = True
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("elem"))
     created_at: str = field(default_factory=utcnow_iso)
 
 
