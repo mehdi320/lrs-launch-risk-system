@@ -15,11 +15,14 @@ import streamlit as st
 
 from creative_studio.core.budget_guard import DEFAULT_KILL_EXPOSURE_THRESHOLD
 from creative_studio.core.copy_generation import (
+    KIND_LABELS,
     GenerationRefused,
     generate_variants,
     generate_variants_from_reference,
 )
 from creative_studio.core.email_sequences import generate_email_sequence
+from creative_studio.core.funnel_builder import FUNNEL_OBJECTIVE_LABELS, FUNNEL_STEP_TEMPLATES, generate_funnel
+from creative_studio.core.pdf_export import build_funnel_pdf_filename, build_pdf_filename, generate_funnel_pdf, generate_variant_pdf
 from creative_studio.core.prioritization import rank_variants_for_budget
 from creative_studio.core.reference_extraction import VARY_DIMENSION_LABELS, analyze_existing_copy
 from creative_studio.core.stats import VariantStats
@@ -28,6 +31,8 @@ from creative_studio.core.variants import (
     ABTest,
     ConclusionReason,
     Framework,
+    FunnelObjective,
+    FunnelStep,
     GenerationMode,
     Product,
     VariantKind,
@@ -39,6 +44,7 @@ from creative_studio.storage.repository import (
     ABTestRepository,
     EmailSequenceRepository,
     EventRepository,
+    FunnelRepository,
     ProductRepository,
     TestResultRepository,
     VariantRepository,
@@ -52,6 +58,7 @@ _test_results = TestResultRepository()
 _tests = ABTestRepository()
 _events = EventRepository()
 _sequences = EmailSequenceRepository()
+_funnels = FunnelRepository()
 
 
 def render_creative_studio(
@@ -146,22 +153,26 @@ def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> No
 
     mode_label = st.radio(
         "Mode de génération",
-        ["🆕 Créer depuis zéro", "🔧 Optimiser un existant"],
+        ["🆕 Créer depuis zéro", "🔧 Optimiser un existant", "🧭 Funnel Builder"],
         horizontal=True,
         key="cs_generation_mode",
         help=(
             "Créer depuis zéro : input minimal (produit, description, prix, audience), "
             "aucun advertorial ou funnel existant requis. "
             "Optimiser un existant : pars d'une publicité ou page de vente déjà en ligne, "
-            "et ne fais varier qu'un seul paramètre à la fois entre les variantes générées."
+            "et ne fais varier qu'un seul paramètre à la fois entre les variantes générées. "
+            "Funnel Builder : génère la structure complète d'un funnel (capture/advertorial "
+            "→ vente → confirmation/upsell) cohérente de bout en bout, plutôt qu'une page isolée."
         ),
     )
     st.divider()
 
     if mode_label == "🆕 Créer depuis zéro":
         _render_from_scratch_generation(product)
-    else:
+    elif mode_label == "🔧 Optimiser un existant":
         _render_optimize_existing_generation(product)
+    else:
+        _render_funnel_builder_generation(product)
 
     st.markdown("#### Variantes existantes")
     existing = _variants.list_by_product(product.id)
@@ -173,6 +184,8 @@ def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> No
         if v.source_mode == GenerationMode.OPTIMIZE_EXISTING:
             dim_label = VARY_DIMENSION_LABELS.get(v.varied_dimension.value) if v.varied_dimension else None
             mode_badge = f" · 🔧 optimisée ({dim_label})" if dim_label else " · 🔧 optimisée"
+        elif v.source_mode == GenerationMode.FUNNEL_BUILDER:
+            mode_badge = " · 🧭 funnel builder"
         else:
             mode_badge = " · 🆕 depuis zéro"
         with st.expander(f"[{v.framework.value}] {v.copy.headline} — statut: {v.status.value}{mode_badge}"):
@@ -291,6 +304,80 @@ def _render_optimize_existing_generation(product: Product) -> None:
             st.error(f"Impossible de générer : {exc}")
 
 
+def _render_funnel_builder_generation(product: Product) -> None:
+    """Mode "Funnel Builder" — génère la structure complète d'un funnel
+    (capture/advertorial -> vente -> confirmation/upsell selon l'objectif)
+    cohérente de bout en bout, en réutilisant le même moteur de génération
+    (_call_claude_for_copy) et le même pipeline de test A/B que les deux
+    autres modes : chaque page du funnel est un Variant standard, testable
+    individuellement, seule leur appartenance au funnel est nouvelle."""
+    st.caption(
+        "Génère la structure complète d'un funnel plutôt qu'une page isolée : un brief "
+        "d'angle/ton/promesse est généré en premier, puis chaque page est rédigée en "
+        "cohérence avec ce brief. Chaque page individuelle reste testable en A/B "
+        "séparément via le pipeline existant."
+    )
+    col1, col2 = st.columns(2)
+    with col1:
+        objective = st.selectbox(
+            "Objectif de conversion",
+            [FunnelObjective.DIRECT_SALE, FunnelObjective.EMAIL_CAPTURE, FunnelObjective.BOOKING],
+            format_func=lambda o: FUNNEL_OBJECTIVE_LABELS[o],
+            key="cs_funnel_objective",
+        )
+    with col2:
+        framework = st.selectbox(
+            "Framework",
+            [Framework.AIDA, Framework.PAS, Framework.HORMOZI],
+            format_func=lambda f: f.value,
+            key="cs_funnel_framework",
+        )
+
+    steps_preview = " → ".join(KIND_LABELS[k] for k in FUNNEL_STEP_TEMPLATES[objective])
+    st.caption(f"Structure générée pour cet objectif : {steps_preview}")
+
+    if st.button("🧭 Générer le funnel avec Claude", type="primary", key="cs_funnel_generate"):
+        try:
+            with st.spinner("Génération du brief puis des pages du funnel..."):
+                funnel, funnel_variants = generate_funnel(product, objective, framework)
+                for v in funnel_variants:
+                    _variants.create(v)
+                steps = [
+                    FunnelStep(funnel_id=funnel.id, variant_id=v.id, step_order=i)
+                    for i, v in enumerate(funnel_variants, start=1)
+                ]
+                _funnels.create(funnel, steps)
+            st.success(f"Funnel généré : {len(funnel_variants)} page(s), angle « {funnel.angle} ».")
+            st.rerun()
+        except GenerationRefused as exc:
+            st.error(str(exc))
+        except RuntimeError as exc:
+            st.error(f"Impossible de générer : {exc}")
+
+    st.markdown("#### Funnels existants")
+    funnels = _funnels.list_by_product(product.id)
+    if not funnels:
+        st.caption("Aucun funnel généré pour ce produit pour l'instant.")
+        return
+
+    for funnel in funnels:
+        steps = _funnels.list_steps(funnel.id)
+        step_variants = [v for v in (_variants.get(s.variant_id) for s in steps) if v is not None]
+        with st.expander(f"🧭 {FUNNEL_OBJECTIVE_LABELS[funnel.objective]} — {funnel.angle[:60]}"):
+            st.caption(f"Ton : {funnel.tone}  \nPromesse : {funnel.promise}")
+            for i, v in enumerate(step_variants, start=1):
+                st.markdown(f"**{i}. [{KIND_LABELS[v.kind]}] {v.copy.headline}** — statut : {v.status.value}")
+            if step_variants:
+                pdf_bytes = generate_funnel_pdf(product, funnel, step_variants)
+                st.download_button(
+                    "📄 Télécharger le funnel en PDF",
+                    data=pdf_bytes,
+                    file_name=build_funnel_pdf_filename(product, funnel),
+                    mime="application/pdf",
+                    key=f"funnel_pdf_{funnel.id}",
+                )
+
+
 def _render_tests_tab() -> None:
     product = _selected_product("tests")
     if product is None:
@@ -355,6 +442,17 @@ def _render_tests_tab() -> None:
                 st.warning("⛔ Test conclu par garde-fou budget — les autres variantes ont été coupées.")
             elif test.conclusion_reason == ConclusionReason.STATISTICAL_SIGNIFICANCE:
                 st.success("✅ Test conclu — gagnant statistiquement significatif.")
+
+            if test.winner_variant_id:
+                winner_variant = variant_by_id.get(test.winner_variant_id) or _variants.get(test.winner_variant_id)
+                if winner_variant is not None:
+                    st.download_button(
+                        "📄 Télécharger le gagnant en PDF",
+                        data=generate_variant_pdf(product, winner_variant),
+                        file_name=build_pdf_filename(product),
+                        mime="application/pdf",
+                        key=f"winner_pdf_{test.id}",
+                    )
 
             if not any(r.exposures for r in results):
                 st.caption("Pas encore de trafic enregistré sur ce test.")

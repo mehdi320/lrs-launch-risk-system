@@ -30,6 +30,10 @@ class Framework(str, Enum):
 class VariantKind(str, Enum):
     ADVERTORIAL = "advertorial"
     SALES_PAGE = "sales_page"
+    CAPTURE = "capture"  # page de capture email / prise de RDV — 1er maillon d'un funnel
+    BOOKING = "booking"  # page de prise de rendez-vous
+    CONFIRMATION = "confirmation"  # page de confirmation / merci
+    UPSELL = "upsell"  # offre complémentaire proposée après l'achat/la conversion principale
 
 
 class VariantStatus(str, Enum):
@@ -57,10 +61,21 @@ class EventType(str, Enum):
 
 
 class GenerationMode(str, Enum):
-    """D'où vient une variante : générée librement, ou dérivée d'un
-    advertorial/page de vente existant en ne faisant varier qu'un paramètre."""
+    """D'où vient une variante : générée librement, dérivée d'un
+    advertorial/page de vente existant en ne faisant varier qu'un paramètre,
+    ou générée comme maillon d'un funnel multi-pages cohérent."""
     FROM_SCRATCH = "from_scratch"
     OPTIMIZE_EXISTING = "optimize_existing"
+    FUNNEL_BUILDER = "funnel_builder"
+
+
+class FunnelObjective(str, Enum):
+    """Objectif de conversion visé par un funnel généré via Funnel Builder —
+    détermine la séquence de types de pages générées (voir
+    core.funnel_builder.FUNNEL_STEP_TEMPLATES)."""
+    DIRECT_SALE = "direct_sale"
+    EMAIL_CAPTURE = "email_capture"
+    BOOKING = "booking"
 
 
 class VaryDimension(str, Enum):
@@ -155,6 +170,35 @@ class TestResult:
     alpha_used: float
     n_looks: int
     computed_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class Funnel:
+    """Le brief de cohérence partagé par toutes les pages d'un funnel généré
+    via Funnel Builder — angle, ton et promesse fixés UNE fois avant de
+    générer les pages, pour que chaque maillon reste aligné avec les autres
+    sans avoir à reconstruire cette cohérence a posteriori."""
+    product_id: str
+    objective: FunnelObjective
+    angle: str
+    tone: str
+    promise: str
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("funnel"))
+    created_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class FunnelStep:
+    """Un maillon d'un funnel : pointe vers un Variant standard (même table,
+    même pipeline de génération et de test A/B que les autres modes) —
+    step_order fixe l'ordre d'affichage/de parcours du funnel."""
+    funnel_id: str
+    variant_id: str
+    step_order: int
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("fstep"))
+    created_at: str = field(default_factory=utcnow_iso)
 
 
 @dataclass

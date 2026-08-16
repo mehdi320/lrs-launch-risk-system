@@ -47,12 +47,22 @@ _METHODOLOGY_PATH = os.path.join(
 __all__ = [
     "DEFAULT_MODEL",
     "GenerationRefused",
+    "KIND_LABELS",
     "generate_variant",
     "generate_variants",
     "generate_variant_from_reference",
     "generate_variants_from_reference",
     "get_anthropic_api_key",
 ]
+
+KIND_LABELS: dict[VariantKind, str] = {
+    VariantKind.ADVERTORIAL: "advertorial",
+    VariantKind.SALES_PAGE: "page de vente",
+    VariantKind.CAPTURE: "page de capture",
+    VariantKind.BOOKING: "page de prise de rendez-vous",
+    VariantKind.CONFIRMATION: "page de confirmation",
+    VariantKind.UPSELL: "page d'upsell",
+}
 
 _COPY_SCHEMA = {
     "type": "object",
@@ -134,9 +144,9 @@ def generate_variant(
     produit (nom, description, prix, audience) — aucun advertorial ou
     funnel existant requis.
     """
-    kind_label = "advertorial" if kind == VariantKind.ADVERTORIAL else "page de vente"
+    kind_label = KIND_LABELS[kind]
     user_prompt = (
-        f"Génère un {kind_label} en utilisant le framework {framework.value}.\n\n"
+        f"Génère un(e) {kind_label} en utilisant le framework {framework.value}.\n\n"
         f"Produit : {product.name}\n"
         f"Description : {product.description}\n"
         f"Prix : {product.price_cents / 100:.2f} {product.currency}\n"
@@ -177,7 +187,7 @@ def generate_variant_from_reference(
     totale à chaque variante, pour pouvoir isoler ce qui améliore
     réellement la conversion.
     """
-    kind_label = "advertorial" if kind == VariantKind.ADVERTORIAL else "page de vente"
+    kind_label = KIND_LABELS[kind]
     dimension_label = VARY_DIMENSION_LABELS[vary_dimension.value]
     hybrid_note = f" (hybride : {reference.hybrid_notes})" if reference.is_hybrid else ""
 

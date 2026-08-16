@@ -18,6 +18,9 @@ from creative_studio.core.variants import (
     EmailSequence,
     Event,
     Framework,
+    Funnel,
+    FunnelObjective,
+    FunnelStep,
     GenerationMode,
     Product,
     TestResult,
@@ -299,6 +302,61 @@ class TestResultRepository:
                 (test_id,),
             ).fetchone()
         return row["n"] or 0
+
+
+class FunnelRepository:
+    def create(self, funnel: Funnel, steps: list[FunnelStep]) -> Funnel:
+        """Persiste le funnel et ses maillons en une seule transaction — les
+        Variant référencés par chaque FunnelStep doivent déjà avoir été créés
+        via VariantRepository.create() avant cet appel."""
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO funnels
+                   (id, tenant_id, product_id, objective, angle, tone, promise, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    funnel.id, funnel.tenant_id, funnel.product_id, funnel.objective.value,
+                    funnel.angle, funnel.tone, funnel.promise, funnel.created_at,
+                ),
+            )
+            conn.executemany(
+                """INSERT INTO funnel_steps
+                   (id, tenant_id, funnel_id, variant_id, step_order, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                [
+                    (s.id, s.tenant_id, s.funnel_id, s.variant_id, s.step_order, s.created_at)
+                    for s in steps
+                ],
+            )
+        return funnel
+
+    def list_by_product(self, product_id: str) -> list[Funnel]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM funnels WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+            ).fetchall()
+        return [self._from_row(r) for r in rows]
+
+    def list_steps(self, funnel_id: str) -> list[FunnelStep]:
+        with db_session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM funnel_steps WHERE funnel_id = ? ORDER BY step_order ASC", (funnel_id,)
+            ).fetchall()
+        return [
+            FunnelStep(
+                id=r["id"], tenant_id=r["tenant_id"], funnel_id=r["funnel_id"],
+                variant_id=r["variant_id"], step_order=r["step_order"], created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
+    @staticmethod
+    def _from_row(row) -> Funnel:
+        return Funnel(
+            id=row["id"], tenant_id=row["tenant_id"], product_id=row["product_id"],
+            objective=FunnelObjective(row["objective"]), angle=row["angle"], tone=row["tone"],
+            promise=row["promise"], created_at=row["created_at"],
+        )
 
 
 class EmailSequenceRepository:
