@@ -58,6 +58,7 @@ class EventType(str, Enum):
     VIEW = "view"
     CLICK_TO_PAYMENT = "click_to_payment"
     PURCHASE = "purchase"
+    FORM_SUBMIT = "form_submit"  # formulaire multi-étapes ou popup exit-intent complété
 
 
 class GenerationMode(str, Enum):
@@ -257,6 +258,74 @@ class FunnelStepElement:
     tenant_id: str = "local"
     id: str = field(default_factory=lambda: new_id("elem"))
     created_at: str = field(default_factory=utcnow_iso)
+
+
+class FormFieldType(str, Enum):
+    TEXT = "text"
+    EMAIL = "email"
+    TEL = "tel"
+
+
+class PopupMode(str, Enum):
+    OFFER = "offer"  # contenu généré via _call_claude_for_copy()
+    EMAIL_CAPTURE = "email_capture"  # contenu saisi manuellement
+
+
+class FormSubmissionSource(str, Enum):
+    PAGE = "page"  # formulaire multi-étapes de la page elle-même
+    EXIT_POPUP = "exit_popup"  # capture email du popup exit-intent
+
+
+@dataclass
+class FormField:
+    name: str
+    label: str
+    field_type: FormFieldType = FormFieldType.TEXT
+    required: bool = True
+
+
+@dataclass
+class FunnelStepForm:
+    """Formulaire de capture découpé en plusieurs écrans successifs plutôt
+    qu'un seul bloc — config entièrement manuelle (nombre d'écrans, champs
+    par écran), jamais générée par Claude."""
+    step_id: str
+    screens: list[list[FormField]]
+    enabled: bool = True
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("form"))
+    created_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class FunnelStepPopup:
+    """Popup exit-intent optionnel par page — déclenché côté client (JS) à
+    la détection d'intention de sortie. `copy` est généré via
+    _call_claude_for_copy() en mode OFFER, saisi à la main en mode
+    EMAIL_CAPTURE (même structure CopyBlock que partout ailleurs dans le
+    module, pour ne pas introduire un format de contenu supplémentaire)."""
+    step_id: str
+    mode: PopupMode
+    copy: CopyBlock
+    enabled: bool = True
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("popup"))
+    created_at: str = field(default_factory=utcnow_iso)
+
+
+@dataclass
+class FormSubmission:
+    """Valeurs capturées par un FunnelStepForm ou la capture email d'un
+    FunnelStepPopup — table dédiée séparée de `events` pour ne pas mélanger
+    données personnelles (PII) et compteurs analytics génériques."""
+    test_id: str
+    variant_id: str
+    visitor_id: str
+    source: FormSubmissionSource
+    values: dict
+    tenant_id: str = "local"
+    id: str = field(default_factory=lambda: new_id("submission"))
+    submitted_at: str = field(default_factory=utcnow_iso)
 
 
 @dataclass

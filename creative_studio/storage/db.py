@@ -150,6 +150,37 @@ CREATE TABLE IF NOT EXISTS funnel_step_elements (
 );
 CREATE INDEX IF NOT EXISTS idx_funnel_step_elements_step ON funnel_step_elements(step_id);
 
+CREATE TABLE IF NOT EXISTS funnel_step_forms (
+    id          TEXT PRIMARY KEY,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
+    step_id     TEXT NOT NULL UNIQUE REFERENCES funnel_steps(id),
+    screens_json TEXT NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS funnel_step_popups (
+    id          TEXT PRIMARY KEY,
+    tenant_id   TEXT NOT NULL DEFAULT 'local',
+    step_id     TEXT NOT NULL UNIQUE REFERENCES funnel_steps(id),
+    mode        TEXT NOT NULL CHECK (mode IN ('offer', 'email_capture')),
+    copy_json   TEXT NOT NULL,
+    enabled     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS form_submissions (
+    id           TEXT PRIMARY KEY,
+    tenant_id    TEXT NOT NULL DEFAULT 'local',
+    test_id      TEXT NOT NULL REFERENCES ab_tests(id),
+    variant_id   TEXT NOT NULL REFERENCES variants(id),
+    visitor_id   TEXT NOT NULL,
+    source       TEXT NOT NULL CHECK (source IN ('page', 'exit_popup')),
+    values_json  TEXT NOT NULL,
+    submitted_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_form_submissions_test ON form_submissions(test_id, variant_id);
+
 CREATE TABLE IF NOT EXISTS email_sequences (
     id          TEXT PRIMARY KEY,
     tenant_id   TEXT NOT NULL DEFAULT 'local',
@@ -232,12 +263,43 @@ def _rebuild_variants_widen_constraints(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE variants_new RENAME TO variants")
 
 
+def _rebuild_events_widen_constraint(conn: sqlite3.Connection) -> None:
+    """Élargit events.event_type pour accepter 'form_submit' (formulaire
+    multi-étapes / popup exit-intent complété) — même contrainte, même
+    procédure de reconstruction que _rebuild_variants_widen_constraints."""
+    conn.execute(
+        """CREATE TABLE events_new (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id    TEXT NOT NULL DEFAULT 'local',
+            test_id      TEXT NOT NULL REFERENCES ab_tests(id),
+            variant_id   TEXT NOT NULL REFERENCES variants(id),
+            visitor_id   TEXT NOT NULL,
+            event_type   TEXT NOT NULL CHECK (event_type IN (
+                             'view', 'click_to_payment', 'purchase', 'form_submit'
+                         )),
+            amount_cents INTEGER,
+            ts           TEXT NOT NULL
+        )"""
+    )
+    conn.execute(
+        """INSERT INTO events_new
+           (id, tenant_id, test_id, variant_id, visitor_id, event_type, amount_cents, ts)
+           SELECT id, tenant_id, test_id, variant_id, visitor_id, event_type, amount_cents, ts
+           FROM events"""
+    )
+    conn.execute("DROP TABLE events")
+    conn.execute("ALTER TABLE events_new RENAME TO events")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_variant ON events(variant_id, event_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_events_test ON events(test_id, event_type)")
+
+
 # Migrations qui ne peuvent pas s'exprimer comme un simple ALTER TABLE ADD
 # COLUMN (ex: élargir un CHECK) — chacune tourne exactement une fois, suivie
 # via la table schema_migrations plutôt que par un test ad hoc sur le SQL
 # existant de la table.
 _HEAVY_MIGRATIONS: list[tuple[int, Callable[[sqlite3.Connection], None]]] = [
     (1, _rebuild_variants_widen_constraints),
+    (2, _rebuild_events_widen_constraint),
 ]
 
 

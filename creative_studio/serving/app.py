@@ -23,16 +23,19 @@ try:
 except ImportError:  # dépendance optionnelle tant que le webhook n'est pas utilisé
     stripe = None
 
-from creative_studio.core.variants import Event, EventType, utcnow_iso
+from creative_studio.core.variants import Event, EventType, FormSubmission, FormSubmissionSource, utcnow_iso
 from creative_studio.storage.db import init_db
 from creative_studio.storage.media import MEDIA_DIR, ensure_media_dir
 from creative_studio.storage.repository import (
     ABTestRepository,
     AssignmentRepository,
     EventRepository,
+    FormSubmissionRepository,
     FunnelRepository,
     FunnelStepElementRepository,
+    FunnelStepFormRepository,
     FunnelStepMediaRepository,
+    FunnelStepPopupRepository,
     ProductRepository,
     VariantRepository,
 )
@@ -58,6 +61,9 @@ events = EventRepository()
 funnels = FunnelRepository()
 funnel_media = FunnelStepMediaRepository()
 funnel_elements = FunnelStepElementRepository()
+funnel_forms = FunnelStepFormRepository()
+funnel_popups = FunnelStepPopupRepository()
+form_submissions = FormSubmissionRepository()
 
 
 @app.on_event("startup")
@@ -81,6 +87,23 @@ def _set_visitor_cookie(response, visitor_id: str) -> None:
         httponly=True,
         samesite="lax",
     )
+
+
+def _resolve_next_url(test, variant) -> str:
+    """Cible du CTA (et de la redirection après soumission de formulaire) :
+    chaîne vers l'étape suivante du funnel si elle existe et a déjà un test
+    A/B actif, sinon comportement historique (redirection vers Stripe via
+    /go). C'est ce chaînage qui rend le taux de passage entre étapes
+    mesurable (core.funnel_analytics) — un funnel partiellement configuré
+    (étape suivante sans test) se comporte exactement comme avant."""
+    funnel_step = funnels.get_step_by_variant(variant.id)
+    if funnel_step is not None:
+        next_step = funnels.get_next_step(funnel_step.funnel_id, funnel_step.step_order)
+        if next_step is not None:
+            next_test = tests.find_by_variant(next_step.variant_id)
+            if next_test is not None:
+                return f"/v/{next_test.id}"
+    return f"/v/{test.id}/go"
 
 
 @app.get("/v/{test_id}", response_class=HTMLResponse)
@@ -111,14 +134,19 @@ def serve_variant(test_id: str, request: Request):
     )
 
     # Une variante peut être le maillon d'un funnel (Funnel Builder) — si
-    # c'est le cas, ses médias/éléments de conversion attachés sont inclus
-    # dans le rendu ; sinon (variante A/B classique) ces listes sont vides.
+    # c'est le cas, ses médias/éléments/formulaire/popup attachés sont
+    # inclus dans le rendu ; sinon (variante A/B classique) tout est vide.
     funnel_step = funnels.get_step_by_variant(variant.id)
     step_media = funnel_media.list_by_step(funnel_step.id) if funnel_step else []
     step_elements = funnel_elements.list_by_step(funnel_step.id) if funnel_step else []
+    step_form = funnel_forms.get_by_step(funnel_step.id) if funnel_step else None
+    step_popup = funnel_popups.get_by_step(funnel_step.id) if funnel_step else None
 
-    cta_url = f"/v/{test.id}/go"
-    html = render_variant_page(variant, product, cta_url=cta_url, media=step_media, elements=step_elements)
+    cta_url = _resolve_next_url(test, variant)
+    html = render_variant_page(
+        variant, product, cta_url=cta_url, media=step_media, elements=step_elements,
+        form=step_form, popup=step_popup, submit_url=f"/v/{test.id}/submit-form",
+    )
     response = HTMLResponse(content=html)
     if is_new:
         _set_visitor_cookie(response, visitor_id)
@@ -162,6 +190,61 @@ def go_to_payment(test_id: str, request: Request):
     redirect_url = f"{product.stripe_payment_link}{separator}client_reference_id={client_reference_id}"
 
     response = RedirectResponse(url=redirect_url, status_code=302)
+    if not request.cookies.get(VISITOR_COOKIE):
+        _set_visitor_cookie(response, visitor_id)
+    return response
+
+
+@app.post("/v/{test_id}/submit-form")
+async def submit_form(test_id: str, request: Request):
+    """Reçoit la soumission du formulaire multi-étapes d'une page, ou de la
+    capture email du popup exit-intent (même endpoint, distingués par le
+    champ caché __lrs_source injecté dans le HTML — voir
+    serving/templates.py). Enregistre les valeurs (form_submissions),
+    déclenche l'événement FORM_SUBMIT (signal pour core.funnel_analytics),
+    puis redirige vers l'étape suivante du funnel comme un CTA classique.
+    """
+    test = tests.get(test_id)
+    if test is None:
+        return PlainTextResponse("Test introuvable.", status_code=404)
+
+    product = products.get(test.product_id)
+    if product is None:
+        return PlainTextResponse("Produit introuvable.", status_code=404)
+
+    visitor_id = request.cookies.get(VISITOR_COOKIE)
+    if not visitor_id:
+        visitor_id = uuid.uuid4().hex
+        variant_id = pick_variant_for_new_visitor(test, visitor_id)
+    else:
+        variant_id = assignments.get_or_assign(
+            test_id=test.id,
+            visitor_id=visitor_id,
+            variant_id_if_new=pick_variant_for_new_visitor(test, visitor_id),
+            assigned_at=utcnow_iso(),
+        )
+
+    variant = variants.get(variant_id)
+    if variant is None:
+        return PlainTextResponse("Variante introuvable.", status_code=404)
+
+    form_data = await request.form()
+    try:
+        source = FormSubmissionSource(form_data.get("__lrs_source", "page"))
+    except ValueError:
+        source = FormSubmissionSource.PAGE
+    values = {k: v for k, v in form_data.items() if k != "__lrs_source"}
+
+    form_submissions.create(
+        FormSubmission(
+            test_id=test.id, variant_id=variant.id, visitor_id=visitor_id, source=source, values=values,
+        )
+    )
+    events.record(
+        Event(test_id=test.id, variant_id=variant.id, visitor_id=visitor_id, event_type=EventType.FORM_SUBMIT)
+    )
+
+    response = RedirectResponse(url=_resolve_next_url(test, variant), status_code=302)
     if not request.cookies.get(VISITOR_COOKIE):
         _set_visitor_cookie(response, visitor_id)
     return response

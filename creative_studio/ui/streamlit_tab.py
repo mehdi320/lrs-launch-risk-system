@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+import pandas as pd
 import streamlit as st
 
 from datetime import datetime, timedelta, timezone
@@ -23,7 +24,13 @@ from creative_studio.core.copy_generation import (
     generate_variants_from_reference,
 )
 from creative_studio.core.email_sequences import generate_email_sequence
-from creative_studio.core.funnel_builder import FUNNEL_OBJECTIVE_LABELS, FUNNEL_STEP_TEMPLATES, generate_funnel
+from creative_studio.core.funnel_analytics import compute_funnel_dropoff
+from creative_studio.core.funnel_builder import (
+    FUNNEL_OBJECTIVE_LABELS,
+    FUNNEL_STEP_TEMPLATES,
+    generate_exit_popup_offer,
+    generate_funnel,
+)
 from creative_studio.core.funnel_elements import (
     ELEMENT_TYPE_LABELS,
     ElementType,
@@ -41,16 +48,24 @@ from creative_studio.core.test_evaluation import compute_and_save_results
 from creative_studio.core.variants import (
     ABTest,
     ConclusionReason,
+    CopyBlock,
     Framework,
+    Funnel,
     FunnelObjective,
     FunnelStep,
     FunnelStepElement,
+    FunnelStepForm,
     FunnelStepMedia,
+    FunnelStepPopup,
+    FormField,
+    FormFieldType,
     GenerationMode,
     MediaPlacement,
     MediaSourceType,
     MediaType,
+    PopupMode,
     Product,
+    Variant,
     VariantKind,
     VariantStatus,
     VaryDimension,
@@ -63,7 +78,9 @@ from creative_studio.storage.repository import (
     EventRepository,
     FunnelRepository,
     FunnelStepElementRepository,
+    FunnelStepFormRepository,
     FunnelStepMediaRepository,
+    FunnelStepPopupRepository,
     ProductRepository,
     TestResultRepository,
     VariantRepository,
@@ -80,6 +97,8 @@ _sequences = EmailSequenceRepository()
 _funnels = FunnelRepository()
 _funnel_media = FunnelStepMediaRepository()
 _funnel_elements = FunnelStepElementRepository()
+_funnel_forms = FunnelStepFormRepository()
+_funnel_popups = FunnelStepPopupRepository()
 
 
 def render_creative_studio(
@@ -434,6 +453,7 @@ def _render_funnel_builder_generation(product: Product) -> None:
 
             media_by_variant_id: dict[str, list[FunnelStepMedia]] = {}
             elements_by_variant_id: dict[str, list[FunnelStepElement]] = {}
+            popup_by_variant_id: dict[str, FunnelStepPopup] = {}
             all_variants = []
             for i, step in enumerate(steps, start=1):
                 variant = step_variant_by_id.get(step.id)
@@ -445,10 +465,15 @@ def _render_funnel_builder_generation(product: Product) -> None:
                 )
                 media_by_variant_id[variant.id] = _render_funnel_step_media(step)
                 elements_by_variant_id[variant.id] = _render_funnel_step_elements(step)
+                _render_funnel_step_form(step)
+                popup = _render_funnel_step_popup(step, product, funnel, variant)
+                if popup is not None:
+                    popup_by_variant_id[variant.id] = popup
 
             if all_variants:
                 pdf_bytes = generate_funnel_pdf(
-                    product, funnel, all_variants, media_by_variant_id, elements_by_variant_id
+                    product, funnel, all_variants, media_by_variant_id, elements_by_variant_id,
+                    popup_by_variant_id,
                 )
                 st.download_button(
                     "📄 Télécharger le funnel en PDF",
@@ -457,6 +482,8 @@ def _render_funnel_builder_generation(product: Product) -> None:
                     mime="application/pdf",
                     key=f"funnel_pdf_{funnel.id}",
                 )
+
+            _render_funnel_analytics(funnel, steps, step_variant_by_id)
 
 
 def _render_funnel_step_media(step: FunnelStep) -> list[FunnelStepMedia]:
@@ -597,6 +624,177 @@ def _render_element_config_form(element_type: ElementType, step_id: str) -> dict
     remaining = st.number_input("Places / stock restant", min_value=0, step=1, value=10, key=f"stock_rem_{step_id}")
     label = st.text_input("Libellé", value="places restantes", key=f"stock_label_{step_id}")
     return {"remaining": int(remaining), "label": label}
+
+
+_FIELD_TYPES_ORDERED = [FormFieldType.TEXT, FormFieldType.EMAIL, FormFieldType.TEL]
+_FIELD_TYPE_LABELS = {FormFieldType.TEXT: "Texte", FormFieldType.EMAIL: "Email", FormFieldType.TEL: "Téléphone"}
+
+
+def _render_funnel_step_form(step: FunnelStep) -> None:
+    """Formulaire de capture découpé en plusieurs écrans — config entièrement
+    manuelle (nombre d'écrans, champs par écran), jamais générée par Claude,
+    donc toujours badgée "à remplir"."""
+    existing = _funnel_forms.get_by_step(step.id)
+    with st.container(border=True):
+        st.caption("🧾 Formulaire multi-étapes — à remplir")
+        if existing:
+            summary = " → ".join(f"écran {i + 1} ({len(s)} champ(s))" for i, s in enumerate(existing.screens))
+            state = "" if existing.enabled else " — inactif"
+            st.caption(f"Actuel : {summary}{state}")
+            col_a, col_b = st.columns([3, 1])
+            new_enabled = col_a.checkbox("Actif", value=existing.enabled, key=f"form_enabled_{step.id}")
+            if new_enabled != existing.enabled:
+                existing.enabled = new_enabled
+                _funnel_forms.upsert(existing)
+                st.rerun()
+            if col_b.button("🗑️ Supprimer", key=f"del_form_{step.id}"):
+                _funnel_forms.delete_by_step(step.id)
+                st.rerun()
+
+        n_screens = st.number_input(
+            "Nombre d'écrans", min_value=1, max_value=5,
+            value=len(existing.screens) if existing else 1, key=f"form_nscreens_{step.id}",
+        )
+        screens: list[list[FormField]] = []
+        for screen_idx in range(int(n_screens)):
+            existing_screen = existing.screens[screen_idx] if existing and screen_idx < len(existing.screens) else []
+            n_fields = st.number_input(
+                f"Champs — écran {screen_idx + 1}", min_value=1, max_value=4,
+                value=len(existing_screen) or 1, key=f"form_nfields_{step.id}_{screen_idx}",
+            )
+            fields: list[FormField] = []
+            for field_idx in range(int(n_fields)):
+                existing_field = existing_screen[field_idx] if field_idx < len(existing_screen) else None
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                with col1:
+                    name = st.text_input(
+                        "Nom (technique)", value=existing_field.name if existing_field else "champ",
+                        key=f"form_fname_{step.id}_{screen_idx}_{field_idx}",
+                    )
+                with col2:
+                    label = st.text_input(
+                        "Libellé affiché", value=existing_field.label if existing_field else "Champ",
+                        key=f"form_flabel_{step.id}_{screen_idx}_{field_idx}",
+                    )
+                with col3:
+                    field_type = st.selectbox(
+                        "Type", _FIELD_TYPES_ORDERED,
+                        index=_FIELD_TYPES_ORDERED.index(existing_field.field_type) if existing_field else 0,
+                        format_func=lambda t: _FIELD_TYPE_LABELS[t],
+                        key=f"form_ftype_{step.id}_{screen_idx}_{field_idx}",
+                    )
+                with col4:
+                    required = st.checkbox(
+                        "Requis", value=existing_field.required if existing_field else True,
+                        key=f"form_frequired_{step.id}_{screen_idx}_{field_idx}",
+                    )
+                fields.append(FormField(name=name, label=label, field_type=field_type, required=required))
+            screens.append(fields)
+
+        if st.button("💾 Enregistrer le formulaire", key=f"save_form_{step.id}"):
+            _funnel_forms.upsert(FunnelStepForm(step_id=step.id, screens=screens))
+            st.success("Formulaire enregistré.")
+            st.rerun()
+
+
+def _render_funnel_step_popup(
+    step: FunnelStep, product: Product, funnel: Funnel, variant: Variant,
+) -> FunnelStepPopup | None:
+    """Popup exit-intent — mode "offre" généré via Claude (badge "généré"),
+    mode "capture email" saisi entièrement à la main (badge "à remplir")."""
+    existing = _funnel_popups.get_by_step(step.id)
+    with st.container(border=True):
+        st.caption("🚪 Popup exit-intent")
+        if existing:
+            mode_badge = "généré" if existing.mode == PopupMode.OFFER else "à remplir"
+            state = "" if existing.enabled else " — inactif"
+            col_a, col_b, col_c = st.columns([3, 1, 1])
+            col_a.caption(f"**{existing.copy.headline}** ({mode_badge}){state} — {existing.copy.cta}")
+            new_enabled = col_b.checkbox("Actif", value=existing.enabled, key=f"popup_enabled_{step.id}")
+            if new_enabled != existing.enabled:
+                existing.enabled = new_enabled
+                _funnel_popups.upsert(existing)
+                st.rerun()
+            if col_c.button("🗑️", key=f"del_popup_{step.id}"):
+                _funnel_popups.delete_by_step(step.id)
+                st.rerun()
+
+        mode_label = st.radio(
+            "Créer / remplacer", ["🤖 Offre (généré)", "✉️ Capture email (manuel)"],
+            horizontal=True, key=f"popup_mode_{step.id}",
+        )
+
+        if mode_label == "🤖 Offre (généré)":
+            if st.button("🪄 Générer l'offre avec Claude", key=f"gen_popup_{step.id}"):
+                try:
+                    with st.spinner("Génération de l'offre du popup..."):
+                        copy = generate_exit_popup_offer(product, funnel, variant.kind)
+                    _funnel_popups.upsert(FunnelStepPopup(step_id=step.id, mode=PopupMode.OFFER, copy=copy))
+                    st.success("Popup généré.")
+                    st.rerun()
+                except GenerationRefused as exc:
+                    st.error(str(exc))
+                except RuntimeError as exc:
+                    st.error(f"Impossible de générer : {exc}")
+        else:
+            prefill = existing.copy if existing and existing.mode == PopupMode.EMAIL_CAPTURE else None
+            with st.form(f"popup_manual_{step.id}"):
+                headline = st.text_input(
+                    "Titre", value=prefill.headline if prefill else "Attendez !", key=f"popup_headline_{step.id}"
+                )
+                hook = st.text_input("Accroche", value=prefill.hook if prefill else "", key=f"popup_hook_{step.id}")
+                cta = st.text_input(
+                    "CTA", value=prefill.cta if prefill else "Je m'inscris", key=f"popup_cta_{step.id}"
+                )
+                submitted = st.form_submit_button("💾 Enregistrer le popup")
+            if submitted:
+                _funnel_popups.upsert(
+                    FunnelStepPopup(
+                        step_id=step.id, mode=PopupMode.EMAIL_CAPTURE,
+                        copy=CopyBlock(headline=headline, hook=hook, body_sections=[], cta=cta),
+                    )
+                )
+                st.success("Popup enregistré.")
+                st.rerun()
+
+    return _funnel_popups.get_by_step(step.id)
+
+
+def _render_funnel_analytics(
+    funnel: Funnel, steps: list[FunnelStep], step_variant_by_id: dict[str, Variant | None],
+) -> None:
+    """Entonnoir de conversion par étape (core.funnel_analytics) : vues,
+    formulaires complétés, achats, et taux de passage vers l'étape suivante.
+    Une étape sans test A/B actif apparaît à zéro plutôt que de fausser le
+    calcul — le funnel peut être partiellement testé."""
+    st.markdown("##### 📊 Analytics du funnel")
+    stats = compute_funnel_dropoff(funnel.id)
+    if not any(s.views for s in stats):
+        st.caption("Pas encore de trafic enregistré sur ce funnel.")
+        return
+
+    labels = []
+    for s, step in zip(stats, steps):
+        variant = step_variant_by_id.get(step.id)
+        kind_label = KIND_LABELS[variant.kind] if variant else f"étape {s.step_order}"
+        labels.append(f"{s.step_order}. {kind_label}")
+    st.bar_chart(pd.DataFrame({"Vues": [s.views for s in stats]}, index=labels))
+
+    for s, step in zip(stats, steps):
+        variant = step_variant_by_id.get(step.id)
+        kind_label = KIND_LABELS[variant.kind] if variant else f"étape {s.step_order}"
+        if s.test_id is None:
+            st.caption(f"{s.step_order}. {kind_label} — pas encore de test A/B actif.")
+            continue
+        dropoff_text = (
+            f" · {s.dropoff_rate_from_previous * 100:.0f}% de passage depuis l'étape précédente"
+            if s.dropoff_rate_from_previous is not None else ""
+        )
+        submit_text = f" · {s.form_submits} formulaire(s) complété(s)" if s.form_submits else ""
+        st.caption(
+            f"{s.step_order}. {kind_label} — {s.views} vue(s){submit_text} · "
+            f"{s.purchases} achat(s){dropoff_text}"
+        )
 
 
 def _render_tests_tab() -> None:

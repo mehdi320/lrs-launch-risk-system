@@ -22,6 +22,7 @@ from creative_studio.core.copy_generation import KIND_LABELS, DEFAULT_MODEL, _ca
 from creative_studio.core.llm_client import build_client, parse_structured_json_response
 from creative_studio.core.reference_extraction import ExistingCopyAnalysis
 from creative_studio.core.variants import (
+    CopyBlock,
     Framework,
     Funnel,
     FunnelObjective,
@@ -218,3 +219,36 @@ def generate_funnel(
             )
         )
     return funnel, variants
+
+
+def generate_exit_popup_offer(
+    product: Product,
+    funnel: Funnel,
+    kind: VariantKind,
+    model: str = DEFAULT_MODEL,
+) -> CopyBlock:
+    """Contenu d'un popup exit-intent en mode "offre" — passe par le même
+    _call_claude_for_copy() que le reste du module (aucun schéma dédié),
+    ancré sur le brief du funnel pour rester dans l'angle/le ton déjà fixés.
+    Le mode "capture email simple" (core.variants.PopupMode.EMAIL_CAPTURE)
+    reste entièrement manuel et n'appelle jamais cette fonction.
+    """
+    kind_label = KIND_LABELS[kind]
+    user_prompt = (
+        f"Génère le contenu d'un popup exit-intent (déclenché quand le visiteur s'apprête à "
+        f"quitter la page) pour la page {kind_label} d'un funnel.\n\n"
+        f"Produit : {product.name}\n"
+        f"Description : {product.description}\n"
+        f"Prix : {product.price_cents / 100:.2f} {product.currency}\n"
+        f"Cible / audience : {product.audience}\n\n"
+        f"CONSIGNE DE COHÉRENCE DU FUNNEL — reprends exactement :\n"
+        f"Angle : {funnel.angle}\n"
+        f"Ton : {funnel.tone}\n"
+        f"Promesse : {funnel.promise}\n\n"
+        "CONTRAINTE DE FORMAT — c'est un popup, pas une page : reste TRÈS court "
+        "(headline percutante, une seule phrase de hook, 1 ou 2 sections courtes maximum, "
+        "un CTA net). L'offre doit créer une dernière raison de rester ou de revenir "
+        "(ex: réduction ponctuelle, bonus, dernière chance) sans contredire l'offre "
+        "principale de la page."
+    )
+    return _call_claude_for_copy(user_prompt, model)

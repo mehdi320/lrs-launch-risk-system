@@ -6,12 +6,15 @@ n'importe quel éditeur. Généré à la volée en mémoire (io.BytesIO), jamais
 écrit sur disque — reportlab est déjà une dépendance du dépôt (voir
 lrs_pdf_report.py à la racine).
 
-Médias (FunnelStepMedia) et éléments de conversion (FunnelStepElement) sont
-optionnels : un PDF de variante seule (hors Funnel Builder) n'en a jamais,
-un PDF de funnel les inclut quand ils sont attachés à l'étape correspondante.
-Le PDF est forcément statique — une vidéo attachée est listée en lien
-copiable, pas jouée ; un timer/une réduction datée est affiché en texte figé
-(render_element_text), sans le décompte JS live de la page servie.
+Médias (FunnelStepMedia), éléments de conversion (FunnelStepElement) et
+popup exit-intent (FunnelStepPopup) sont optionnels : un PDF de variante
+seule (hors Funnel Builder) n'en a jamais, un PDF de funnel les inclut quand
+ils sont attachés à l'étape correspondante. Le PDF est forcément statique —
+une vidéo attachée est listée en lien copiable, pas jouée ; un timer/une
+réduction datée est affiché en texte figé (render_element_text), sans le
+décompte JS live de la page servie ; le popup n'est inclus qu'en mode offre
+(texte copiable), jamais en mode capture email (formulaire interactif) ; le
+formulaire multi-étapes (FunnelStepForm) n'a lui aucun équivalent PDF.
 """
 
 from __future__ import annotations
@@ -36,8 +39,10 @@ from creative_studio.core.variants import (
     Funnel,
     FunnelStepElement,
     FunnelStepMedia,
+    FunnelStepPopup,
     MediaSourceType,
     MediaType,
+    PopupMode,
     Product,
     Variant,
 )
@@ -98,6 +103,10 @@ def _styles() -> dict[str, ParagraphStyle]:
             "CTA", parent=base["BodyText"], fontSize=13, leading=17,
             spaceBefore=10, fontName="Helvetica-Bold",
         ),
+        "popup_note": ParagraphStyle(
+            "PopupNote", parent=base["BodyText"], fontSize=9, leading=13,
+            spaceBefore=10, textColor=colors.HexColor("#888888"), fontName="Helvetica-Oblique",
+        ),
     }
 
 
@@ -137,11 +146,25 @@ def _media_flowables(media_items: list[FunnelStepMedia], styles: dict[str, Parag
     return flowables
 
 
+def _popup_flowable(popup: FunnelStepPopup | None, styles: dict[str, ParagraphStyle]):
+    """Le popup exit-intent n'a de sens qu'en offre (mode OFFER) dans un PDF
+    statique — le mode capture email est un formulaire interactif, comme le
+    formulaire multi-étapes (FunnelStepForm) ni l'un ni l'autre ne peuvent
+    être représentés dans un PDF, donc ils en sont simplement absents."""
+    if popup is None or not popup.enabled or popup.mode != PopupMode.OFFER:
+        return None
+    return Paragraph(
+        _escape(f"🎁 Popup exit-intent : {popup.copy.headline} — {popup.copy.cta}"),
+        styles["popup_note"],
+    )
+
+
 def _variant_flowables(
     variant: Variant,
     styles: dict[str, ParagraphStyle],
     media: list[FunnelStepMedia] | None = None,
     elements: list[FunnelStepElement] | None = None,
+    popup: FunnelStepPopup | None = None,
 ) -> list:
     media = media or []
     elements = elements or []
@@ -165,6 +188,9 @@ def _variant_flowables(
             flowables.append(Paragraph(_escape(text), styles["element"]))
     flowables.append(Spacer(1, 8))
     flowables.append(Paragraph(_escape(variant.copy.cta), styles["cta"]))
+    popup_flowable = _popup_flowable(popup, styles)
+    if popup_flowable is not None:
+        flowables.append(popup_flowable)
     return flowables
 
 
@@ -178,16 +204,19 @@ def generate_variant_pdf(
     variant: Variant,
     media: list[FunnelStepMedia] | None = None,
     elements: list[FunnelStepElement] | None = None,
+    popup: FunnelStepPopup | None = None,
 ) -> bytes:
     """PDF prêt à copier-coller pour une seule variante gagnante : le copy
-    final (headline, hook, corps, CTA), plus médias/éléments de conversion
-    optionnels si cette variante est une étape de funnel qui en a."""
+    final (headline, hook, corps, CTA), plus médias/éléments de conversion/
+    popup optionnels si cette variante est une étape de funnel qui en a.
+    Le formulaire multi-étapes (FunnelStepForm), interactif, n'a pas
+    d'équivalent PDF et n'est donc jamais inclus."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=2.5 * cm, rightMargin=2.5 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
     )
-    doc.build(_variant_flowables(variant, _styles(), media, elements))
+    doc.build(_variant_flowables(variant, _styles(), media, elements, popup))
     return buf.getvalue()
 
 
@@ -202,12 +231,15 @@ def generate_funnel_pdf(
     variants_in_order: list[Variant],
     media_by_variant_id: dict[str, list[FunnelStepMedia]] | None = None,
     elements_by_variant_id: dict[str, list[FunnelStepElement]] | None = None,
+    popup_by_variant_id: dict[str, FunnelStepPopup] | None = None,
 ) -> bytes:
     """PDF unique regroupant toutes les étapes du funnel, clairement séparées
     (saut de page entre chaque étape) et copiables une par une, avec les
-    médias et éléments de conversion attachés à chaque étape."""
+    médias, éléments de conversion et popups (offre uniquement) attachés à
+    chaque étape."""
     media_by_variant_id = media_by_variant_id or {}
     elements_by_variant_id = elements_by_variant_id or {}
+    popup_by_variant_id = popup_by_variant_id or {}
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -223,6 +255,7 @@ def generate_funnel_pdf(
             _variant_flowables(
                 variant, styles,
                 media_by_variant_id.get(variant.id), elements_by_variant_id.get(variant.id),
+                popup_by_variant_id.get(variant.id),
             )
         )
         if i < total:

@@ -17,16 +17,23 @@ from creative_studio.core.variants import (
     CopyBlock,
     EmailSequence,
     Event,
+    FormField,
+    FormFieldType,
+    FormSubmission,
+    FormSubmissionSource,
     Framework,
     Funnel,
     FunnelObjective,
     FunnelStep,
     FunnelStepElement,
+    FunnelStepForm,
     FunnelStepMedia,
+    FunnelStepPopup,
     GenerationMode,
     MediaPlacement,
     MediaSourceType,
     MediaType,
+    PopupMode,
     Product,
     TestResult,
     TestStatus,
@@ -197,6 +204,27 @@ class ABTestRepository:
                 (test_id, variant_id),
             )
 
+    def find_by_variant(self, variant_id: str) -> ABTest | None:
+        """Le test A/B le plus récent qui inclut cette variante — utilisé par
+        le chaînage de funnel (quel test_id sert le trafic réel de l'étape
+        suivante) et par l'analytics de drop-off (core.funnel_analytics),
+        que ce soit la variante d'origine du maillon ou une variante
+        alternative testée par la suite pour la même position."""
+        with db_session() as conn:
+            row = conn.execute(
+                """SELECT t.* FROM ab_tests t
+                   JOIN ab_test_variants v ON v.test_id = t.id
+                   WHERE v.variant_id = ?
+                   ORDER BY t.created_at DESC LIMIT 1""",
+                (variant_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            variant_rows = conn.execute(
+                "SELECT variant_id, weight FROM ab_test_variants WHERE test_id = ?", (row["id"],)
+            ).fetchall()
+        return self._from_row(row, variant_rows)
+
     @staticmethod
     def _from_row(row, variant_rows) -> ABTest:
         variant_ids = [r["variant_id"] for r in variant_rows]
@@ -360,6 +388,19 @@ class FunnelRepository:
             ).fetchone()
         return self._step_from_row(row) if row else None
 
+    def get_next_step(self, funnel_id: str, current_step_order: int) -> FunnelStep | None:
+        """Le maillon suivant dans l'ordre du funnel — utilisé pour chaîner
+        le CTA d'une étape vers la suivante plutôt que de renvoyer
+        systématiquement vers Stripe, ce qui rend l'entonnoir de conversion
+        (core.funnel_analytics) réellement significatif."""
+        with db_session() as conn:
+            row = conn.execute(
+                """SELECT * FROM funnel_steps WHERE funnel_id = ? AND step_order > ?
+                   ORDER BY step_order ASC LIMIT 1""",
+                (funnel_id, current_step_order),
+            ).fetchone()
+        return self._step_from_row(row) if row else None
+
     @staticmethod
     def _step_from_row(row) -> FunnelStep:
         return FunnelStep(
@@ -448,6 +489,121 @@ class FunnelStepElementRepository:
     def delete(self, element_id: str) -> None:
         with db_session() as conn:
             conn.execute("DELETE FROM funnel_step_elements WHERE id = ?", (element_id,))
+
+
+def _screens_to_json(screens: list[list[FormField]]) -> str:
+    return json.dumps([[asdict(f) for f in screen] for screen in screens], ensure_ascii=False)
+
+
+def _screens_from_json(raw: str) -> list[list[FormField]]:
+    return [
+        [
+            FormField(
+                name=d["name"], label=d["label"],
+                field_type=FormFieldType(d["field_type"]), required=d["required"],
+            )
+            for d in screen
+        ]
+        for screen in json.loads(raw)
+    ]
+
+
+class FunnelStepFormRepository:
+    """Un seul formulaire par étape (UNIQUE sur step_id) — un upsert simple
+    (delete + create) plutôt qu'un UPDATE champ par champ, la config entière
+    étant remplacée à chaque modification depuis l'UI."""
+
+    def upsert(self, form: FunnelStepForm) -> FunnelStepForm:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_forms WHERE step_id = ?", (form.step_id,))
+            conn.execute(
+                """INSERT INTO funnel_step_forms
+                   (id, tenant_id, step_id, screens_json, enabled, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    form.id, form.tenant_id, form.step_id, _screens_to_json(form.screens),
+                    int(form.enabled), form.created_at,
+                ),
+            )
+        return form
+
+    def get_by_step(self, step_id: str) -> FunnelStepForm | None:
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT * FROM funnel_step_forms WHERE step_id = ?", (step_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return FunnelStepForm(
+            id=row["id"], tenant_id=row["tenant_id"], step_id=row["step_id"],
+            screens=_screens_from_json(row["screens_json"]), enabled=bool(row["enabled"]),
+            created_at=row["created_at"],
+        )
+
+    def delete_by_step(self, step_id: str) -> None:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_forms WHERE step_id = ?", (step_id,))
+
+
+class FunnelStepPopupRepository:
+    """Un seul popup par étape (UNIQUE sur step_id), même logique d'upsert
+    que FunnelStepFormRepository."""
+
+    def upsert(self, popup: FunnelStepPopup) -> FunnelStepPopup:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_popups WHERE step_id = ?", (popup.step_id,))
+            conn.execute(
+                """INSERT INTO funnel_step_popups
+                   (id, tenant_id, step_id, mode, copy_json, enabled, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    popup.id, popup.tenant_id, popup.step_id, popup.mode.value,
+                    json.dumps(asdict(popup.copy), ensure_ascii=False), int(popup.enabled), popup.created_at,
+                ),
+            )
+        return popup
+
+    def get_by_step(self, step_id: str) -> FunnelStepPopup | None:
+        with db_session() as conn:
+            row = conn.execute(
+                "SELECT * FROM funnel_step_popups WHERE step_id = ?", (step_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return FunnelStepPopup(
+            id=row["id"], tenant_id=row["tenant_id"], step_id=row["step_id"],
+            mode=PopupMode(row["mode"]), copy=CopyBlock(**json.loads(row["copy_json"])),
+            enabled=bool(row["enabled"]), created_at=row["created_at"],
+        )
+
+    def delete_by_step(self, step_id: str) -> None:
+        with db_session() as conn:
+            conn.execute("DELETE FROM funnel_step_popups WHERE step_id = ?", (step_id,))
+
+
+class FormSubmissionRepository:
+    def create(self, submission: FormSubmission) -> FormSubmission:
+        with db_session() as conn:
+            conn.execute(
+                """INSERT INTO form_submissions
+                   (id, tenant_id, test_id, variant_id, visitor_id, source, values_json, submitted_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    submission.id, submission.tenant_id, submission.test_id, submission.variant_id,
+                    submission.visitor_id, submission.source.value,
+                    json.dumps(submission.values, ensure_ascii=False), submission.submitted_at,
+                ),
+            )
+        return submission
+
+    def count_by_variant(self, test_id: str) -> dict[str, int]:
+        with db_session() as conn:
+            rows = conn.execute(
+                """SELECT variant_id, COUNT(*) AS n FROM form_submissions
+                   WHERE test_id = ? GROUP BY variant_id""",
+                (test_id,),
+            ).fetchall()
+        return {r["variant_id"]: r["n"] for r in rows}
 
 
 class EmailSequenceRepository:
