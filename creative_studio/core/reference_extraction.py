@@ -174,7 +174,7 @@ def analyze_existing_copy(raw_text_or_url: str, model: str = DEFAULT_MODEL) -> E
     quand un lien de référence est fourni.
     """
     text = fetch_reference_text(raw_text_or_url)
-    return _analyze_text(text, model)
+    return analyze_text(text, model)
 
 
 def analyze_existing_copy_pdf_bytes(pdf_bytes: bytes, model: str = DEFAULT_MODEL) -> ExistingCopyAnalysis:
@@ -182,10 +182,14 @@ def analyze_existing_copy_pdf_bytes(pdf_bytes: bytes, model: str = DEFAULT_MODEL
     (upload direct depuis le Funnel Builder) plutôt qu'un lien à télécharger.
     """
     text = extract_pdf_text(pdf_bytes)
-    return _analyze_text(text, model)
+    return analyze_text(text, model)
 
 
-def _analyze_text(text: str, model: str) -> ExistingCopyAnalysis:
+def analyze_text(text: str, model: str = DEFAULT_MODEL) -> ExistingCopyAnalysis:
+    """Analyse un texte déjà résolu (voir fetch_reference_text /
+    extract_pdf_text) — point d'entrée public utilisé quand l'appelant a
+    besoin du texte brut en plus de l'analyse (ex: core.copy_scoring, qui
+    score le texte de référence tel quel plutôt que de le re-télécharger)."""
     text = text[:MAX_REFERENCE_CHARS]
 
     client = build_client()

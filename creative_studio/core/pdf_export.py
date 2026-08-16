@@ -31,9 +31,10 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Image as ReportlabImage
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from creative_studio.core.copy_generation import KIND_LABELS
+from creative_studio.core.copy_scoring import SCORE_DISCLAIMER, CopyScore, CopyScoreComparison
 from creative_studio.core.funnel_elements import render_element_text
 from creative_studio.core.variants import (
     Funnel,
@@ -51,7 +52,9 @@ from creative_studio.storage.media import media_path
 __all__ = [
     "build_funnel_pdf_filename",
     "build_pdf_filename",
+    "build_score_comparison_pdf_filename",
     "generate_funnel_pdf",
+    "generate_score_comparison_pdf",
     "generate_variant_pdf",
 ]
 
@@ -107,7 +110,68 @@ def _styles() -> dict[str, ParagraphStyle]:
             "PopupNote", parent=base["BodyText"], fontSize=9, leading=13,
             spaceBefore=10, textColor=colors.HexColor("#888888"), fontName="Helvetica-Oblique",
         ),
+        "score_disclaimer": ParagraphStyle(
+            "ScoreDisclaimer", parent=base["BodyText"], fontSize=9, leading=13,
+            spaceBefore=6, spaceAfter=10, textColor=colors.HexColor("#b45309"), fontName="Helvetica-Oblique",
+        ),
+        "score_title": ParagraphStyle(
+            "ScoreTitle", parent=base["Heading2"], fontSize=13, leading=16, spaceBefore=14, spaceAfter=4,
+        ),
     }
+
+
+def _score_table_flowable(score_or_comparison, styles: dict[str, ParagraphStyle]) -> Table:
+    """Table reportlab partagée par les deux usages du score : seul (une
+    variante) ou en comparaison avant/après (mode Optimiser un existant).
+    Un seul endroit qui sait dessiner ce tableau — pas de logique dupliquée
+    entre les deux appelants."""
+    if isinstance(score_or_comparison, CopyScoreComparison):
+        comp = score_or_comparison
+        before_by_slug = {c.slug: c.score for c in comp.before.criteria}
+        rows = [["Critère", "Avant", "Après", "Δ"]]
+        for c in comp.after.criteria:
+            before_score = before_by_slug.get(c.slug, 0)
+            delta = comp.delta_by_criterion.get(c.slug, c.score - before_score)
+            rows.append([
+                c.label, f"{before_score}/{c.max_points}", f"{c.score}/{c.max_points}",
+                f"+{delta}" if delta > 0 else str(delta),
+            ])
+        total_delta = comp.delta_total
+        rows.append([
+            "Total", f"{comp.before.total}/100", f"{comp.after.total}/100",
+            f"+{total_delta}" if total_delta > 0 else str(total_delta),
+        ])
+    else:
+        score: CopyScore = score_or_comparison
+        rows = [["Critère", "Score"]]
+        for c in score.criteria:
+            rows.append([c.label, f"{c.score}/{c.max_points}"])
+        rows.append(["Total", f"{score.total}/100"])
+
+    table = Table(rows, hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f4f6")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.5, colors.HexColor("#cccccc")),
+                ("LINEABOVE", (0, -1), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ]
+        )
+    )
+    return table
+
+
+def _score_section_flowables(score: CopyScore, styles: dict[str, ParagraphStyle]) -> list:
+    return [
+        Paragraph("Score de structure copywriting", styles["score_title"]),
+        Paragraph(_escape(SCORE_DISCLAIMER), styles["score_disclaimer"]),
+        _score_table_flowable(score, styles),
+    ]
 
 
 def _image_bytes(media: FunnelStepMedia) -> bytes | None:
@@ -165,6 +229,7 @@ def _variant_flowables(
     media: list[FunnelStepMedia] | None = None,
     elements: list[FunnelStepElement] | None = None,
     popup: FunnelStepPopup | None = None,
+    score: CopyScore | None = None,
 ) -> list:
     media = media or []
     elements = elements or []
@@ -191,6 +256,8 @@ def _variant_flowables(
     popup_flowable = _popup_flowable(popup, styles)
     if popup_flowable is not None:
         flowables.append(popup_flowable)
+    if score is not None:
+        flowables.extend(_score_section_flowables(score, styles))
     return flowables
 
 
@@ -205,10 +272,13 @@ def generate_variant_pdf(
     media: list[FunnelStepMedia] | None = None,
     elements: list[FunnelStepElement] | None = None,
     popup: FunnelStepPopup | None = None,
+    score: CopyScore | None = None,
 ) -> bytes:
     """PDF prêt à copier-coller pour une seule variante gagnante : le copy
     final (headline, hook, corps, CTA), plus médias/éléments de conversion/
-    popup optionnels si cette variante est une étape de funnel qui en a.
+    popup optionnels si cette variante est une étape de funnel qui en a, et
+    le score de structure copywriting optionnel (avec son disclaimer —
+    jamais affiché sans, voir core.copy_scoring.SCORE_DISCLAIMER).
     Le formulaire multi-étapes (FunnelStepForm), interactif, n'a pas
     d'équivalent PDF et n'est donc jamais inclus."""
     buf = io.BytesIO()
@@ -216,13 +286,43 @@ def generate_variant_pdf(
         buf, pagesize=A4,
         leftMargin=2.5 * cm, rightMargin=2.5 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
     )
-    doc.build(_variant_flowables(variant, _styles(), media, elements, popup))
+    doc.build(_variant_flowables(variant, _styles(), media, elements, popup, score))
     return buf.getvalue()
 
 
 def build_funnel_pdf_filename(product: Product, funnel: Funnel) -> str:
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     return f"{_slugify(product.name)}_funnel_{funnel.objective.value}_{date_str}.pdf"
+
+
+def build_score_comparison_pdf_filename(product: Product) -> str:
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return f"{_slugify(product.name)}_score_avant_apres_{date_str}.pdf"
+
+
+def generate_score_comparison_pdf(
+    product: Product,
+    comparison: CopyScoreComparison,
+    before_label: str,
+    after_label: str,
+) -> bytes:
+    """PDF autonome pour le mode "Optimiser un existant" : tableau
+    avant/après du score de structure copywriting, avec le disclaimer en
+    tête — jamais affiché à côté d'un vrai résultat de test A/B sans lui."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=2.5 * cm, rightMargin=2.5 * cm, topMargin=2 * cm, bottomMargin=2 * cm,
+    )
+    styles = _styles()
+    story = [
+        Paragraph(_escape(f"{product.name} — Score de structure copywriting"), styles["headline"]),
+        Paragraph(_escape(f"Avant : {before_label}  →  Après : {after_label}"), styles["hook"]),
+        Paragraph(_escape(SCORE_DISCLAIMER), styles["score_disclaimer"]),
+        _score_table_flowable(comparison, styles),
+    ]
+    doc.build(story)
+    return buf.getvalue()
 
 
 def generate_funnel_pdf(

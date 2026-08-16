@@ -23,6 +23,13 @@ from creative_studio.core.copy_generation import (
     generate_variants,
     generate_variants_from_reference,
 )
+from creative_studio.core.copy_scoring import (
+    SCORE_DISCLAIMER,
+    compare_scores,
+    compute_copy_score,
+    scorable_from_copy_block,
+    scorable_from_reference,
+)
 from creative_studio.core.email_sequences import generate_email_sequence
 from creative_studio.core.funnel_analytics import compute_funnel_dropoff
 from creative_studio.core.funnel_builder import (
@@ -36,12 +43,21 @@ from creative_studio.core.funnel_elements import (
     ElementType,
     render_element_text,
 )
-from creative_studio.core.pdf_export import build_funnel_pdf_filename, build_pdf_filename, generate_funnel_pdf, generate_variant_pdf
+from creative_studio.core.pdf_export import (
+    build_funnel_pdf_filename,
+    build_pdf_filename,
+    build_score_comparison_pdf_filename,
+    generate_funnel_pdf,
+    generate_score_comparison_pdf,
+    generate_variant_pdf,
+)
 from creative_studio.core.prioritization import rank_variants_for_budget
 from creative_studio.core.reference_extraction import (
     VARY_DIMENSION_LABELS,
     analyze_existing_copy,
     analyze_existing_copy_pdf_bytes,
+    analyze_text,
+    fetch_reference_text,
 )
 from creative_studio.core.stats import VariantStats
 from creative_studio.core.test_evaluation import compute_and_save_results
@@ -233,9 +249,16 @@ def _render_variants_tab(run_lrs_audit_fn: Optional[Callable[[str], int]]) -> No
             for section in v.copy.body_sections:
                 st.write(section)
             st.markdown(f"**CTA** : {v.copy.cta}")
+
+            funnel_step = _funnels.get_step_by_variant(v.id)
+            step_elements = _funnel_elements.list_by_step(funnel_step.id) if funnel_step else None
+            structure_score = compute_copy_score(scorable_from_copy_block(v.copy), step_elements)
+            st.caption(f"🧮 Score de structure (estimation) : {structure_score.total}/100 — aide à prioriser quoi tester en premier.")
+            st.caption(f"⚠️ {SCORE_DISCLAIMER}")
+
             score_col1, score_col2 = st.columns([1, 2])
             with score_col1:
-                st.metric("Score LRS", v.lrs_score if v.lrs_score is not None else "—")
+                st.metric("Score LRS (audit réel)", v.lrs_score if v.lrs_score is not None else "—")
             with score_col2:
                 if run_lrs_audit_fn is not None and st.button("Auditer avec LRS", key=f"audit_{v.id}"):
                     page_text = "\n\n".join([v.copy.headline, v.copy.hook, *v.copy.body_sections, v.copy.cta])
@@ -293,7 +316,9 @@ def _render_optimize_existing_generation(product: Product) -> None:
         "Colle le texte d'une publicité ou d'une page de vente déjà existante (ou son URL). "
         "Claude en extrait l'angle et le framework, puis génère une variante par paramètre "
         "coché ci-dessous — en gardant tout le reste identique, pour isoler ce qui améliore "
-        "la conversion."
+        "la conversion. Un score de structure copywriting (estimation, pas une vraie mesure de "
+        "conversion — voir plus bas) compare ensuite chaque variante générée à la référence, pour "
+        "t'aider à choisir laquelle lancer en test A/B en premier."
     )
     reference_input = st.text_area(
         "Advertorial / page de vente existante (texte collé ou URL)",
@@ -326,7 +351,8 @@ def _render_optimize_existing_generation(product: Product) -> None:
     ):
         try:
             with st.spinner("Analyse de la publicité existante..."):
-                analysis = analyze_existing_copy(reference_input)
+                raw_text = fetch_reference_text(reference_input)
+                analysis = analyze_text(raw_text)
             st.info(
                 f"**Framework détecté** : {analysis.detected_framework.value}"
                 + (f" (hybride — {analysis.hybrid_notes})" if analysis.is_hybrid else "")
@@ -336,12 +362,58 @@ def _render_optimize_existing_generation(product: Product) -> None:
                 new_variants = generate_variants_from_reference(product, kind, analysis, dimensions)
                 for v in new_variants:
                     _variants.create(v)
+            # Le score "avant" (référence) est recalculé après coup depuis le
+            # texte brut de la génération précédente — stocké en session_state
+            # pour survivre au st.rerun() ci-dessous (analysis/raw_text ne sont
+            # jamais persistés en base, la comparaison n'aurait sinon plus de
+            # "avant" à afficher sur le prochain script run).
+            st.session_state["cs_last_optimize_scores"] = {
+                "product_id": product.id,
+                "before": compute_copy_score(scorable_from_reference(analysis, raw_text)),
+                "variant_ids": [v.id for v in new_variants],
+            }
             st.success(f"{len(new_variants)} variante(s) générée(s) à partir de l'existant.")
             st.rerun()
         except GenerationRefused as exc:
             st.error(str(exc))
         except (RuntimeError, ValueError) as exc:
             st.error(f"Impossible de générer : {exc}")
+
+    last_scores = st.session_state.get("cs_last_optimize_scores")
+    if last_scores and last_scores["product_id"] == product.id:
+        st.markdown("##### 🎯 Score de structure copywriting — avant / après")
+        st.warning(SCORE_DISCLAIMER)
+        for vid in last_scores["variant_ids"]:
+            variant = _variants.get(vid)
+            if variant is None:
+                continue
+            after_score = compute_copy_score(scorable_from_copy_block(variant.copy))
+            comparison = compare_scores(last_scores["before"], after_score)
+            dim_label = VARY_DIMENSION_LABELS.get(variant.varied_dimension.value) if variant.varied_dimension else "?"
+            with st.expander(
+                f"{dim_label} — {after_score.total}/100 (Δ {comparison.delta_total:+d} vs référence)"
+            ):
+                rows = [
+                    {
+                        "Critère": c.label,
+                        "Avant": f"{before_c.score}/{c.max_points}",
+                        "Après": f"{c.score}/{c.max_points}",
+                        "Δ": comparison.delta_by_criterion[c.slug],
+                    }
+                    for c, before_c in zip(comparison.after.criteria, comparison.before.criteria)
+                ]
+                st.table(rows)
+                pdf_bytes = generate_score_comparison_pdf(
+                    product, comparison, before_label="Référence originale",
+                    after_label=f"Variante {dim_label}",
+                )
+                st.download_button(
+                    "📄 Télécharger le comparatif en PDF",
+                    data=pdf_bytes,
+                    file_name=build_score_comparison_pdf_filename(product),
+                    mime="application/pdf",
+                    key=f"score_pdf_{vid}",
+                )
 
 
 _MEDIA_PLACEMENT_LABELS = {
