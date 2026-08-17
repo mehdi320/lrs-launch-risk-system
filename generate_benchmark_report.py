@@ -675,7 +675,9 @@ def generate():
 
 
 if __name__ == "__main__":
+    import os as _os
     pdf_bytes = generate()
-    with open("/sessions/beautiful-ecstatic-allen/mnt/LRS/LRS_Benchmark_Report_2025.pdf", "wb") as f:
+    out_path = _os.path.join(_os.path.dirname(__file__), "assets", "LRS_Benchmark_Report_2025.pdf")
+    with open(out_path, "wb") as f:
         f.write(pdf_bytes)
-    print(f"✅ Benchmark Report généré — {len(pdf_bytes):,} bytes")
+    print(f"✅ Benchmark Report généré — {len(pdf_bytes):,} bytes — {out_path}")

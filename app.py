@@ -468,7 +468,7 @@ PLAN_LIMITS = {
         "drip_emails":       True,
         "ads_api":           True,
         "price":             "49€/mois",
-        "badge_color":       "#6366f1",
+        "badge_color":       "var(--accent)",
     },
     "agency": {
         "label":             "Agency",
@@ -482,7 +482,7 @@ PLAN_LIMITS = {
         "drip_emails":       True,
         "ads_api":           True,
         "price":             "99€/mois",
-        "badge_color":       "#f59e0b",
+        "badge_color":       "var(--warning)",
     },
 }
 
@@ -559,7 +559,7 @@ DRIP_SEQUENCE = [
         "body_fn": lambda email, name: f"""
 <!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:28px'>
     <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 Bienvenue sur LRS™</div>
     <div style='color:rgba(255,255,255,0.75);font-size:0.85rem;margin-top:4px'>Launch Risk System — Audit paid traffic pre-launch</div>
   </div>
@@ -572,9 +572,9 @@ DRIP_SEQUENCE = [
     <div style='background:#f8f8fc;border-radius:10px;padding:20px;margin:20px 0'>
       <div style='font-weight:700;color:#1a1a2e;margin-bottom:12px'>Pour démarrer :</div>
       <div style='color:#555;font-size:0.88rem;line-height:2'>
-        <span style='color:#6366f1;font-weight:700'>① </span>Collez l'URL de votre landing page<br>
-        <span style='color:#6366f1;font-weight:700'>② </span>Choisissez votre plateforme (Meta / TikTok / Google)<br>
-        <span style='color:#6366f1;font-weight:700'>③ </span>Cliquez <strong>🚀 Run Audit</strong> — résultats en 15s<br>
+        <span style='color:var(--accent);font-weight:700'>① </span>Collez l'URL de votre landing page<br>
+        <span style='color:var(--accent);font-weight:700'>② </span>Choisissez votre plateforme (Meta / TikTok / Google)<br>
+        <span style='color:var(--accent);font-weight:700'>③ </span>Cliquez <strong>🚀 Run Audit</strong> — résultats en 15s<br>
       </div>
     </div>
     <p style='color:#888;font-size:0.82rem'>
@@ -593,7 +593,7 @@ DRIP_SEQUENCE = [
         "body_fn": lambda email, name: f"""
 <!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.1rem;font-weight:800'>⚡ Quick Wins — J+3</div>
   </div>
   <div style='padding:28px'>
@@ -603,8 +603,8 @@ DRIP_SEQUENCE = [
       des corrections qui prennent moins d'une heure chacune et peuvent
       augmenter votre score de 2 à 4 points.
     </p>
-    <div style='background:#fff0f0;border-left:4px solid #6366f1;border-radius:8px;padding:16px;margin:20px 0'>
-      <strong style='color:#6366f1'>💡 Le Rewrite Tracker est là pour ça</strong>
+    <div style='background:#fff0f0;border-left:4px solid var(--accent);border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:var(--accent)'>💡 Le Rewrite Tracker est là pour ça</strong>
       <div style='color:#555;font-size:0.88rem;margin-top:8px'>
         Dans chaque résultat d'audit, ouvrez <strong>✍️ Rewrite Tracker</strong>.
         Cochez chaque correction appliquée. LRS vous rappellera automatiquement
@@ -628,7 +628,7 @@ DRIP_SEQUENCE = [
         "body_fn": lambda email, name: f"""
 <!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.1rem;font-weight:800'>📡 Monitoring — J+7</div>
   </div>
   <div style='padding:28px'>
@@ -638,8 +638,8 @@ DRIP_SEQUENCE = [
       un bug d'affichage, une image cassée, un témoignage supprimé...
       Chaque point perdu se traduit par un ROAS qui baisse.
     </p>
-    <div style='background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:16px;margin:20px 0'>
-      <strong style='color:#22c55e'>✅ Activez le monitoring en 30 secondes</strong>
+    <div style='background:#f0fdf4;border-left:4px solid var(--success);border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:var(--success)'>✅ Activez le monitoring en 30 secondes</strong>
       <div style='color:#555;font-size:0.88rem;margin-top:8px'>
         <strong>Suivi → Monitoring & Alertes → ➕ Planifier un audit</strong><br>
         Entrez votre URL, choisissez la fréquence (7 / 14 / 30 jours),
@@ -660,7 +660,7 @@ DRIP_SEQUENCE = [
         "body_fn": lambda email, name: f"""
 <!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.1rem;font-weight:800'>🧠 Intelligence Cumulative — J+10</div>
   </div>
   <div style='padding:28px'>
@@ -692,7 +692,7 @@ DRIP_SEQUENCE = [
         "body_fn": lambda email, name: f"""
 <!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.1rem;font-weight:800'>🔁 Re-audit — J+14</div>
   </div>
   <div style='padding:28px'>
@@ -701,8 +701,8 @@ DRIP_SEQUENCE = [
       Ça fait 14 jours. Si vous avez appliqué des corrections depuis votre premier audit,
       il est temps de mesurer l'impact.
     </p>
-    <div style='background:#f0fdf4;border-left:4px solid #22c55e;border-radius:8px;padding:16px;margin:20px 0'>
-      <strong style='color:#22c55e'>✅ Comment mesurer votre progression</strong>
+    <div style='background:#f0fdf4;border-left:4px solid var(--success);border-radius:8px;padding:16px;margin:20px 0'>
+      <strong style='color:var(--success)'>✅ Comment mesurer votre progression</strong>
       <div style='color:#555;font-size:0.88rem;margin-top:8px;line-height:1.8'>
         1. Retournez sur LRS, onglet <strong>Audit</strong><br>
         2. Re-auditez la même URL qu'il y a 14 jours<br>
@@ -814,19 +814,14 @@ def render_email_capture_widget():
     if drip_data.get("email"):
         return  # déjà enregistré
 
-    light = st.session_state.get("light_mode", False)
-    bg    = "#1a1a2e" if not light else "#f0f0ff"
-    brd   = "#6366f1"
-
     st.markdown(
-        f"<div style='background:{bg};border:1px solid {brd};"
-        f"border-radius:10px;padding:16px 20px;margin-bottom:12px'>"
-        f"<div style='color:#6366f1;font-weight:700;font-size:0.88rem;margin-bottom:8px'>"
-        f"📧 Recevez vos rapports & conseils personnalisés</div>"
-        f"<div style='color:#aaa;font-size:0.82rem'>"
-        f"Entrez votre email pour recevoir votre séquence d'onboarding (5 emails sur 14 jours) "
-        f"et les alertes de monitoring automatiques.</div>"
-        f"</div>",
+        "<div class='lrs-alert' style='margin-bottom:var(--space-3)'>"
+        "<div style='color:var(--accent);font-weight:var(--fw-semibold);font-size:0.88rem;margin-bottom:8px'>"
+        "📧 Recevez vos rapports & conseils personnalisés</div>"
+        "<div style='color:var(--text-secondary);font-size:0.82rem'>"
+        "Entrez votre email pour recevoir votre séquence d'onboarding (5 emails sur 14 jours) "
+        "et les alertes de monitoring automatiques.</div>"
+        "</div>",
         unsafe_allow_html=True,
     )
     ec1, ec2, ec3 = st.columns([3, 2, 1])
@@ -1107,11 +1102,10 @@ def render_ads_connector():
         st.info("🔗 **Connexion API pub** disponible sur les plans **Pro** (49€) et **Agency** (99€).")
         return
 
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
 
     creds = load_ads_creds()
 
@@ -2283,7 +2277,7 @@ def run_audit_stream(mode, platform, offer_type, landing_content, ad_text, marke
             if n_chars >= threshold:
                 status_stage.markdown(
                     f"<div style='padding:8px 12px;background:#1a1a2e;border-radius:6px;"
-                    f"border-left:3px solid #6366f1;color:#ccc;font-size:0.88em'>{msg}</div>",
+                    f"border-left:3px solid var(--accent);color:#ccc;font-size:0.88em'>{msg}</div>",
                     unsafe_allow_html=True
                 )
                 break
@@ -2505,7 +2499,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None):
     ts       = meta.get("timestamp", "")
     mode_m   = meta.get("mode", "")
 
-    score_color = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+    score_color = "var(--danger)" if score <= 9 else "var(--warning)" if score <= 14 else "var(--success)"
 
     fp  = result.get("fix_plan", {})
     top = fp.get("top_priority_action", {})
@@ -2522,7 +2516,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None):
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
 
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 LRS™ — Résultat d'Audit</div>
     <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{ts} · {mode_m}</div>
   </div>
@@ -2538,7 +2532,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None):
       <div style='color:{score_color};font-size:1.1rem;font-weight:700;margin-top:8px'>{decision}</div>
     </div>
 
-    {"<div style='margin-bottom:20px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>🎯 Action Prioritaire</div><div style='background:#fff0f0;border-left:3px solid #FF4444;border-radius:6px;padding:12px 16px;color:#333'>" + top.get("what","") + "</div></div>" if top and top.get("what") else ""}
+    {"<div style='margin-bottom:20px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>🎯 Action Prioritaire</div><div style='background:#fff0f0;border-left:3px solid var(--danger);border-radius:6px;padding:12px 16px;color:#333'>" + top.get("what","") + "</div></div>" if top and top.get("what") else ""}
 
     {"<div><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>⚡ Quick Wins</div><ul style='padding-left:18px;margin:0'>" + qws_html + "</ul></div>" if qws_html else ""}
   </div>
@@ -3022,12 +3016,11 @@ def render_cumulative_intel():
     l'intégralité de l'historique de l'utilisateur.
     """
     history = st.session_state.audit_history
-    light   = st.session_state.get("light_mode", False)
-    bg      = "#ffffff" if light else "#0f0f1a"
-    bg2     = "#f8f8fc" if light else "#07071a"
-    border  = "#e5e7eb" if light else "#1e1e3a"
-    txt     = "#1a1a2e" if light else "#e0e0e0"
-    txt2    = "#6b7280" if light else "#888"
+    bg      = "var(--bg-surface)"
+    bg2     = "var(--bg-surface-2)"
+    border  = "var(--border)"
+    txt     = "var(--text)"
+    txt2    = "var(--text-secondary)"
 
     st.markdown(f"<h4 style='color:{txt}'>🧠 Intelligence Cumulative</h4>", unsafe_allow_html=True)
     st.caption("Analyse de l'ensemble de tes audits pour identifier tes patterns récurrents et ton levier de progression n°1.")
@@ -3051,7 +3044,7 @@ def render_cumulative_intel():
 
     # ── Message progression ───────────────────────────────────
     if intel.get("progress_msg"):
-        color_prog = "#22c55e" if "📈" in intel["progress_msg"] else "#ef4444"
+        color_prog = "var(--success)" if "📈" in intel["progress_msg"] else "var(--danger)"
         st.markdown(
             f"<div style='background:{bg};border-left:4px solid {color_prog};"
             f"border:1px solid {border};border-left:4px solid {color_prog};"
@@ -3063,15 +3056,15 @@ def render_cumulative_intel():
 
     # ── KPIs moyens ───────────────────────────────────────────
     trend_icon = {"improving": "📈", "declining": "📉", "stable": "➡️"}[intel["score_trend"]]
-    trend_col  = {"improving": "#22c55e", "declining": "#ef4444", "stable": "#f59e0b"}[intel["score_trend"]]
+    trend_col  = {"improving": "var(--success)", "declining": "var(--danger)", "stable": "var(--warning)"}[intel["score_trend"]]
     trend_lbl  = {"improving": "En hausse", "declining": "En baisse", "stable": "Stable"}[intel["score_trend"]]
 
     k1, k2, k3, k4 = st.columns(4)
     for col, label, val, color in [
         (k1, "Score moyen",    f"{intel['avg_score']}/20", _score_color(intel['avg_score'])),
         (k2, "Tendance",       f"{trend_icon} {trend_lbl}", trend_col),
-        (k3, "Point faible",   intel["worst_crit"],         "#ef4444"),
-        (k4, "Point fort",     intel["best_crit"],          "#22c55e"),
+        (k3, "Point faible",   intel["worst_crit"],         "var(--danger)"),
+        (k4, "Point fort",     intel["best_crit"],          "var(--success)"),
     ]:
         with col:
             st.markdown(
@@ -3088,14 +3081,14 @@ def render_cumulative_intel():
     st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:10px'>📊 Moyenne par critère — sur {n} audits</div>", unsafe_allow_html=True)
     for crit, avg_val in intel["crits"].items():
         pct = int(avg_val / 5 * 100)
-        bar_color = "#ef4444" if avg_val < 3 else "#f59e0b" if avg_val < 4 else "#22c55e"
+        bar_color = "var(--danger)" if avg_val < 3 else "var(--warning)" if avg_val < 4 else "var(--success)"
         worst_flag = " ← 🔴 POINT FAIBLE RÉCURRENT" if crit == intel["worst_crit"] else ""
         st.markdown(
             f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
             f"padding:12px 16px;margin-bottom:5px'>"
             f"<div style='display:flex;justify-content:space-between;margin-bottom:6px'>"
             f"  <span style='color:{txt};font-size:0.86rem;font-weight:600'>{crit}"
-            f"    <span style='color:#ef4444;font-size:0.75rem'>{worst_flag}</span></span>"
+            f"    <span style='color:var(--danger);font-size:0.75rem'>{worst_flag}</span></span>"
             f"  <span style='color:{bar_color};font-weight:700'>{avg_val}/5</span>"
             f"</div>"
             f"<div style='background:{border};border-radius:4px;height:8px'>"
@@ -3150,18 +3143,16 @@ def render_cumulative_intel():
     p = prescriptions.get(worst, {})
     if p:
         st.markdown(
-            f"<div style='background:{'#fff0f0' if not light else '#fff5f5'};"
-            f"border:1px solid {'#fecaca' if not light else '#fca5a5'};"
-            f"border-left:4px solid #ef4444;border-radius:10px;padding:18px 20px'>"
-            f"<div style='color:#ef4444;font-weight:700;font-size:0.95rem;margin-bottom:8px'>"
+            "<div class='lrs-alert lrs-alert-danger' style='padding:18px 20px'>"
+            "<div style='color:var(--danger);font-weight:var(--fw-bold);font-size:0.95rem;margin-bottom:8px'>"
             f"🎯 Ton levier n°1 : améliorer le {worst}</div>"
-            f"<div style='color:{'#555' if light else '#ccc'};font-size:0.87rem;margin-bottom:12px'>{p['why']}</div>"
-            f"<div style='color:{'#374151' if light else '#e0e0e0'};font-weight:600;font-size:0.85rem;margin-bottom:8px'>"
+            f"<div style='color:var(--text-secondary);font-size:0.87rem;margin-bottom:12px'>{p['why']}</div>"
+            "<div style='color:var(--text);font-weight:var(--fw-semibold);font-size:0.85rem;margin-bottom:8px'>"
             f"Si tu corriges le {worst} de {avg_w}/5 → 5/5, tu gagnes ~{score_gain_est} pts de score.</div>",
             unsafe_allow_html=True,
         )
         for fix in p["fix"]:
-            st.markdown(f"<div style='color:{'#555' if light else '#bbb'};font-size:0.84rem;padding:4px 0 4px 12px;border-left:2px solid #ef4444'>→ {fix}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:var(--text-secondary);font-size:0.84rem;padding:4px 0 4px 12px;border-left:2px solid var(--danger)'>→ {fix}</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("")
 
@@ -3190,13 +3181,13 @@ def render_cumulative_intel():
         adb = intel["avg_days_between"]
         if adb <= 3:
             freq_msg = f"🔥 Tu audites très régulièrement (tous les ~{adb}j) — continue, c'est le profil des meilleurs optimiseurs."
-            freq_col = "#22c55e"
+            freq_col = "var(--success)"
         elif adb <= 10:
             freq_msg = f"✅ Bonne cadence d'optimisation (~{adb}j entre audits)."
-            freq_col = "#6366f1"
+            freq_col = "var(--accent)"
         else:
             freq_msg = f"⏰ Tu audites en moyenne tous les {adb} jours. Essaie de lancer un audit chaque semaine pour accélérer tes résultats."
-            freq_col = "#f59e0b"
+            freq_col = "var(--warning)"
         st.markdown(
             f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
             f"padding:12px 16px'><span style='color:{freq_col}'>{freq_msg}</span></div>",
@@ -3306,11 +3297,10 @@ def render_campaign_tracker():
     LRS croise avec le score de la page pour un diagnostic continu.
     """
     history  = st.session_state.audit_history
-    light    = st.session_state.get("light_mode", False)
-    bg       = "#ffffff" if light else "#0f0f1a"
-    border   = "#e5e7eb" if light else "#1e1e3a"
-    txt      = "#1a1a2e" if light else "#e0e0e0"
-    txt2     = "#6b7280" if light else "#888"
+    bg       = "var(--bg-surface)"
+    border   = "var(--border)"
+    txt      = "var(--text)"
+    txt2     = "var(--text-secondary)"
 
     campaigns = load_campaigns()
 
@@ -3444,7 +3434,7 @@ def render_campaign_tracker():
 
             if diags:
                 st.markdown("**Diagnostics :**")
-                level_colors = {"danger": "#ef4444", "warning": "#f59e0b", "ok": "#22c55e"}
+                level_colors = {"danger": "var(--danger)", "warning": "var(--warning)", "ok": "var(--success)"}
                 level_icons  = {"danger": "🔴", "warning": "🟡", "ok": "🟢"}
                 for d in diags:
                     col_d = level_colors.get(d["level"], "#888")
@@ -3546,11 +3536,10 @@ def render_swipe_library():
     Librairie swipe files privée — hooks, headlines, CTAs sauvegardés
     depuis les audits passés, tagués par plateforme et niche.
     """
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
 
     swipes = load_swipefiles()
 
@@ -3567,7 +3556,7 @@ def render_swipe_library():
                 f"<div style='background:{bg};border:1px solid {border};border-radius:8px;"
                 f"padding:12px;text-align:center'>"
                 f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase'>{label}</div>"
-                f"<div style='color:#6366f1;font-size:1.6rem;font-weight:800'>{n}</div>"
+                f"<div style='color:var(--accent);font-size:1.6rem;font-weight:800'>{n}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
@@ -3640,7 +3629,7 @@ def render_swipe_library():
                 f"<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:8px'>"
                 f"  <div style='color:{txt};font-size:0.87rem;flex:1;line-height:1.5'>{item.get('text','')}</div>"
                 f"  <div style='display:flex;flex-direction:column;gap:4px;min-width:80px;text-align:right'>"
-                f"    <span style='background:#6366f1;color:#fff;font-size:0.68rem;padding:2px 7px;"
+                f"    <span style='background:var(--accent);color:#fff;font-size:0.68rem;padding:2px 7px;"
                 f"          border-radius:20px'>{plat_tag}</span>"
                 f"  </div>"
                 f"</div>"
@@ -3726,7 +3715,7 @@ def render_rewrite_tracker(result, meta, key_prefix="rwt"):
                     page_data[item_key]["date"] = datetime.datetime.now().strftime("%d/%m/%Y") if new_val else ""
                     page_data[item_key]["label"] = item_label
             with col_text:
-                color = "#22c55e" if (page_data.get(item_key,{}).get("applied")) else "#aaa"
+                color = "var(--success)" if (page_data.get(item_key,{}).get("applied")) else "#aaa"
                 suffix = f" ✅ *appliqué le {applied_date}*" if applied_date and page_data.get(item_key,{}).get("applied") else ""
                 st.markdown(f"<span style='color:{color};font-size:0.88rem'>{item_label}</span>{suffix}", unsafe_allow_html=True)
                 if item_detail:
@@ -3780,12 +3769,11 @@ def render_pricing_page():
     Page pricing intégrée — comparaison des 4 plans avec features détaillées.
     Visible depuis le Dashboard → Plans & Tarifs.
     """
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    bg2    = "#f8f8fc" if light else "#07071a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    bg2    = "var(--bg-surface-2)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
     cur    = _get_plan()
 
     st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>💳 Plans & Tarifs</h3>", unsafe_allow_html=True)
@@ -3795,8 +3783,8 @@ def render_pricing_page():
     plans_display = [
         ("free",    "🆓 Free",    "Gratuit",  "#6b7280"),
         ("starter", "⚡ Starter", "19€/mois", "#6b7280"),
-        ("pro",     "🚀 Pro",     "49€/mois", "#6366f1"),
-        ("agency",  "👔 Agency",  "99€/mois", "#f59e0b"),
+        ("pro",     "🚀 Pro",     "49€/mois", "var(--accent)"),
+        ("agency",  "👔 Agency",  "99€/mois", "var(--warning)"),
     ]
 
     cols = st.columns(4)
@@ -3823,7 +3811,7 @@ def render_pricing_page():
             brd_col = badge_col if is_current else border
             brd_w   = "2px" if is_current else "1px"
             popular = " 🔥" if plan_key == "pro" else ""
-            cur_badge = "<div style='color:#22c55e;font-size:0.72rem;font-weight:700;margin-top:4px'>✅ PLAN ACTUEL</div>" if is_current else ""
+            cur_badge = "<div style='color:var(--success);font-size:0.72rem;font-weight:700;margin-top:4px'>✅ PLAN ACTUEL</div>" if is_current else ""
             st.markdown(
                 f"<div style='background:{bg};border:{brd_w} solid {brd_col};border-radius:12px;"
                 f"padding:20px;text-align:center;margin-bottom:12px'>"
@@ -3843,7 +3831,7 @@ def render_pricing_page():
         for i, val in enumerate(feat_vals):
             with row_cols[i+1]:
                 is_cur_col = (plans_display[i][0] == cur)
-                color = "#22c55e" if val == "✅" else "#ef4444" if val == "❌" else txt
+                color = "var(--success)" if val == "✅" else "var(--danger)" if val == "❌" else txt
                 weight = "700" if is_cur_col else "400"
                 st.markdown(f"<div style='color:{color};font-size:0.83rem;text-align:center;padding:6px 0;font-weight:{weight}'>{val}</div>", unsafe_allow_html=True)
 
@@ -4120,11 +4108,11 @@ def send_monitoring_digest(monitored_entries, to_email):
         dec    = entry.get("decision", "")
         ts     = entry.get("timestamp","")
         prev_sc = entry.get("prev_score")
-        sc_color = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+        sc_color = "var(--danger)" if sc<=9 else "var(--warning)" if sc<=14 else "var(--success)"
         delta_html = ""
         if prev_sc is not None:
             delta = sc - prev_sc
-            delta_color = "#22c55e" if delta>0 else "#ef4444" if delta<0 else "#888"
+            delta_color = "var(--success)" if delta>0 else "var(--danger)" if delta<0 else "#888"
             delta_arrow = "▲" if delta>0 else "▼" if delta<0 else "="
             delta_html = f"<span style='color:{delta_color};margin-left:8px;font-size:0.8rem'>{delta_arrow} {abs(delta)} pts</span>"
         rows_html += f"""
@@ -4141,9 +4129,9 @@ def send_monitoring_digest(monitored_entries, to_email):
     alert_banner = ""
     if danger_count > 0:
         alert_banner = f"""
-        <div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:6px;
+        <div style='background:#fff0f0;border-left:4px solid var(--danger);border-radius:6px;
                     padding:12px 16px;margin-bottom:20px'>
-          <strong style='color:#ef4444'>⚠️ {danger_count} page(s) en danger</strong>
+          <strong style='color:var(--danger)'>⚠️ {danger_count} page(s) en danger</strong>
           <div style='color:#555;font-size:0.85rem;margin-top:4px'>Score ≤ 9/20 — action requise immédiatement.</div>
         </div>"""
 
@@ -4152,7 +4140,7 @@ def send_monitoring_digest(monitored_entries, to_email):
 <html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,#6366f1,#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.2rem;font-weight:800'>📊 LRS™ — Digest Hebdomadaire</div>
     <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{now_str} · {len(monitored_entries)} pages surveillées</div>
   </div>
@@ -4204,7 +4192,7 @@ def send_score_drop_alert(entry, prev_score, to_email):
     url_v  = str(entry.get("url","") or entry.get("offer_type",""))[:80]
     sc     = entry.get("score", 0)
     delta  = sc - prev_score
-    sc_col = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+    sc_col = "var(--danger)" if sc<=9 else "var(--warning)" if sc<=14 else "var(--success)"
     now_str = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
 
     html_body = f"""
@@ -4212,8 +4200,8 @@ def send_score_drop_alert(entry, prev_score, to_email):
 <html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:580px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:#1a0a0a;border-top:4px solid #ef4444;padding:20px 24px'>
-    <div style='color:#ef4444;font-size:1.1rem;font-weight:800'>⚠️ Alerte chute de score</div>
+  <div style='background:#1a0a0a;border-top:4px solid var(--danger);padding:20px 24px'>
+    <div style='color:var(--danger);font-size:1.1rem;font-weight:800'>⚠️ Alerte chute de score</div>
     <div style='color:#aaa;font-size:0.82rem;margin-top:4px'>{now_str}</div>
   </div>
   <div style='padding:24px 28px'>
@@ -4225,16 +4213,16 @@ def send_score_drop_alert(entry, prev_score, to_email):
         <div style='color:#888;font-size:2rem;font-weight:800'>{prev_score}/20</div>
       </div>
       <div style='flex:1;background:#fff0f0;border-radius:8px;padding:16px;text-align:center;border:1px solid #fecaca'>
-        <div style='color:#ef4444;font-size:0.72rem;text-transform:uppercase'>Score actuel</div>
+        <div style='color:var(--danger);font-size:0.72rem;text-transform:uppercase'>Score actuel</div>
         <div style='color:{sc_col};font-size:2rem;font-weight:800'>{sc}/20</div>
       </div>
       <div style='flex:1;background:#fff0f0;border-radius:8px;padding:16px;text-align:center;border:1px solid #fecaca'>
-        <div style='color:#ef4444;font-size:0.72rem;text-transform:uppercase'>Delta</div>
-        <div style='color:#ef4444;font-size:2rem;font-weight:800'>▼ {abs(delta)}</div>
+        <div style='color:var(--danger);font-size:0.72rem;text-transform:uppercase'>Delta</div>
+        <div style='color:var(--danger);font-size:2rem;font-weight:800'>▼ {abs(delta)}</div>
       </div>
     </div>
-    <div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:6px;padding:12px 16px'>
-      <strong style='color:#ef4444'>Action recommandée</strong>
+    <div style='background:#fff0f0;border-left:4px solid var(--danger);border-radius:6px;padding:12px 16px'>
+      <strong style='color:var(--danger)'>Action recommandée</strong>
       <div style='color:#555;font-size:0.85rem;margin-top:4px'>
         Connectez-vous à LRS™ pour voir le plan d'action complet et lancer un re-audit.
       </div>
@@ -4266,21 +4254,20 @@ def render_competitor_audit(api_key):
     Mode comparaison : audite votre page ET celle d'un concurrent.
     Affiche un rapport côte-à-côte avec les écarts critiques.
     """
-    light = st.session_state.get("light_mode", False)
-    bg    = "#ffffff" if light else "#0f0f1a"
-    border= "#e5e7eb" if light else "#1e1e3a"
-    txt   = "#1a1a2e" if light else "#e0e0e0"
-    txt2  = "#6b7280" if light else "#888"
+    bg    = "var(--bg-surface)"
+    border= "var(--border)"
+    txt   = "var(--text)"
+    txt2  = "var(--text-secondary)"
 
     st.markdown(f"<h4 style='color:{txt}'>🥊 Audit Concurrents — Comparaison directe</h4>", unsafe_allow_html=True)
     st.caption("Comparez votre page avec celle d'un concurrent. LRS score les deux et identifie précisément où vous perdez face à lui.")
 
     col_you, col_them = st.columns(2)
     with col_you:
-        st.markdown(f"<div style='color:#6366f1;font-weight:700;font-size:0.85rem;margin-bottom:6px'>🔵 VOTRE PAGE</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='color:var(--accent);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🔵 VOTRE PAGE</div>", unsafe_allow_html=True)
         your_url = st.text_input("Votre URL", placeholder="https://votre-landing.com", key="comp_your_url")
     with col_them:
-        st.markdown(f"<div style='color:#f59e0b;font-weight:700;font-size:0.85rem;margin-bottom:6px'>🟡 CONCURRENT</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='color:var(--warning);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🟡 CONCURRENT</div>", unsafe_allow_html=True)
         their_url = st.text_input("URL concurrent", placeholder="https://concurrent.com", key="comp_their_url")
 
     c1, c2, c3 = st.columns(3)
@@ -4359,13 +4346,13 @@ def render_competitor_audit(api_key):
 
     with col_y:
         color_y   = _score_color(sy)
-        border_y  = "#6366f1" if winner == "you" else border
-        winner_y  = "<div style='color:#6366f1;font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "you" else ""
+        border_y  = "var(--accent)" if winner == "you" else border
+        winner_y  = "<div style='color:var(--accent);font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "you" else ""
         dec_y     = cy.get("decision", "")
         st.markdown(
             f"<div style='background:{bg};border:2px solid {border_y};"
             f"border-radius:12px;padding:20px;text-align:center'>"
-            f"<div style='color:#6366f1;font-weight:700;font-size:0.8rem;text-transform:uppercase'>🔵 Vous</div>"
+            f"<div style='color:var(--accent);font-weight:700;font-size:0.8rem;text-transform:uppercase'>🔵 Vous</div>"
             f"<div style='color:{color_y};font-size:3rem;font-weight:900;line-height:1'>{sy}</div>"
             f"<div style='color:{txt2};font-size:0.85rem'>/20</div>"
             f"<div style='color:{color_y};font-weight:600;margin-top:6px'>{dec_y}</div>"
@@ -4375,7 +4362,7 @@ def render_competitor_audit(api_key):
         )
     with col_mid:
         delta_vs  = sy - st_
-        delta_col = "#22c55e" if delta_vs > 0 else "#ef4444" if delta_vs < 0 else "#888"
+        delta_col = "var(--success)" if delta_vs > 0 else "var(--danger)" if delta_vs < 0 else "#888"
         delta_sym = "▲" if delta_vs > 0 else "▼" if delta_vs < 0 else "="
         st.markdown(
             f"<div style='text-align:center;padding:20px 0'>"
@@ -4387,13 +4374,13 @@ def render_competitor_audit(api_key):
         )
     with col_t:
         color_t   = _score_color(st_)
-        border_t  = "#f59e0b" if winner == "them" else border
-        winner_t  = "<div style='color:#f59e0b;font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "them" else ""
+        border_t  = "var(--warning)" if winner == "them" else border
+        winner_t  = "<div style='color:var(--warning);font-size:0.75rem;margin-top:6px'>🏆 MEILLEURE PAGE</div>" if winner == "them" else ""
         dec_t     = ct.get("decision", "")
         st.markdown(
             f"<div style='background:{bg};border:2px solid {border_t};"
             f"border-radius:12px;padding:20px;text-align:center'>"
-            f"<div style='color:#f59e0b;font-weight:700;font-size:0.8rem;text-transform:uppercase'>🟡 Concurrent</div>"
+            f"<div style='color:var(--warning);font-weight:700;font-size:0.8rem;text-transform:uppercase'>🟡 Concurrent</div>"
             f"<div style='color:{color_t};font-size:3rem;font-weight:900;line-height:1'>{st_}</div>"
             f"<div style='color:{txt2};font-size:0.85rem'>/20</div>"
             f"<div style='color:{color_t};font-weight:600;margin-top:6px'>{dec_t}</div>"
@@ -4413,7 +4400,7 @@ def render_competitor_audit(api_key):
         vy = cy.get(crit, 0)
         vt = ct.get(crit, 0)
         diff = vy - vt
-        diff_col = "#22c55e" if diff > 0 else "#ef4444" if diff < 0 else "#888"
+        diff_col = "var(--success)" if diff > 0 else "var(--danger)" if diff < 0 else "#888"
         diff_sym = f"▲ +{diff}" if diff > 0 else f"▼ {diff}" if diff < 0 else "="
         bar_y_pct = int(vy / 5 * 100)
         bar_t_pct = int(vt / 5 * 100)
@@ -4425,13 +4412,13 @@ def render_competitor_audit(api_key):
             f"  <span style='color:{diff_col};font-size:0.85rem;font-weight:700'>{diff_sym} pts</span>"
             f"</div>"
             f"<div style='display:flex;gap:8px;align-items:center'>"
-            f"  <span style='color:#6366f1;font-size:0.78rem;min-width:30px'>🔵 {vy}/5</span>"
+            f"  <span style='color:var(--accent);font-size:0.78rem;min-width:30px'>🔵 {vy}/5</span>"
             f"  <div style='flex:1;background:#1e1e3a;border-radius:4px;height:8px'>"
-            f"    <div style='background:#6366f1;width:{bar_y_pct}%;height:8px;border-radius:4px'></div></div>"
+            f"    <div style='background:var(--accent);width:{bar_y_pct}%;height:8px;border-radius:4px'></div></div>"
             f"  <span style='color:{txt2};font-size:0.78rem'>vs</span>"
             f"  <div style='flex:1;background:#1e1e3a;border-radius:4px;height:8px'>"
-            f"    <div style='background:#f59e0b;width:{bar_t_pct}%;height:8px;border-radius:4px'></div></div>"
-            f"  <span style='color:#f59e0b;font-size:0.78rem;min-width:30px'>{vt}/5 🟡</span>"
+            f"    <div style='background:var(--warning);width:{bar_t_pct}%;height:8px;border-radius:4px'></div></div>"
+            f"  <span style='color:var(--warning);font-size:0.78rem;min-width:30px'>{vt}/5 🟡</span>"
             f"</div>"
             f"</div>",
             unsafe_allow_html=True,
@@ -4443,9 +4430,9 @@ def render_competitor_audit(api_key):
     if worst_gap[1] < 0:
         labels_map = {"hook":"Hook & Headline","offer":"Offre","trust":"Trust","friction":"Friction"}
         st.markdown(
-            f"<div style='background:#fff0f0;border-left:4px solid #ef4444;border-radius:8px;"
+            f"<div style='background:#fff0f0;border-left:4px solid var(--danger);border-radius:8px;"
             f"padding:14px 18px;margin-top:12px'>"
-            f"<strong style='color:#ef4444'>📌 Priorité absolue : {labels_map[worst_gap[0]]}</strong>"
+            f"<strong style='color:var(--danger)'>📌 Priorité absolue : {labels_map[worst_gap[0]]}</strong>"
             f"<div style='color:#555;font-size:0.87rem;margin-top:6px'>"
             f"Votre concurrent vous dépasse de {abs(worst_gap[1])} points sur ce critère. "
             f"C'est votre levier n°1 pour inverser le rapport de force.</div>"
@@ -4473,7 +4460,7 @@ def render_agency_report_widget(result, meta, key_prefix="agency"):
             agency_name   = st.text_input("Nom de votre agence", placeholder="Growth Agency", key=f"{key_prefix}_agency")
             client_name   = st.text_input("Nom du client", placeholder="Startup XYZ", key=f"{key_prefix}_client")
         with ag2:
-            agency_color  = st.color_picker("Couleur principale", "#6366f1", key=f"{key_prefix}_color")
+            agency_color  = st.color_picker("Couleur principale", "var(--accent)", key=f"{key_prefix}_color")
             exec_summary  = st.text_area("Introduction personnalisée (optionnel)",
                                           placeholder="Cher client, suite à notre audit...",
                                           height=80, key=f"{key_prefix}_intro")
@@ -4594,8 +4581,8 @@ def render_checklist():
     else:          st.success("80%+ -- Fondamentaux solides. Vous pouvez lancer.")
 
 # ── AFFICHAGE RESULTATS ──────────────────────────────────────
-RISK_COLORS  = {"High": "#FF4444", "Moderate": "#FF8C00", "Low": "#22c55e"}
-MATCH_COLORS = {"Good": "#22c55e", "Moderate": "#FF8C00", "Bad": "#FF4444", "N/A": "#555"}
+RISK_COLORS  = {"High": "var(--danger)", "Moderate": "var(--warning)", "Low": "var(--success)"}
+MATCH_COLORS = {"Good": "var(--success)", "Moderate": "var(--warning)", "Bad": "var(--danger)", "N/A": "#555"}
 
 def bar(v, m=5):
     f = round(v / m * 10)
@@ -4675,15 +4662,14 @@ def render_demo_mode():
     Mode démo — montre un exemple complet d'audit avec données pré-chargées.
     Permet aux nouveaux utilisateurs de comprendre la valeur sans clé API.
     """
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
 
     st.markdown(
         f"<div style='background:{bg};border:2px dashed {border};border-radius:12px;"
         f"padding:14px 20px;margin-bottom:16px;text-align:center'>"
-        f"<span style='color:#f59e0b;font-weight:700'>🎭 MODE DÉMO</span>"
+        f"<span style='color:var(--warning);font-weight:700'>🎭 MODE DÉMO</span>"
         f"<span style='color:{txt};font-size:0.85rem;margin-left:10px'>"
         f"Ceci est un exemple pré-calculé. Vos vrais audits apparaîtront ici une fois votre clé API configurée.</span>"
         f"</div>",
@@ -4719,27 +4705,26 @@ def render_benchmark_context(score, offer_type, platform):
     top25  = bm["top25"]
     bot25  = bm["bot25"]
     delta  = round(score - avg, 1)
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
 
     if score >= top25:
         position = "🏆 Top 25%"
-        pos_color = "#22c55e"
+        pos_color = "var(--success)"
         pos_msg   = f"Vous êtes dans le top 25% des pages {offer_type} sur {platform}."
     elif score >= avg:
         position = "✅ Au-dessus de la moyenne"
-        pos_color = "#6366f1"
+        pos_color = "var(--accent)"
         pos_msg   = f"Vous êtes au-dessus de la moyenne {platform} ({avg}/20)."
     elif score >= bot25:
         position = "⚠️ En dessous de la moyenne"
-        pos_color = "#f59e0b"
+        pos_color = "var(--warning)"
         pos_msg   = f"La moyenne {platform} est {avg}/20 — vous êtes {abs(delta)} pts en dessous."
     else:
         position = "🔴 Bottom 25%"
-        pos_color = "#ef4444"
+        pos_color = "var(--danger)"
         pos_msg   = f"Vous êtes dans le bottom 25% des pages {offer_type} sur {platform}. Action urgente requise."
 
     # Barre de positionnement
@@ -4755,14 +4740,14 @@ def render_benchmark_context(score, offer_type, platform):
         f"</div>"
         f"<div style='color:{txt2};font-size:0.82rem;margin-bottom:10px'>{pos_msg}</div>"
         f"<div style='position:relative;background:{border};border-radius:6px;height:10px;margin-bottom:8px'>"
-        f"  <div style='position:absolute;left:{pct_avg}%;top:-3px;width:2px;height:16px;background:#f59e0b'></div>"
-        f"  <div style='position:absolute;left:{pct_top}%;top:-3px;width:2px;height:16px;background:#22c55e'></div>"
+        f"  <div style='position:absolute;left:{pct_avg}%;top:-3px;width:2px;height:16px;background:var(--warning)'></div>"
+        f"  <div style='position:absolute;left:{pct_top}%;top:-3px;width:2px;height:16px;background:var(--success)'></div>"
         f"  <div style='background:{pos_color};width:{pct_score}%;height:10px;border-radius:6px'></div>"
         f"</div>"
         f"<div style='display:flex;justify-content:space-between;font-size:0.72rem;color:{txt2}'>"
         f"  <span>0</span>"
-        f"  <span style='color:#f59e0b'>Moy. {avg}/20</span>"
-        f"  <span style='color:#22c55e'>Top 25% {top25}/20</span>"
+        f"  <span style='color:var(--warning)'>Moy. {avg}/20</span>"
+        f"  <span style='color:var(--success)'>Top 25% {top25}/20</span>"
         f"  <span>20</span>"
         f"</div>"
         f"</div>",
@@ -4809,12 +4794,11 @@ def render_notification_center():
     """Centre de notifications in-app — badge non-lues dans le header."""
     notifs   = load_notifications()
     unread   = [n for n in notifs if not n.get("read")]
-    light    = st.session_state.get("light_mode", False)
-    bg       = "#ffffff" if light else "#0f0f1a"
-    border   = "#e5e7eb" if light else "#1e1e3a"
-    txt      = "#1a1a2e" if light else "#e0e0e0"
-    txt2     = "#6b7280" if light else "#888"
-    level_colors = {"info": "#6366f1","success": "#22c55e","warning": "#f59e0b","danger": "#ef4444"}
+    bg       = "var(--bg-surface)"
+    border   = "var(--border)"
+    txt      = "var(--text)"
+    txt2     = "var(--text-secondary)"
+    level_colors = {"info": "var(--accent)","success": "var(--success)","warning": "var(--warning)","danger": "var(--danger)"}
     level_icons  = {"info": "ℹ️","success": "✅","warning": "⚠️","danger": "🔴"}
 
     badge = f" 🔔 {len(unread)}" if unread else " 🔔"
@@ -4834,7 +4818,7 @@ def render_notification_center():
 
         for i, n in enumerate(notifs[:20]):
             lv    = n.get("level", "info")
-            col_n = level_colors.get(lv, "#6366f1")
+            col_n = level_colors.get(lv, "var(--accent)")
             ico_n = level_icons.get(lv, "ℹ️")
             read_op = "1" if n.get("read") else "0.6"  # unread = slightly dimmed border
             st.markdown(
@@ -4896,11 +4880,10 @@ def render_referral_widget():
     """
     Widget referral — code unique, stats parrainage, mois offert par ami upgradé.
     """
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
 
     ref_data = get_or_create_referral_code()
     code     = ref_data["code"]
@@ -4915,10 +4898,10 @@ def render_referral_widget():
     cc1, cc2, cc3 = st.columns(3)
     with cc1:
         st.markdown(
-            f"<div style='background:{bg};border:2px solid #6366f1;border-radius:10px;"
+            f"<div style='background:{bg};border:2px solid var(--accent);border-radius:10px;"
             f"padding:16px;text-align:center'>"
             f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase'>Votre code</div>"
-            f"<div style='color:#6366f1;font-size:1.5rem;font-weight:800;letter-spacing:2px'>{code}</div>"
+            f"<div style='color:var(--accent);font-size:1.5rem;font-weight:800;letter-spacing:2px'>{code}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -4927,7 +4910,7 @@ def render_referral_widget():
             f"<div style='background:{bg};border:1px solid {border};border-radius:10px;"
             f"padding:16px;text-align:center'>"
             f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase'>Filleuls upgradés</div>"
-            f"<div style='color:#22c55e;font-size:1.5rem;font-weight:800'>{n_conv}</div>"
+            f"<div style='color:var(--success);font-size:1.5rem;font-weight:800'>{n_conv}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -4936,7 +4919,7 @@ def render_referral_widget():
             f"<div style='background:{bg};border:1px solid {border};border-radius:10px;"
             f"padding:16px;text-align:center'>"
             f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase'>Mois offerts</div>"
-            f"<div style='color:#f59e0b;font-size:1.5rem;font-weight:800'>{credits}</div>"
+            f"<div style='color:var(--warning);font-size:1.5rem;font-weight:800'>{credits}</div>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -5003,11 +4986,10 @@ def render_ab_tracker(api_key):
     A/B Test Tracker — score 2 variantes de la même page,
     suit quelle variante gagne semaine après semaine.
     """
-    light  = st.session_state.get("light_mode", False)
-    bg     = "#ffffff" if light else "#0f0f1a"
-    border = "#e5e7eb" if light else "#1e1e3a"
-    txt    = "#1a1a2e" if light else "#e0e0e0"
-    txt2   = "#6b7280" if light else "#888"
+    bg     = "var(--bg-surface)"
+    border = "var(--border)"
+    txt    = "var(--text)"
+    txt2   = "var(--text-secondary)"
 
     abtests  = load_abtests()
 
@@ -5018,10 +5000,10 @@ def render_ab_tracker(api_key):
         ab_name = st.text_input("Nom du test", placeholder="Ex: Headline V1 vs V2 — Juillet", key="ab_name")
         c1, c2  = st.columns(2)
         with c1:
-            st.markdown("<div style='color:#6366f1;font-weight:700;font-size:0.85rem'>🔵 Variante A (contrôle)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:var(--accent);font-weight:700;font-size:0.85rem'>🔵 Variante A (contrôle)</div>", unsafe_allow_html=True)
             url_a = st.text_input("URL variante A", placeholder="https://page-originale.com", key="ab_url_a")
         with c2:
-            st.markdown("<div style='color:#f59e0b;font-weight:700;font-size:0.85rem'>🟡 Variante B (challenger)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='color:var(--warning);font-weight:700;font-size:0.85rem'>🟡 Variante B (challenger)</div>", unsafe_allow_html=True)
             url_b = st.text_input("URL variante B", placeholder="https://page-variante.com", key="ab_url_b")
 
         ab1, ab2 = st.columns(2)
@@ -5085,8 +5067,8 @@ def render_ab_tracker(api_key):
                 st.markdown("### 🏆 Résultats A/B")
                 r1, r2, r3 = st.columns([2,1,2])
                 for col, label, score, crits, color, brd in [
-                    (r1, "🔵 Variante A", sa, ca, "#6366f1", "#6366f1" if winner=="A" else border),
-                    (r3, "🟡 Variante B", sb, cb, "#f59e0b", "#f59e0b" if winner=="B" else border),
+                    (r1, "🔵 Variante A", sa, ca, "var(--accent)", "var(--accent)" if winner=="A" else border),
+                    (r3, "🟡 Variante B", sb, cb, "var(--warning)", "var(--warning)" if winner=="B" else border),
                 ]:
                     with col:
                         win_badge = " 🏆 GAGNANTE" if (winner!="=" and ((label.startswith("🔵") and winner=="A") or (label.startswith("🟡") and winner=="B"))) else ""
@@ -5101,7 +5083,7 @@ def render_ab_tracker(api_key):
                         )
                 with r2:
                     delta_ab = sb - sa
-                    d_col = "#22c55e" if delta_ab > 0 else "#ef4444" if delta_ab < 0 else "#888"
+                    d_col = "var(--success)" if delta_ab > 0 else "var(--danger)" if delta_ab < 0 else "#888"
                     d_sym = "▲" if delta_ab > 0 else "▼" if delta_ab < 0 else "="
                     st.markdown(
                         f"<div style='text-align:center;padding:20px 0'>"
@@ -5115,7 +5097,7 @@ def render_ab_tracker(api_key):
                 for crit in ["hook","offer","trust","friction"]:
                     va = ca.get(crit,0); vb = cb.get(crit,0)
                     diff = vb - va
-                    diff_col = "#22c55e" if diff>0 else "#ef4444" if diff<0 else "#888"
+                    diff_col = "var(--success)" if diff>0 else "var(--danger)" if diff<0 else "#888"
                     diff_sym = f"▲+{diff}" if diff>0 else f"▼{diff}" if diff<0 else "="
                     st.markdown(f"**{crit.capitalize()}** : A={va}/5 → B={vb}/5 &nbsp; <span style='color:{diff_col}'>{diff_sym}</span>", unsafe_allow_html=True)
 
@@ -5140,13 +5122,13 @@ def render_ab_tracker(api_key):
                 st.caption(f"Hypothèse : {tdata.get('hypothesis','')}")
                 for i, r in enumerate(reversed(rounds[-5:])):
                     w = r.get("winner","=")
-                    w_col = "#6366f1" if w=="A" else "#f59e0b" if w=="B" else "#888"
+                    w_col = "var(--accent)" if w=="A" else "var(--warning)" if w=="B" else "#888"
                     st.markdown(
                         f"<div style='display:flex;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid {border}'>"
                         f"<span style='color:{txt2};font-size:0.78rem'>{r.get('ts','')}</span>"
-                        f"<span style='color:#6366f1'>A:{r.get('score_a',0)}</span>"
+                        f"<span style='color:var(--accent)'>A:{r.get('score_a',0)}</span>"
                         f"<span style='color:{txt2}'>vs</span>"
-                        f"<span style='color:#f59e0b'>B:{r.get('score_b',0)}</span>"
+                        f"<span style='color:var(--warning)'>B:{r.get('score_b',0)}</span>"
                         f"<span style='color:{w_col};font-weight:700'>→ {w} gagne</span>"
                         f"</div>", unsafe_allow_html=True,
                     )
@@ -5260,7 +5242,7 @@ def render_results(result, offer_type=None, platform=None):
     ]
     bars_html = ""
     for lbl, val in criteria:
-        col = "#FF4444" if val <= 2 else "#FF8C00" if val <= 3 else "#22c55e"
+        col = "var(--danger)" if val <= 2 else "var(--warning)" if val <= 3 else "var(--success)"
         pct = val / 5 * 100
         bars_html += f"""
         <div style='margin-bottom:10px'>
@@ -5297,7 +5279,7 @@ def render_results(result, offer_type=None, platform=None):
                            ("trust_detail","Trust",c.get("trust",0)),
                            ("friction_detail","Friction",c.get("friction",0))]:
         detail = why.get(key, "")
-        col    = "#FF4444" if val <= 2 else "#FF8C00" if val <= 3 else "#22c55e"
+        col    = "var(--danger)" if val <= 2 else "var(--warning)" if val <= 3 else "var(--success)"
         if detail:
             with st.expander(f"{lbl} — {val}/5", expanded=(val <= 2)):
                 st.markdown(detail)
@@ -5346,9 +5328,9 @@ def render_results(result, offer_type=None, platform=None):
     top_prio = fp.get("top_priority_action", {})
     if top_prio and top_prio.get("what"):
         st.markdown(
-            f"""<div style='background:#1a0a0a;border:1px solid #FF4444;
-                border-left:4px solid #FF4444;border-radius:10px;padding:16px 20px;margin-bottom:12px'>
-              <div style='color:#FF4444;font-size:0.75rem;font-weight:700;
+            f"""<div style='background:#1a0a0a;border:1px solid var(--danger);
+                border-left:4px solid var(--danger);border-radius:10px;padding:16px 20px;margin-bottom:12px'>
+              <div style='color:var(--danger);font-size:0.75rem;font-weight:700;
                    text-transform:uppercase;letter-spacing:1px;margin-bottom:6px'>
                 Action prioritaire #1
               </div>
@@ -5417,7 +5399,7 @@ def render_results(result, offer_type=None, platform=None):
     total_gain    = h_gain + o_gain + t_gain + f_gain
     pred_score    = min(20, c["score"] + total_gain)
     pred_decision, _ = get_decision(pred_score)
-    pred_color    = "#FF4444" if pred_score <= 9 else "#FF8C00" if pred_score <= 14 else "#22c55e"
+    pred_color    = "var(--danger)" if pred_score <= 9 else "var(--warning)" if pred_score <= 14 else "var(--success)"
     n_actions     = (1 if top_prio and top_prio.get("what") else 0) + len(quick_wins) + min(len(long_term), 2)
 
     # Card prediction
@@ -5433,9 +5415,9 @@ def render_results(result, offer_type=None, platform=None):
     with pred_col1:
         pred_bars_html = ""
         crit_list = [
-            ("Hook",     c["hook"],     h_gain, "#6366f1"),
-            ("Offer",    c["offer"],    o_gain, "#22c55e"),
-            ("Trust",    c["trust"],    t_gain, "#FF8C00"),
+            ("Hook",     c["hook"],     h_gain, "var(--accent)"),
+            ("Offer",    c["offer"],    o_gain, "var(--success)"),
+            ("Trust",    c["trust"],    t_gain, "var(--warning)"),
             ("Friction", c["friction"], f_gain, "#06b6d4"),
         ]
         for lbl, cur_v, gain_v, col_v in crit_list:
@@ -5479,7 +5461,7 @@ def render_results(result, offer_type=None, platform=None):
                 {pred_score}<span style='color:#333;font-size:0.4em'>/20</span>
               </div>
               <div style='color:{pred_color};font-size:0.85em;font-weight:600;margin-top:4px'>{pred_decision}</div>
-              <div style='color:#22c55e;font-size:0.88em;font-weight:700;margin-top:8px'>
+              <div style='color:var(--success);font-size:0.88em;font-weight:700;margin-top:8px'>
                 {"+" + str(total_gain) + " pts potentiels" if total_gain > 0 else "🏆 Déjà au maximum"}
               </div>
             </div>""",
@@ -5586,7 +5568,7 @@ def render_history():
         latest_score = history[0].get("score", 0)
         delta        = latest_score - first_score
         delta_str    = ("+" if delta >= 0 else "") + str(delta)
-        delta_color  = "#22c55e" if delta > 0 else "#FF4444" if delta < 0 else "#888"
+        delta_color  = "var(--success)" if delta > 0 else "var(--danger)" if delta < 0 else "#888"
         avg_score    = round(sum(e.get("score", 0) for e in history) / len(history), 1)
         total_audits = len(history)
 
@@ -5600,7 +5582,7 @@ def render_history():
               </div>
               <div>
                 <div style='color:#aaa;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Score moyen</div>
-                <div style='color:#6366f1;font-size:2em;font-weight:800'>{avg_score}<span style='font-size:0.5em;color:#555'>/20</span></div>
+                <div style='color:var(--accent);font-size:2em;font-weight:800'>{avg_score}<span style='font-size:0.5em;color:#555'>/20</span></div>
               </div>
               <div>
                 <div style='color:#aaa;font-size:0.75em;text-transform:uppercase;letter-spacing:1px'>Total audits</div>
@@ -5635,7 +5617,7 @@ def render_history():
         score  = entry.get("score", 0)
         dec    = entry.get("decision", "")
         label  = str(entry.get("url", "") or entry.get("offer_type", ""))[:40]
-        color  = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+        color  = "var(--danger)" if score <= 9 else "var(--warning)" if score <= 14 else "var(--success)"
         url_entry = entry.get("url", "")
 
         # Badge delta vs audit précédent (i+1 = plus ancien)
@@ -5644,7 +5626,7 @@ def render_history():
             prev_score = history[i + 1].get("score", 0)
             d = score - prev_score
             if d != 0:
-                dc = "#22c55e" if d > 0 else "#FF4444"
+                dc = "var(--success)" if d > 0 else "var(--danger)"
                 delta_badge = f"  <span style='color:{dc};font-size:0.85em'>({'+'if d>0 else ''}{d})</span>"
 
         expander_title = (
@@ -5664,7 +5646,7 @@ def render_history():
                 if i + 1 < len(history):
                     prev = history[i + 1].get("score", 0)
                     d2 = score - prev
-                    dc2 = "#22c55e" if d2 > 0 else "#FF4444" if d2 < 0 else "#888"
+                    dc2 = "var(--success)" if d2 > 0 else "var(--danger)" if d2 < 0 else "#888"
                     ds = ("+" if d2 >= 0 else "") + str(d2) + " pts"
                     st.markdown("**vs précédent**<br><span style='color:" + dc2 + ";font-weight:700'>" + ds + "</span>", unsafe_allow_html=True)
 
@@ -5784,7 +5766,7 @@ def render_history():
                     if ra_mode in ("Funnel Only", "Full Risk") and ra_url:
                         _ra_stage.markdown(
                             "<div style='padding:8px 12px;background:#1a1a2e;border-radius:6px;"
-                            "border-left:3px solid #6366f1;color:#ccc;font-size:0.88em'>"
+                            "border-left:3px solid var(--accent);color:#ccc;font-size:0.88em'>"
                             "🔍 Extraction de la page...</div>",
                             unsafe_allow_html=True
                         )
@@ -5814,7 +5796,7 @@ def render_history():
                     prev_score = entry.get("score", 0)
                     new_score  = new_result.get("_c", {}).get("score", 0)
                     delta_ra   = new_score - prev_score
-                    dc_ra      = "#22c55e" if delta_ra > 0 else "#FF4444" if delta_ra < 0 else "#888"
+                    dc_ra      = "var(--success)" if delta_ra > 0 else "var(--danger)" if delta_ra < 0 else "#888"
                     sign_ra    = "+" if delta_ra > 0 else ""
                     st.markdown(
                         f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:10px;
@@ -5855,7 +5837,7 @@ def render_monitoring(api_key):
             url_short = al["url"].replace("https://","").replace("http://","")[:50]
             delta     = al["delta"]
             icon      = "📈" if delta > 0 else "📉"
-            col_al    = "#22c55e" if delta > 0 else "#FF4444"
+            col_al    = "var(--success)" if delta > 0 else "var(--danger)"
             sign      = "+" if delta > 0 else ""
             st.markdown(
                 f"""<div style='background:#1a1a2e;border-left:4px solid {col_al};
@@ -5918,7 +5900,7 @@ def render_monitoring(api_key):
             first_sc = entries_url[0].get("score", 0)
             last_sc  = entries_url[-1].get("score", 0)
             delta_t  = last_sc - first_sc
-            col_t    = "#22c55e" if delta_t > 0 else "#FF4444" if delta_t < 0 else "#888"
+            col_t    = "var(--success)" if delta_t > 0 else "var(--danger)" if delta_t < 0 else "#888"
             sign_t   = "+" if delta_t >= 0 else ""
             met1, met2, met3 = st.columns(3)
             with met1: st.metric("Premier audit", f"{first_sc}/20")
@@ -6153,7 +6135,7 @@ def render_projects(api_key):
         urls     = proj.get("urls", [])
         n_done   = len([u for u in urls if u in audits])
         avg_sc   = round(sum(audits[u]["score"] for u in urls if u in audits) / n_done, 1) if n_done > 0 else None
-        proj_color = "#22c55e" if (avg_sc or 0) >= 15 else "#FF8C00" if (avg_sc or 0) >= 10 else "#FF4444"
+        proj_color = "var(--success)" if (avg_sc or 0) >= 15 else "var(--warning)" if (avg_sc or 0) >= 10 else "var(--danger)"
 
         expander_label = (
             f"🗂️ {proj['name']}  —  {n_done}/{len(urls)} audités"
@@ -6186,7 +6168,7 @@ def render_projects(api_key):
                     u_short = u.replace("https://","").replace("http://","")[:50]
                     if u in audits:
                         sc = audits[u]["score"]
-                        col = "#22c55e" if sc >= 15 else "#FF8C00" if sc >= 10 else "#FF4444"
+                        col = "var(--success)" if sc >= 15 else "var(--warning)" if sc >= 10 else "var(--danger)"
                         st.markdown(
                             f"<div style='display:flex;align-items:center;gap:12px;margin:4px 0'>"
                             f"<span style='color:#aaa;font-size:0.85em;min-width:200px'>{u_short}</span>"
@@ -6398,7 +6380,7 @@ def render_bulk(api_key):
                     sc_c = "#FFD700" if rank==1 else "#C0C0C0" if rank==2 else "#CD7F32"
                     medal = "🥇" if rank==1 else "🥈" if rank==2 else "🥉"
                     url_s = entry["url"].replace("https://","")[:35]
-                    sc_h  = "#22c55e" if entry["score"]>=15 else "#FF8C00" if entry["score"]>=10 else "#FF4444"
+                    sc_h  = "var(--success)" if entry["score"]>=15 else "var(--warning)" if entry["score"]>=10 else "var(--danger)"
                     st.markdown(
                         f"""<div style='background:#1a1a2e;border:2px solid {sc_c};border-radius:10px;
                             padding:14px;text-align:center;margin:4px'>
@@ -6414,7 +6396,7 @@ def render_bulk(api_key):
         st.markdown("#### 📋 Détail par page")
         for r in sortable:
             sc = r["score"]
-            sc_color = "#22c55e" if sc >= 15 else "#FF8C00" if sc >= 10 else "#FF4444"
+            sc_color = "var(--success)" if sc >= 15 else "var(--warning)" if sc >= 10 else "var(--danger)"
             with st.expander(f"{r['url'].replace('https://','')[:55]} — {sc}/20 — {r.get('decision','')}"):
                 render_results(r["result"], offer_type=r.get("offer_type"), platform=r.get("platform"))
 
@@ -6493,7 +6475,7 @@ def render_comparison(api_key, model="gpt-4o-mini"):
                 with col:
                     sc = r.get("score",0)
                     risk = r.get("risk","High")
-                    sc_hex = "#FF4444" if risk=="High" else "#FF8C00" if risk=="Moderate" else "#22c55e"
+                    sc_hex = "var(--danger)" if risk=="High" else "var(--warning)" if risk=="Moderate" else "var(--success)"
                     winner = sc == max(ra.get("score",0), rb.get("score",0))
                     st.markdown(
                         f"""<div style='background:#1a1a2e;border-left:4px solid {sc_hex};
@@ -6561,16 +6543,16 @@ def render_onboarding_banner():
     st.markdown(
         """
         <div style='background:linear-gradient(135deg,#1a1a2e,#16213e);
-             border:2px solid #6366f1;border-radius:14px;
+             border:2px solid var(--accent);border-radius:14px;
              padding:24px 28px;margin-bottom:20px'>
-          <div style='color:#6366f1;font-size:1.1em;font-weight:700;margin-bottom:8px'>
+          <div style='color:var(--accent);font-size:1.1em;font-weight:700;margin-bottom:8px'>
             👋 Bienvenue sur LRS™ — Launch Risk System
           </div>
           <div style='color:#ccc;font-size:0.92em;line-height:1.7'>
             <b style='color:#fff'>3 étapes pour votre premier audit :</b><br>
-            &nbsp;&nbsp;<span style='color:#6366f1'>①</span> &nbsp;Collez l'URL de votre landing page dans l'onglet <b>Audit</b><br>
-            &nbsp;&nbsp;<span style='color:#6366f1'>②</span> &nbsp;Choisissez votre plateforme publicitaire et le type d'offre<br>
-            &nbsp;&nbsp;<span style='color:#6366f1'>③</span> &nbsp;Cliquez <b>🚀 Run LRS Audit</b> — résultats en 15 secondes<br><br>
+            &nbsp;&nbsp;<span style='color:var(--accent)'>①</span> &nbsp;Collez l'URL de votre landing page dans l'onglet <b>Audit</b><br>
+            &nbsp;&nbsp;<span style='color:var(--accent)'>②</span> &nbsp;Choisissez votre plateforme publicitaire et le type d'offre<br>
+            &nbsp;&nbsp;<span style='color:var(--accent)'>③</span> &nbsp;Cliquez <b>🚀 Run LRS Audit</b> — résultats en 15 secondes<br><br>
             <b style='color:#fff'>Fonctionnalités disponibles :</b>
             &nbsp;Audit · Comparaison · Projets multi-pages · Bulk audit · Monitoring planifié · Export PDF client
           </div>
@@ -6587,7 +6569,7 @@ def render_onboarding_banner():
             st.rerun()
 
 # ── ADS LIBRARY ──────────────────────────────────────────────
-def _card(title, items, color="#6366f1", icon=""):
+def _card(title, items, color="var(--accent)", icon=""):
     """Render a compact framework card."""
     rows = "".join(
         f"<div style='padding:5px 0;border-bottom:1px solid #1e1e3a;color:#ccc;font-size:0.83em'>{item}</div>"
@@ -6598,16 +6580,6 @@ def _card(title, items, color="#6366f1", icon=""):
             border-left:3px solid {color};border-radius:8px;padding:14px 16px;margin-bottom:10px'>
           <div style='color:{color};font-weight:700;font-size:0.88em;margin-bottom:8px'>{icon} {title}</div>
           {rows}
-        </div>""",
-        unsafe_allow_html=True,
-    )
-
-def _stat(value, label, color="#6366f1"):
-    st.markdown(
-        f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:8px;
-            padding:14px;text-align:center;margin-bottom:8px'>
-          <div style='color:{color};font-size:1.8em;font-weight:800;line-height:1'>{value}</div>
-          <div style='color:#666;font-size:0.75em;margin-top:4px'>{label}</div>
         </div>""",
         unsafe_allow_html=True,
     )
@@ -6639,13 +6611,13 @@ def render_ads_library():
                 "📊 Stat choc : '73% des campagnes échouent dès J1 — voici pourquoi'",
                 "🛑 Pattern interrupt : visuel inattendu + texte court",
                 "👤 Identification : 'Si tu fais du paid traffic...'",
-            ], color="#6366f1", icon="🎯")
+            ], color="var(--accent)", icon="🎯")
             _card("Structure pub Meta", [
                 "0–3s : Hook visuel + texte overlay (une phrase max)",
                 "3–15s : Corps — problème → solution → preuve",
                 "15–30s : CTA clair + urgence ('Offre se termine dimanche')",
                 "Primary text : 125 car. avant 'Voir plus' → hook obligatoire",
-            ], color="#22c55e", icon="📐")
+            ], color="var(--success)", icon="📐")
         with col2:
             _card("Benchmarks CTR (cold traffic)", [
                 "✅ > 2% CTR : bon — publiez davantage",
@@ -6653,7 +6625,7 @@ def render_ads_library():
                 "⚠️  < 1% CTR : créa à revoir ou audience trop large",
                 "CPM acceptable : 8–18€ (FR, ecom/digital)",
                 "Fréquence > 3.5 : creative fatigue, changez la créa",
-            ], color="#FF8C00", icon="📊")
+            ], color="var(--warning)", icon="📊")
             _card("Modèles de primary text", [
                 "PAS : Problème → Agitate ('tu perds X€/j') → Solve",
                 "Social Proof : '[Prénom] a obtenu [résultat] en [durée]'",
@@ -6751,7 +6723,7 @@ Campagne CBO — [Objectif : Ventes]
                 "⚠️  VTR (View-Through Rate) > 25% à 6s : hook OK",
                 "🚀 ROAS > 2.0 avant de scale",
                 "Fréquence > 2.5 en 7j : nouvelle créa urgente",
-            ], color="#22c55e", icon="📊")
+            ], color="var(--success)", icon="📊")
             _card("Formats natifs gagnants", [
                 "UGC face caméra : 15–30s, son naturel ambiant",
                 "Spark Ads : boostez vos contenus organiques TikTok",
@@ -6924,7 +6896,7 @@ Compte
                 "LP : 500-800 mots, 1 CTA, pas de nav",
                 "Checkout : 1-page, confiance++",
                 "Upsell : bump offer sur checkout",
-            ], color="#6366f1", icon="🎯")
+            ], color="var(--accent)", icon="🎯")
         with col2:
             _card("Funnel VSL (Video Sales Letter)", [
                 "Ad → LP avec vidéo → Checkout → Upsells",
@@ -6932,7 +6904,7 @@ Compte
                 "Vidéo autoplay sans controls (dès possible)",
                 "CTA apparaît à 60% de la vidéo",
                 "Upsell 1 (complémentaire) + Upsell 2 (premium)",
-            ], color="#22c55e", icon="🎬")
+            ], color="var(--success)", icon="🎬")
         with col3:
             _card("Funnel Lead Magnet", [
                 "Ad → Optin (email) → Email nurturing → Vente",
@@ -6940,7 +6912,7 @@ Compte
                 "Lead magnet : valeur perçue élevée, résultat rapide",
                 "Sequence 5 emails : valeur → valeur → pitch → urgence → dernière chance",
                 "Retargeting parallèle sur les optins non-convertis",
-            ], color="#FF8C00", icon="📧")
+            ], color="var(--warning)", icon="📧")
 
         st.markdown("---")
         st.markdown("#### Les règles immuables d'une landing page qui convertit")
@@ -6955,7 +6927,7 @@ Compte
                 "⑤ Offre : ce que vous obtenez (offer stack)",
                 "⑥ Garantie : réduction du risque perçu",
                 "⑦ CTA final : urgence + bouton",
-            ], color="#6366f1", icon="📄")
+            ], color="var(--accent)", icon="📄")
             _card("Les erreurs qui tuent la conversion", [
                 "❌ Navigation header visible (fuite = -20-40% CVR)",
                 "❌ CTA générique ('En savoir plus', 'Cliquer ici')",
@@ -6963,7 +6935,7 @@ Compte
                 "❌ Garantie absente ou invisible",
                 "❌ Pas de preuve sociale above the fold",
                 "❌ Page trop lente > 3s (Google = -53% de taux de rebond)",
-            ], color="#FF4444", icon="⚠️")
+            ], color="var(--danger)", icon="⚠️")
         with col_b:
             _card("Offer Stack — comment présenter l'offre", [
                 "Listez TOUT ce que le client obtient avec valeur €",
@@ -6972,14 +6944,14 @@ Compte
                 "Bonus 2 : 'Valeur : 47€'",
                 "Garantie 30j : 'Risque zéro'",
                 "Prix total barré → 'Aujourd'hui seulement : 47€'",
-            ], color="#22c55e", icon="🎁")
+            ], color="var(--success)", icon="🎁")
             _card("Optimisation du checkout", [
                 "1-page checkout = meilleur CVR (Shopify, ThriveCart...)",
                 "Bump offer visible (+15-25% revenu moyen)",
                 "Logos de paiement sécurisé sous le bouton",
                 "Résumé commande visible à droite du formulaire",
                 "Testimonial ou stat sous le CTA checkout",
-            ], color="#FF8C00", icon="🛒")
+            ], color="var(--warning)", icon="🛒")
 
         with st.expander("📊 Benchmarks CVR par type de page"):
             st.markdown("""
@@ -7004,20 +6976,20 @@ Compte
                 "A : Agitez — 'Et ça coûte X€ par mois / détruit votre...'",
                 "S : Présentez votre solution comme l'évidence",
                 "⚡ Idéal pour : primary text, email, VSL intro",
-            ], color="#6366f1", icon="🔥")
+            ], color="var(--accent)", icon="🔥")
             _card("AIDA — Attention · Interest · Desire · Action", [
                 "A : Attention — hook fort (stat, question, choc)",
                 "I : Interest — pourquoi c'est pertinent POUR EUX",
                 "D : Desire — bénéfices concrets + preuves",
                 "A : Action — CTA clair + urgence",
                 "⚡ Idéal pour : landing page, email séquence",
-            ], color="#22c55e", icon="📈")
+            ], color="var(--success)", icon="📈")
             _card("BAB — Before · After · Bridge", [
                 "Before : 'Avant, tu passais 2h à optimiser tes pubs...'",
                 "After : 'Imagine avoir le score exact avant de dépenser 1€'",
                 "Bridge : 'C'est exactement ce que fait LRS™ en 15s'",
                 "⚡ Idéal pour : témoignages, ads UGC, email welcome",
-            ], color="#FF8C00", icon="🌉")
+            ], color="var(--warning)", icon="🌉")
         with col2:
             _card("Les 4U — Urgent · Unique · Utile · Ultra-spécifique", [
                 "Urgent : pourquoi agir maintenant? (prix, stock, délai)",
@@ -7032,7 +7004,7 @@ Compte
                 "'Stop [action commune] — voici ce qui marche vraiment'",
                 "'Comment [résultat désiré] sans [douleur habituelle]'",
                 "'Ce que [autorité] ne veut pas que vous sachiez sur [sujet]'",
-            ], color="#FF4444", icon="💡")
+            ], color="var(--danger)", icon="💡")
 
         st.markdown("---")
         st.markdown("#### Templates prêts à l'emploi")
@@ -7206,7 +7178,7 @@ def render_benchmark_tab():
         st.markdown("Valeur standalone : **€27–47**")
 
         # Charger le PDF depuis le fichier
-        benchmark_path = os.path.join(os.path.dirname(__file__), "LRS_Benchmark_Report_2025.pdf")
+        benchmark_path = os.path.join(os.path.dirname(__file__), "assets", "LRS_Benchmark_Report_2025.pdf")
         try:
             with open(benchmark_path, "rb") as f:
                 pdf_bytes = f.read()
@@ -7326,15 +7298,15 @@ def send_post_audit_email_auto(result, meta):
     top   = fp.get("top_priority_action", {})
     qws   = fp.get("quick_wins", [])[:2]
 
-    sc_color = "#FF4444" if score <= 9 else "#FF8C00" if score <= 14 else "#22c55e"
+    sc_color = "var(--danger)" if score <= 9 else "var(--warning)" if score <= 14 else "var(--success)"
     risk_emoji = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
 
     action_html = ""
     if top and top.get("what"):
         action_html = f"""
-        <div style='background:#fff8f8;border-left:4px solid #FF4444;border-radius:6px;
+        <div style='background:#fff8f8;border-left:4px solid var(--danger);border-radius:6px;
              padding:14px 18px;margin:16px 0'>
-          <div style='color:#FF4444;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+          <div style='color:var(--danger);font-size:0.72rem;font-weight:700;text-transform:uppercase;
                letter-spacing:1px;margin-bottom:6px'>🎯 Action prioritaire #1</div>
           <div style='color:#1a1a2e;font-weight:700'>{top.get('what','')}</div>
           <div style='color:#555;font-size:0.88rem;margin-top:6px'>{top.get('how_exactly','')}</div>
@@ -7346,9 +7318,9 @@ def send_post_audit_email_auto(result, meta):
 
     next_step_html = ""
     if score >= 10:
-        next_step_html = "<p style='color:#22c55e;font-weight:700'>✅ Bon score ! Appliquez le plan et re-auditez dans 7 jours pour mesurer votre progression.</p>"
+        next_step_html = "<p style='color:var(--success);font-weight:700'>✅ Bon score ! Appliquez le plan et re-auditez dans 7 jours pour mesurer votre progression.</p>"
     else:
-        next_step_html = "<p style='color:#FF4444;font-weight:700'>⚠️ Score critique — appliquez les actions prioritaires avant de lancer vos campagnes.</p>"
+        next_step_html = "<p style='color:var(--danger);font-weight:700'>⚠️ Score critique — appliquez les actions prioritaires avant de lancer vos campagnes.</p>"
 
     html_body = f"""
 <!DOCTYPE html>
@@ -7357,7 +7329,7 @@ def send_post_audit_email_auto(result, meta):
             box-shadow:0 4px 20px rgba(0,0,0,0.08)'>
 
   <div style='background:linear-gradient(135deg,#1a1a2e,#16213e);padding:28px'>
-    <div style='color:#6366f1;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+    <div style='color:var(--accent);font-size:0.72rem;font-weight:700;text-transform:uppercase;
          letter-spacing:1.5px;margin-bottom:6px'>🚦 LRS™ — Launch Risk System</div>
     <div style='color:#fff;font-size:1.4rem;font-weight:800'>Votre audit est prêt{", " + name if name else ""}</div>
     <div style='color:#888;font-size:0.82rem;margin-top:4px'>{ts}</div>
@@ -7386,7 +7358,7 @@ def send_post_audit_email_auto(result, meta):
     {next_step_html}
 
     <div style='background:#f0f0ff;border-radius:10px;padding:16px 20px;margin-top:20px;text-align:center'>
-      <div style='color:#6366f1;font-weight:700;margin-bottom:6px'>📅 Rappel re-audit dans 7 jours</div>
+      <div style='color:var(--accent);font-weight:700;margin-bottom:6px'>📅 Rappel re-audit dans 7 jours</div>
       <div style='color:#555;font-size:0.85rem'>
         Appliquez vos corrections, puis re-lancez l'audit pour mesurer votre progression.
         LRS vous enverra votre score mis à jour.
@@ -7463,12 +7435,12 @@ def send_weekly_digest_email():
     name   = drip_data.get("name","")
 
     best_sc = best.get("score",0)
-    best_sc_color = "#FF4444" if best_sc <= 9 else "#FF8C00" if best_sc <= 14 else "#22c55e"
+    best_sc_color = "var(--danger)" if best_sc <= 9 else "var(--warning)" if best_sc <= 14 else "var(--success)"
 
     rows_html = ""
     for e in recent[:5]:
         sc = e.get("score",0)
-        c  = "#FF4444" if sc<=9 else "#FF8C00" if sc<=14 else "#22c55e"
+        c  = "var(--danger)" if sc<=9 else "var(--warning)" if sc<=14 else "var(--success)"
         label = str(e.get("url","") or e.get("offer_type",""))[:45]
         rows_html += f"<tr><td style='padding:8px 12px;color:#555;font-size:0.85rem'>{label}</td><td style='padding:8px 12px;color:{c};font-weight:700'>{sc}/20</td><td style='padding:8px 12px;color:#888;font-size:0.82rem'>{e.get('platform','')}</td></tr>"
 
@@ -7479,7 +7451,7 @@ def send_weekly_digest_email():
             box-shadow:0 4px 20px rgba(0,0,0,0.08)'>
 
   <div style='background:linear-gradient(135deg,#1a1a2e,#0f0f2e);padding:28px'>
-    <div style='color:#6366f1;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px'>📊 LRS™ — Bilan Hebdomadaire</div>
+    <div style='color:var(--accent);font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px'>📊 LRS™ — Bilan Hebdomadaire</div>
     <div style='color:#fff;font-size:1.3rem;font-weight:800;margin-top:6px'>Cette semaine{", " + name if name else ""}</div>
   </div>
 
@@ -7487,7 +7459,7 @@ def send_weekly_digest_email():
     <div style='display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px'>
       <div style='text-align:center;flex:1;min-width:100px;background:#f8f8fc;border-radius:10px;padding:16px'>
         <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Audits</div>
-        <div style='color:#6366f1;font-size:2.5rem;font-weight:900'>{len(recent)}</div>
+        <div style='color:var(--accent);font-size:2.5rem;font-weight:900'>{len(recent)}</div>
       </div>
       <div style='text-align:center;flex:1;min-width:100px;background:#f8f8fc;border-radius:10px;padding:16px'>
         <div style='color:#888;font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Score moyen</div>
@@ -7511,7 +7483,7 @@ def send_weekly_digest_email():
     </table>
 
     <div style='background:#f0f8f0;border-radius:10px;padding:16px 20px;text-align:center'>
-      <div style='color:#22c55e;font-weight:700;margin-bottom:6px'>💡 Continuez sur votre lancée</div>
+      <div style='color:var(--success);font-weight:700;margin-bottom:6px'>💡 Continuez sur votre lancée</div>
       <div style='color:#555;font-size:0.85rem'>
         Re-auditez vos meilleures pages après avoir appliqué les recommandations.
         Chaque point gagné = plus de budget ROI+.
@@ -7559,9 +7531,8 @@ def render_reaudit_reminder():
 
     last_url = history[0].get("url", "")
     last_score = history[0].get("score", 0)
-    light = st.session_state.get("light_mode", False)
-    bg    = "#fffbeb" if light else "#1a1400"
-    brd   = "#f59e0b"
+    bg    = "var(--warning-soft)"
+    brd   = "var(--warning)"
 
     col_msg, col_btn = st.columns([4, 1])
     with col_msg:
@@ -7588,7 +7559,7 @@ def render_score_celebration(current_score, previous_score):
     if delta <= 0:
         return
 
-    color  = "#22c55e"
+    color  = "var(--success)"
     emoji  = "🎉" if delta >= 5 else "🚀" if delta >= 3 else "✨"
     msg    = "Excellent travail !" if delta >= 5 else "Belle progression !" if delta >= 3 else "Bonne amélioration !"
 
@@ -7649,7 +7620,7 @@ def render_quick_audit_result(qr):
     score15  = qr.get("score15", 0)
     risk     = qr.get("risk", "High")
     dec      = qr.get("decision", "Do NOT launch")
-    sc_color = "#FF4444" if risk == "High" else "#FF8C00" if risk == "Moderate" else "#22c55e"
+    sc_color = "var(--danger)" if risk == "High" else "var(--warning)" if risk == "Moderate" else "var(--success)"
 
     st.markdown(
         f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-top:4px solid {sc_color};
@@ -7671,7 +7642,7 @@ def render_quick_audit_result(qr):
     qa1, qa2, qa3 = st.columns(3)
     for col, lbl, key in [(qa1, "🪝 Hook", "hook"), (qa2, "🎁 Offer", "offer"), (qa3, "🛡️ Trust", "trust")]:
         val = qr.get(key, 0)
-        c   = "#FF4444" if val <= 1 else "#FF8C00" if val <= 3 else "#22c55e"
+        c   = "var(--danger)" if val <= 1 else "var(--warning)" if val <= 3 else "var(--success)"
         with col:
             st.markdown(
                 f"<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:8px;"
@@ -7684,9 +7655,9 @@ def render_quick_audit_result(qr):
     action = qr.get("action", {})
     if action.get("what"):
         st.markdown(
-            f"""<div style='background:#0a0a14;border:1px solid #FF4444;border-left:4px solid #FF4444;
+            f"""<div style='background:#0a0a14;border:1px solid var(--danger);border-left:4px solid var(--danger);
                 border-radius:8px;padding:14px 18px;margin-top:14px'>
-              <div style='color:#FF4444;font-size:0.72rem;font-weight:700;text-transform:uppercase;
+              <div style='color:var(--danger);font-size:0.72rem;font-weight:700;text-transform:uppercase;
                    letter-spacing:1px;margin-bottom:4px'>⚡ Action prioritaire</div>
               <div style='color:#fff;font-weight:700;font-size:0.93rem'>{action.get('what','')}</div>
               <div style='color:#aaa;font-size:0.84rem;margin-top:6px'>{action.get('how_exactly','')}</div>
@@ -8391,7 +8362,7 @@ def main():
                     "<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;"
                     "padding:32px;text-align:center'>"
                     "<div style='font-size:2rem'>🔒</div>"
-                    "<div style='color:#6366f1;font-weight:700;font-size:1.1rem;margin:12px 0 6px'>Ads Library</div>"
+                    "<div style='color:var(--accent);font-weight:700;font-size:1.1rem;margin:12px 0 6px'>Ads Library</div>"
                     "<div style='color:#888;font-size:0.9rem'>Disponible sur le plan <strong>Pro</strong> (49€/mois) et <strong>Agency</strong> (99€/mois).</div>"
                     "</div>",
                     unsafe_allow_html=True,
