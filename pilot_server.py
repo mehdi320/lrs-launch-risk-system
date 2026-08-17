@@ -67,6 +67,25 @@ class AuditRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
+BULK_MAX_URLS = 20
+
+
+class BulkAuditRequest(BaseModel):
+    urls: list[str] = Field(default_factory=list)
+    mode: str = "Funnel Only"
+    platform: str = "Meta"
+    offer_type: str = "Digital product"
+    brand_type: str = "Nouveau lancement"
+    model: str = "gpt-4o-mini"
+
+
+class CreativeAnglesRequest(BaseModel):
+    offer_description: str = ""
+    platform: str = "Meta"
+    offer_type: str = "Digital product"
+    model: str = "gpt-4o-mini"
+
+
 @app.post("/api/audit")
 def run_audit_endpoint(req: AuditRequest):
     mode = req.mode if req.mode in VALID_MODES else "Funnel Only"
@@ -208,6 +227,177 @@ def get_dashboard():
         "evolution": evolution,
         "recent_audits": recent_audits,
     }
+
+
+@app.get("/api/history")
+def get_history(q: str = "", risk: str = "Tous", platform: str = "Toutes"):
+    history = _load_history()
+
+    def entry_risk(e):
+        return audit_engine.get_decision(e.get("score", 0))[1]
+
+    q_norm = q.strip().lower()
+    filtered = []
+    for e in history:
+        if q_norm:
+            haystack = (str(e.get("url", "")) + str(e.get("platform", "")) +
+                        str(e.get("offer_type", "")) + str(e.get("score", ""))).lower()
+            if q_norm not in haystack:
+                continue
+        if risk != "Tous" and entry_risk(e) != risk:
+            continue
+        if platform != "Toutes" and e.get("platform", "") != platform:
+            continue
+        filtered.append(e)
+
+    entries = []
+    for i, e in enumerate(filtered):
+        delta = None
+        if i + 1 < len(filtered):
+            delta = e.get("score", 0) - filtered[i + 1].get("score", 0)
+        entries.append({
+            "url": e.get("url", ""),
+            "offer_type": e.get("offer_type", ""),
+            "mode": e.get("mode", ""),
+            "platform": e.get("platform", ""),
+            "timestamp": e.get("timestamp", ""),
+            "score": e.get("score", 0),
+            "decision": e.get("decision", ""),
+            "risk": entry_risk(e),
+            "delta": delta,
+        })
+
+    stats = None
+    if len(filtered) >= 2:
+        first_score = filtered[-1].get("score", 0)
+        latest_score = filtered[0].get("score", 0)
+        stats = {
+            "delta_global": latest_score - first_score,
+            "avg_score": round(sum(e.get("score", 0) for e in filtered) / len(filtered), 1),
+            "total": len(filtered),
+        }
+
+    evolution = [
+        {
+            "index": i + 1,
+            "score": e.get("score", 0),
+            "label": str(e.get("url") or e.get("offer_type") or "")[:30],
+        }
+        for i, e in enumerate(reversed(filtered))
+    ]
+
+    return {"entries": entries, "stats": stats, "evolution": evolution}
+
+
+@app.get("/api/alerts")
+def get_alerts():
+    history = _load_history()
+    if len(history) < 2:
+        return {"alerts": []}
+
+    url_map = {}
+    for entry in reversed(history):
+        url = entry.get("url", "")
+        if not url:
+            continue
+        url_map.setdefault(url, []).append(entry)
+
+    alerts = []
+    for url, entries in url_map.items():
+        if len(entries) < 2:
+            continue
+        latest = entries[-1]
+        prev = entries[-2]
+        delta = latest.get("score", 0) - prev.get("score", 0)
+        if abs(delta) >= 2:
+            alerts.append({
+                "url": url,
+                "latest_score": latest.get("score", 0),
+                "prev_score": prev.get("score", 0),
+                "delta": delta,
+                "latest_ts": latest.get("timestamp", ""),
+                "direction": "up" if delta > 0 else "down",
+            })
+    alerts.sort(key=lambda a: abs(a["delta"]), reverse=True)
+    return {"alerts": alerts}
+
+
+@app.post("/api/bulk-audit")
+def run_bulk_audit(req: BulkAuditRequest):
+    mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
+    urls = [u.strip() for u in req.urls if u.strip().startswith("http")][:BULK_MAX_URLS]
+    if not urls:
+        raise HTTPException(status_code=400, detail="Aucune URL valide fournie.")
+
+    results = []
+    for url in urls:
+        try:
+            content, status, is_js = audit_engine.extract_page(url)
+            if not content:
+                results.append({"url": url, "error": status, "score": None})
+                continue
+            page_type = audit_engine.detect_page_type(content, url)
+            page_lang = audit_engine.detect_language(content)
+            result = audit_engine.run_audit(
+                mode=mode,
+                platform=req.platform,
+                offer_type=req.offer_type,
+                landing_content=content,
+                ad_text="",
+                market_context="",
+                model=req.model,
+                brand_type=req.brand_type,
+                page_type=page_type,
+                page_lang=page_lang,
+            )
+            c = result.get("_c", {})
+            meta = {
+                "mode": mode,
+                "platform": req.platform,
+                "offer_type": req.offer_type,
+                "url": url,
+                "timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "brand_type": req.brand_type,
+                "page_type": page_type,
+                "ad_text": "",
+                "model": req.model,
+            }
+            _save_history_entry(result, meta)
+            results.append({
+                "url": url,
+                "score": c.get("score", 0),
+                "hook": c.get("hook", 0),
+                "offer": c.get("offer", 0),
+                "trust": c.get("trust", 0),
+                "friction": c.get("friction", 0),
+                "decision": c.get("decision", ""),
+                "risk": c.get("risk", "High"),
+                "error": None,
+            })
+        except ValueError as e:
+            results.append({"url": url, "error": str(e)[:120], "score": None})
+        except Exception as e:
+            results.append({"url": url, "error": str(e)[:120], "score": None})
+
+    results.sort(key=lambda r: (r["score"] is None, -(r["score"] or 0)))
+    return {"results": results}
+
+
+@app.post("/api/creative-angles")
+def get_creative_angles(req: CreativeAnglesRequest):
+    offer_description = req.offer_description.strip()
+    if not offer_description:
+        raise HTTPException(status_code=400, detail="Merci de décrire votre offre.")
+    try:
+        result = audit_engine.generate_creative_angles(
+            offer_description=offer_description,
+            platform=req.platform,
+            offer_type=req.offer_type,
+            model=req.model,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return result
 
 
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")

@@ -367,6 +367,7 @@
   .nav-tabs {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 40px;
   }
@@ -451,6 +452,134 @@
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 20px; padding: 20px 20px 12px;
   }
+
+  /* ── Filtres (Historique) ── */
+  .filter-bar {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  .filter-bar input[type="text"] {
+    flex: 2; min-width: 180px;
+    background: var(--surface-2); border: 1px solid var(--border-strong);
+    border-radius: 12px; padding: 12px 16px; font-size: 14px; color: var(--text);
+    outline: none; font-family: inherit;
+  }
+  .filter-bar input[type="text"]::placeholder { color: var(--text-muted); }
+  .filter-bar input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .filter-bar .segmented { flex: 1; min-width: 160px; }
+
+  .stats-banner {
+    display: flex; gap: 32px; flex-wrap: wrap;
+    background: linear-gradient(135deg, #17171c, #101014);
+    border: 1px solid var(--border);
+    border-radius: 20px; padding: 22px 26px; margin-bottom: 20px;
+  }
+  .stats-banner .stat-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--text-muted); margin-bottom: 4px;
+  }
+  .stats-banner .stat-val { font-size: 26px; font-weight: 800; line-height: 1.1; }
+  .stats-banner .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Alertes (Suivi) ── */
+  .alert-row {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 18px; margin-bottom: 8px;
+    border-left: 3px solid var(--border);
+  }
+  .alert-row.up { border-left-color: var(--success); }
+  .alert-row.down { border-left-color: var(--danger); }
+  .alert-row .alert-icon { font-size: 20px; }
+  .alert-row .alert-body { flex: 1; min-width: 0; }
+  .alert-row .alert-title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .alert-row .alert-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .alert-row .alert-delta { font-size: 18px; font-weight: 800; flex-shrink: 0; }
+
+  /* ── Historique : ligne dépliable ── */
+  .hist-row {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 18px; margin-bottom: 8px; cursor: pointer;
+  }
+  .hist-row .hist-top { display: flex; align-items: center; gap: 14px; }
+  .hist-row .hist-score { font-size: 19px; font-weight: 800; min-width: 46px; }
+  .hist-row .hist-body { flex: 1; min-width: 0; }
+  .hist-row .hist-title {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .hist-row .hist-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .hist-row .hist-chevron { color: var(--text-muted); font-size: 12px; transition: transform 0.2s var(--ease); }
+  .hist-row.open .hist-chevron { transform: rotate(90deg); }
+  .hist-row .hist-detail {
+    display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px;
+  }
+  .hist-row.open .hist-detail { display: grid; }
+  .hist-row .hist-detail .hd-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px;
+  }
+  .hist-row .hist-detail .hd-val { font-size: 14px; font-weight: 600; color: var(--text); }
+
+  /* ── Multi-Audit ── */
+  .podium { display: flex; gap: 12px; margin: 20px 0; align-items: flex-end; }
+  .podium .podium-card {
+    flex: 1; text-align: center; border-radius: 16px; padding: 20px 14px;
+    background: var(--surface); border: 2px solid var(--border);
+  }
+  .podium .podium-card.rank1 { border-color: #ffd700; order: 2; }
+  .podium .podium-card.rank2 { border-color: #c0c0c0; order: 1; }
+  .podium .podium-card.rank3 { border-color: #cd7f32; order: 3; }
+  .podium .podium-medal { font-size: 26px; margin-bottom: 6px; }
+  .podium .podium-url {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .podium .podium-score { font-size: 26px; font-weight: 800; }
+
+  /* ── Ressources : checklist ── */
+  .checklist-cat { margin-bottom: 22px; }
+  .checklist-cat h3 {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin: 0 0 10px;
+  }
+  .checklist-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 0; font-size: 15px; color: var(--text); cursor: pointer;
+  }
+  .checklist-item input[type="checkbox"] {
+    width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); cursor: pointer;
+  }
+  .checklist-item.checked span { color: var(--text-muted); text-decoration: line-through; }
+  .checklist-progress-wrap {
+    margin-bottom: 20px;
+  }
+  .progress-track {
+    height: 10px; background: var(--surface-2); border-radius: 100px; overflow: hidden; margin-top: 8px;
+  }
+  .progress-fill { height: 100%; border-radius: 100px; transition: width 0.4s var(--ease); }
+  .progress-msg {
+    margin-top: 12px; padding: 12px 16px; border-radius: 12px; font-size: 14px; font-weight: 600;
+  }
+
+  /* ── Creative Studio ── */
+  .angle-card {
+    background: var(--surface-2); border-radius: 12px; padding: 16px; margin-bottom: 10px;
+  }
+  .angle-card .angle-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .angle-card .angle-sub { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .hook-item {
+    display: flex; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border);
+    font-size: 14px; color: var(--text);
+  }
+  .hook-item:first-child { border-top: none; }
+  .hook-item .hook-tag {
+    flex-shrink: 0; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 100px;
+    height: fit-content;
+  }
 </style>
 </head>
 <body>
@@ -460,9 +589,19 @@
     <div class="nav-tabs" id="navTabs">
       <button class="nav-tab active" data-view="dashboard">Dashboard</button>
       <button class="nav-tab" data-view="audit">Audit</button>
+      <button class="nav-tab" data-view="multi">Multi-Audit</button>
+      <button class="nav-tab" data-view="suivi">Suivi</button>
+      <button class="nav-tab" data-view="historique">Historique</button>
+      <button class="nav-tab" data-view="ressources">Ressources</button>
+      <button class="nav-tab" data-view="creative">Creative Studio</button>
     </div>
 
     <div id="dashboardView"></div>
+    <div id="multiView" style="display:none"></div>
+    <div id="suiviView" style="display:none"></div>
+    <div id="historiqueView" style="display:none"></div>
+    <div id="ressourcesView" style="display:none"></div>
+    <div id="creativeView" style="display:none"></div>
 
     <div id="auditView" style="display:none">
     <div id="heroText">
@@ -548,6 +687,16 @@ function setupSegmented(id) {
 ['modeSeg', 'platformSeg', 'offerSeg', 'brandSeg'].forEach(setupSegmented);
 
 // ── Navigation entre onglets ──────────────────────────
+const VIEW_IDS = {
+  dashboard: 'dashboardView',
+  audit: 'auditView',
+  multi: 'multiView',
+  suivi: 'suiviView',
+  historique: 'historiqueView',
+  ressources: 'ressourcesView',
+  creative: 'creativeView',
+};
+
 function setupNavTabs() {
   const nav = $('#navTabs');
   nav.addEventListener('click', (e) => {
@@ -556,9 +705,15 @@ function setupNavTabs() {
     $$('button', nav).forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const view = btn.dataset.view;
-    $('#dashboardView').style.display = (view === 'dashboard') ? 'block' : 'none';
-    $('#auditView').style.display = (view === 'audit') ? 'block' : 'none';
+    Object.entries(VIEW_IDS).forEach(([v, id]) => {
+      $('#' + id).style.display = (v === view) ? 'block' : 'none';
+    });
     if (view === 'dashboard') loadDashboard();
+    if (view === 'multi') renderMulti();
+    if (view === 'suivi') loadSuivi();
+    if (view === 'historique') loadHistorique();
+    if (view === 'ressources') renderRessources();
+    if (view === 'creative') renderCreative();
   });
 }
 setupNavTabs();
@@ -697,6 +852,552 @@ async function loadDashboard() {
     $('#dashboardView').innerHTML =
       `<div class="error-box" style="display:block">Impossible de charger le dashboard : ${escapeHtml(err.message)}</div>`;
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Multi-Audit (Bulk) ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+function renderMulti() {
+  $('#multiView').innerHTML = `
+    <div class="card">
+      <div class="field">
+        <label class="field-label" for="bulkUrls">URLs à auditer (une par ligne, 20 max)</label>
+        <textarea id="bulkUrls" placeholder="https://page1.com&#10;https://page2.com&#10;https://concurrent.com" style="min-height:140px"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Mode</label>
+          <div class="segmented" id="bulkModeSeg">
+            <button class="active" data-val="Funnel Only">Funnel Only</button>
+            <button data-val="Full Risk">Full Risk</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="bulkPlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Type d'offre</label>
+          <div class="segmented" id="bulkOfferSeg">
+            <button class="active" data-val="Digital product">Digital</button>
+            <button data-val="Ecom (produit physique)">E-com</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Marque</label>
+          <div class="segmented" id="bulkBrandSeg">
+            <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
+            <button data-val="Marque etablie">Marque établie</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="bulkRunBtn">Lancer les audits</button>
+      <div class="error-box" id="bulkErrorBox"></div>
+    </div>
+    <div class="loading" id="bulkLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Audit des pages en cours… (peut prendre plusieurs minutes)</div>
+    </div>
+    <div id="bulkResults"></div>
+  `;
+  ['bulkModeSeg', 'bulkPlatformSeg', 'bulkOfferSeg', 'bulkBrandSeg'].forEach(setupSegmented);
+  $('#bulkRunBtn').addEventListener('click', runBulkAudit);
+}
+
+async function runBulkAudit() {
+  const urls = $('#bulkUrls').value.split('\n').map(u => u.trim()).filter(u => u.startsWith('http'));
+  const errBox = $('#bulkErrorBox');
+  errBox.style.display = 'none';
+  if (!urls.length) {
+    errBox.textContent = 'Merci de coller au moins une URL valide (commençant par http).';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#bulkRunBtn').disabled = true;
+  $('#bulkLoadingBox').style.display = 'flex';
+  $('#bulkResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/bulk-audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        urls,
+        mode: getSegVal('bulkModeSeg'),
+        platform: getSegVal('bulkPlatformSeg'),
+        offer_type: getSegVal('bulkOfferSeg'),
+        brand_type: getSegVal('bulkBrandSeg'),
+      }),
+    });
+    const data = await res.json();
+    $('#bulkLoadingBox').style.display = 'none';
+    $('#bulkRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderBulkResults(data.results || []);
+  } catch (err) {
+    $('#bulkLoadingBox').style.display = 'none';
+    $('#bulkRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function renderBulkResults(results) {
+  const ok = results.filter(r => r.score !== null);
+  const errors = results.filter(r => r.score === null);
+
+  let podiumHtml = '';
+  if (ok.length >= 3) {
+    const medals = [['rank1', '🥇'], ['rank2', '🥈'], ['rank3', '🥉']];
+    podiumHtml = `<div class="podium">` + ok.slice(0, 3).map((r, i) => `
+      <div class="podium-card ${medals[i][0]}">
+        <div class="podium-medal">${medals[i][1]}</div>
+        <div class="podium-url">${escapeHtml(r.url.replace('https://', '').replace('http://', ''))}</div>
+        <div class="podium-score" style="color:${scoreColor(r.score)}">${r.score}<span style="color:var(--text-muted);font-size:14px">/20</span></div>
+      </div>
+    `).join('') + `</div>`;
+  }
+
+  const listHtml = ok.map((r, i) => `
+    <div class="list-row">
+      <span class="lr-score" style="color:${scoreColor(r.score)}">${i + 1}. ${r.score}/20</span>
+      <div class="lr-body">
+        <div class="lr-title">${escapeHtml(r.url)}</div>
+        <div class="lr-meta">Hook ${r.hook}/5 · Offer ${r.offer}/5 · Trust ${r.trust}/5 · Friction ${r.friction}/5</div>
+      </div>
+      <span class="lr-tag" style="color:${scoreColor(r.score)}">${escapeHtml(r.decision)}</span>
+    </div>
+  `).join('');
+
+  const errorsHtml = errors.length ? `
+    <div class="dash-section">
+      <h2>⚠️ Échecs (${errors.length})</h2>
+      ${errors.map(r => `
+        <div class="list-row">
+          <div class="lr-body">
+            <div class="lr-title">${escapeHtml(r.url)}</div>
+            <div class="lr-meta" style="color:var(--danger)">${escapeHtml(r.error || 'Erreur inconnue')}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  $('#bulkResults').innerHTML = `
+    <div class="dash-section fade-up">
+      <h2>Résultats — ${results.length} page(s) auditée(s)</h2>
+      ${podiumHtml}
+      ${listHtml}
+    </div>
+    ${errorsHtml}
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Suivi — Alertes de score ────────────────────────────────
+// ══════════════════════════════════════════════════════════
+async function loadSuivi() {
+  $('#suiviView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/alerts');
+    const data = await res.json();
+    renderSuivi(data.alerts || []);
+  } catch (err) {
+    $('#suiviView').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les alertes : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuivi(alerts) {
+  if (!alerts.length) {
+    $('#suiviView').innerHTML = `
+      <div class="empty-dash fade-up">
+        <div class="emoji">📡</div>
+        <div class="title">Aucune alerte pour l'instant</div>
+        <div class="sub">Les alertes apparaissent quand le score d'une même URL varie d'au moins 2 points entre deux audits.</div>
+      </div>
+    `;
+    return;
+  }
+  $('#suiviView').innerHTML = `
+    <div class="dash-section fade-up" style="margin-top:0">
+      <h2>📡 Variations de score significatives (${alerts.length})</h2>
+      ${alerts.map(a => `
+        <div class="alert-row ${a.direction}">
+          <span class="alert-icon">${a.direction === 'up' ? '📈' : '📉'}</span>
+          <div class="alert-body">
+            <div class="alert-title">${escapeHtml(a.url)}</div>
+            <div class="alert-meta">${a.prev_score}/20 → ${a.latest_score}/20 · ${escapeHtml(a.latest_ts)}</div>
+          </div>
+          <span class="alert-delta" style="color:${a.direction === 'up' ? 'var(--success)' : 'var(--danger)'}">${a.delta > 0 ? '+' : ''}${a.delta}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Historique ───────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+let _histFilterTimer = null;
+
+function renderHistoriqueShell() {
+  $('#historiqueView').innerHTML = `
+    <div class="filter-bar">
+      <input type="text" id="histSearch" placeholder="🔍 Rechercher — URL, plateforme, score…" autocomplete="off" />
+      <div class="segmented" id="histRiskSeg">
+        <button class="active" data-val="Tous">Tous</button>
+        <button data-val="Low">Low</button>
+        <button data-val="Moderate">Moderate</button>
+        <button data-val="High">High</button>
+      </div>
+      <div class="segmented" id="histPlatformSeg">
+        <button class="active" data-val="Toutes">Toutes</button>
+        <button data-val="Meta">Meta</button>
+        <button data-val="TikTok">TikTok</button>
+        <button data-val="Google">Google</button>
+      </div>
+    </div>
+    <div id="histContent"></div>
+  `;
+  ['histRiskSeg', 'histPlatformSeg'].forEach(setupSegmented);
+  $('#histRiskSeg').addEventListener('click', loadHistorique);
+  $('#histPlatformSeg').addEventListener('click', loadHistorique);
+  $('#histSearch').addEventListener('input', () => {
+    clearTimeout(_histFilterTimer);
+    _histFilterTimer = setTimeout(loadHistorique, 300);
+  });
+}
+
+async function loadHistorique() {
+  if (!$('#histContent')) renderHistoriqueShell();
+  const q = $('#histSearch').value;
+  const risk = getSegVal('histRiskSeg');
+  const platform = getSegVal('histPlatformSeg');
+  $('#histContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const params = new URLSearchParams({ q, risk, platform });
+    const res = await fetch('/api/history?' + params.toString());
+    const data = await res.json();
+    renderHistorique(data);
+  } catch (err) {
+    $('#histContent').innerHTML = `<div class="error-box" style="display:block">Impossible de charger l'historique : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderHistorique(data) {
+  const entries = data.entries || [];
+  if (!entries.length) {
+    $('#histContent').innerHTML = `
+      <div class="empty-dash fade-up">
+        <div class="emoji">🗂️</div>
+        <div class="title">Aucun audit ne correspond</div>
+        <div class="sub">Essayez d'autres filtres, ou lancez votre premier audit.</div>
+      </div>
+    `;
+    return;
+  }
+
+  let statsHtml = '';
+  if (data.stats) {
+    const d = data.stats.delta_global;
+    const dColor = d > 0 ? 'var(--success)' : d < 0 ? 'var(--danger)' : 'var(--text-muted)';
+    statsHtml = `
+      <div class="stats-banner fade-up">
+        <div>
+          <div class="stat-label">Progression globale</div>
+          <div class="stat-val" style="color:${dColor}">${d >= 0 ? '+' : ''}${d} pts</div>
+          <div class="stat-sub">depuis le premier audit (filtré)</div>
+        </div>
+        <div>
+          <div class="stat-label">Score moyen</div>
+          <div class="stat-val" style="color:var(--accent)">${data.stats.avg_score}<span style="color:var(--text-muted);font-size:16px">/20</span></div>
+        </div>
+        <div>
+          <div class="stat-label">Total audits</div>
+          <div class="stat-val">${data.stats.total}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  const evoHtml = (data.evolution || []).length >= 2 ? `
+    <div class="sparkline-wrap fade-up" style="margin-bottom:20px">${buildSparkline(data.evolution)}</div>
+  ` : '';
+
+  const rowsHtml = entries.map((e, i) => `
+    <div class="hist-row fade-up" data-idx="${i}">
+      <div class="hist-top">
+        <span class="hist-score" style="color:${scoreColor(e.score)}">${e.score}/20</span>
+        <div class="hist-body">
+          <div class="hist-title">${escapeHtml(e.url || e.offer_type || '')}</div>
+          <div class="hist-meta">${escapeHtml(e.timestamp)} · ${escapeHtml(e.mode)}${e.delta !== null ? ` · <span style="color:${e.delta > 0 ? 'var(--success)' : e.delta < 0 ? 'var(--danger)' : 'var(--text-muted)'}">(${e.delta > 0 ? '+' : ''}${e.delta})</span>` : ''}</div>
+        </div>
+        <span class="hist-chevron">▶</span>
+      </div>
+      <div class="hist-detail">
+        <div><div class="hd-label">Décision</div><div class="hd-val" style="color:${scoreColor(e.score)}">${escapeHtml(e.decision)}</div></div>
+        <div><div class="hd-label">Plateforme</div><div class="hd-val">${escapeHtml(e.platform)}</div></div>
+        <div><div class="hd-label">Risque</div><div class="hd-val">${escapeHtml(e.risk)}</div></div>
+        <div><div class="hd-label">vs précédent</div><div class="hd-val">${e.delta !== null ? (e.delta > 0 ? '+' : '') + e.delta + ' pts' : '—'}</div></div>
+      </div>
+    </div>
+  `).join('');
+
+  $('#histContent').innerHTML = statsHtml + evoHtml + rowsHtml;
+  $$('.hist-row', $('#histContent')).forEach(row => {
+    row.addEventListener('click', () => row.classList.toggle('open'));
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Ressources — Checklist pré-lancement ────────────────────
+// ══════════════════════════════════════════════════════════
+const CHECKLIST_DATA = [
+  ["Hook & Headline", [
+    "La headline répond clairement : qu'est-ce que j'obtiens ?",
+    "La headline contient un chiffre, timeframe ou persona spécifique",
+    "L'image hero montre le produit en action ou le résultat visible",
+    "Le visiteur comprend la valeur en moins de 5 secondes",
+  ]],
+  ["Offre", [
+    "Le prix est visible sans scroller",
+    "Il y a un offer stack avec valeurs chiffrées",
+    "La garantie est visible directement sous le CTA principal",
+    "Il y a une urgence ou rareté crédible",
+  ]],
+  ["Trust", [
+    "Il y a au moins 10 avis ou témoignages",
+    "Les témoignages ont prénom + résultat spécifique",
+    "Il y a un badge de paiement sécurisé visible",
+    "Le nombre total d'acheteurs est mentionné",
+  ]],
+  ["Friction & CTA", [
+    "Il y a un seul CTA principal",
+    "Le CTA est répété au moins 3 fois sur la page",
+    "Pas de menu de navigation distrayant",
+    "Le parcours d'achat fait moins de 3 clics",
+  ]],
+  ["Tracking", [
+    "Le Pixel Meta ou TikTok est installé et vérifié",
+    "L'événement Purchase est configuré",
+    "Google Analytics est actif",
+    "Un test d'achat a été effectué",
+  ]],
+];
+const CHECKLIST_STORAGE_KEY = 'lrs_pilot_checklist';
+
+function loadChecklistState() {
+  try {
+    return JSON.parse(localStorage.getItem(CHECKLIST_STORAGE_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+function saveChecklistState(state) {
+  try {
+    localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {}
+}
+
+function renderRessources() {
+  const state = loadChecklistState();
+
+  const catsHtml = CHECKLIST_DATA.map(([cat, items]) => `
+    <div class="checklist-cat">
+      <h3>${escapeHtml(cat)}</h3>
+      ${items.map(item => {
+        const checked = !!state[item];
+        return `
+          <label class="checklist-item ${checked ? 'checked' : ''}">
+            <input type="checkbox" data-item="${escapeHtml(item)}" ${checked ? 'checked' : ''} />
+            <span>${escapeHtml(item)}</span>
+          </label>
+        `;
+      }).join('')}
+    </div>
+  `).join('');
+
+  $('#ressourcesView').innerHTML = `
+    <div class="checklist-progress-wrap">
+      <div class="field-label" style="margin-bottom:0">Checklist pré-lancement</div>
+      <div id="checklistProgressBody"></div>
+    </div>
+    <div class="card">${catsHtml}</div>
+  `;
+  updateChecklistProgress();
+
+  $$('#ressourcesView .checklist-item input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const state = loadChecklistState();
+      state[cb.dataset.item] = cb.checked;
+      saveChecklistState(state);
+      cb.closest('.checklist-item').classList.toggle('checked', cb.checked);
+      updateChecklistProgress();
+    });
+  });
+}
+
+function updateChecklistProgress() {
+  const state = loadChecklistState();
+  const totalItems = CHECKLIST_DATA.reduce((sum, [, items]) => sum + items.length, 0);
+  const checked = CHECKLIST_DATA.reduce((sum, [, items]) => sum + items.filter(i => state[i]).length, 0);
+  const pct = totalItems ? Math.round(checked / totalItems * 100) : 0;
+  const color = pct < 50 ? 'var(--danger)' : pct < 80 ? 'var(--warning)' : 'var(--success)';
+  const msg = pct < 50
+    ? "Moins de 50% — ne lancez pas encore."
+    : pct < 80
+    ? "Entre 50 et 80% — testez en petit budget."
+    : "80%+ — fondamentaux solides, vous pouvez lancer.";
+
+  $('#checklistProgressBody').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">
+      <span style="font-size:14px;color:var(--text-secondary)">${checked}/${totalItems} complétés</span>
+      <span style="font-size:20px;font-weight:800;color:${color}">${pct}%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div class="progress-msg" style="background:${color}22;color:${color}">${msg}</div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Creative Studio (génération d'angles) ───────────────────
+// ══════════════════════════════════════════════════════════
+function renderCreative() {
+  $('#creativeView').innerHTML = `
+    <div class="card">
+      <div class="field">
+        <label class="field-label" for="creativeOffer">Décrivez votre offre</label>
+        <textarea id="creativeOffer" placeholder="Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…" style="min-height:120px"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="creativePlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Type d'offre</label>
+          <div class="segmented" id="creativeOfferSeg">
+            <button class="active" data-val="Digital product">Digital</button>
+            <button data-val="Ecom (produit physique)">E-com</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="creativeRunBtn">Générer des angles créatifs</button>
+      <div class="error-box" id="creativeErrorBox"></div>
+    </div>
+    <div class="loading" id="creativeLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Génération des angles créatifs…</div>
+    </div>
+    <div id="creativeResults"></div>
+  `;
+  ['creativePlatformSeg', 'creativeOfferSeg'].forEach(setupSegmented);
+  $('#creativeRunBtn').addEventListener('click', runCreativeAngles);
+}
+
+async function runCreativeAngles() {
+  const offerDescription = $('#creativeOffer').value.trim();
+  const errBox = $('#creativeErrorBox');
+  errBox.style.display = 'none';
+  if (!offerDescription) {
+    errBox.textContent = 'Merci de décrire votre offre.';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#creativeRunBtn').disabled = true;
+  $('#creativeLoadingBox').style.display = 'flex';
+  $('#creativeResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/creative-angles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        offer_description: offerDescription,
+        platform: getSegVal('creativePlatformSeg'),
+        offer_type: getSegVal('creativeOfferSeg'),
+      }),
+    });
+    const data = await res.json();
+    $('#creativeLoadingBox').style.display = 'none';
+    $('#creativeRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderCreativeResults(data);
+  } catch (err) {
+    $('#creativeLoadingBox').style.display = 'none';
+    $('#creativeRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function renderCreativeResults(data) {
+  const angles = data.angles || [];
+  const hooks = data.hooks || [];
+  const variants = data.variants || [];
+
+  $('#creativeResults').innerHTML = `
+    ${angles.length ? `
+    <div class="section fade-up">
+      <h2>Angles publicitaires</h2>
+      ${angles.map(a => `
+        <div class="angle-card">
+          <div class="angle-title">${escapeHtml(a.angle || '')}</div>
+          <div class="angle-sub">${escapeHtml(a.rationale || '')}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${hooks.length ? `
+    <div class="section fade-up" style="animation-delay:0.05s">
+      <h2>Hooks</h2>
+      ${hooks.map(h => `
+        <div class="hook-item">
+          <span class="hook-tag">${escapeHtml(h.type || '')}</span>
+          <span>${escapeHtml(h.hook || '')}</span>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${variants.length ? `
+    <div class="section fade-up" style="animation-delay:0.1s">
+      <h2>Variantes publicité</h2>
+      ${variants.map(v => `
+        <div class="rewrite-field">
+          <div class="rw-label">Headline</div><div class="rw-val">${escapeHtml(v.headline || '')}</div>
+        </div>
+        <div class="rewrite-field">
+          <div class="rw-label">Texte principal</div><div class="rw-val">${escapeHtml(v.primary_text || '')}</div>
+        </div>
+        <div class="rewrite-field" style="margin-bottom:24px">
+          <div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(v.cta || '')}</div>
+        </div>
+      `).join('')}
+    </div>` : ''}
+
+    ${data.script_ugc_20s ? `
+    <div class="section fade-up" style="animation-delay:0.15s">
+      <h2>Script UGC (20s)</h2>
+      <div class="rewrite-field"><div class="rw-val">${escapeHtml(data.script_ugc_20s)}</div></div>
+    </div>` : ''}
+  `;
 }
 
 function getSegVal(id) {

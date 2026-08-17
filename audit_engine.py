@@ -530,3 +530,75 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
 
     raw = response.choices[0].message.content or ""
     return _parse_audit_json(raw, mode, platform, offer_type)
+
+
+# ── GÉNÉRATION D'ANGLES CRÉATIFS (à partir d'une offre, sans landing page) ──
+def generate_creative_angles(offer_description, platform, offer_type, model="gpt-4o-mini"):
+    if OpenAI is None:
+        raise ValueError("Librairie openai non installee. Relancez : pip install openai")
+
+    api_key = get_api_key()
+    if not api_key:
+        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans votre fichier .env.")
+
+    client = OpenAI(api_key=api_key)
+    system = (
+        "Tu es un copywriter senior specialise en paid traffic (Meta/TikTok/Google Ads). "
+        "Tu generes des angles publicitaires, hooks et un script UGC a partir d'une offre. "
+        "Reponds UNIQUEMENT en JSON, en francais, sans texte hors du JSON."
+    )
+    user_prompt = (
+        "OFFRE : " + offer_description + "\n"
+        "PLATEFORME : " + platform + " | TYPE D'OFFRE : " + offer_type + "\n\n"
+        "Genere :\n"
+        "- 3 angles publicitaires distincts (angle + rationale)\n"
+        "- 5 hooks varies (question, statistique, douleur, controverse, curiosite)\n"
+        "- 3 variantes de publicite complete (primary_text, headline, cta)\n"
+        "- 1 script UGC de 20 secondes\n\n"
+        "Format JSON exact :\n"
+        '{"angles":[{"angle":"X","rationale":"X"}],'
+        '"hooks":[{"hook":"X","type":"question"}],'
+        '"variants":[{"primary_text":"X","headline":"X","cta":"X"}],'
+        '"script_ugc_20s":"X"}'
+    )
+
+    response = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                response_format={"type": "json_object"},
+            )
+            break
+        except Exception as e:
+            last_err = str(e)
+            if "api_key" in last_err.lower() or "authentication" in last_err.lower():
+                raise ValueError("Cle API invalide ou expiree. Verifiez votre OPENAI_API_KEY.")
+            if "quota" in last_err.lower() or "billing" in last_err.lower():
+                raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+
+    if response is None:
+        raise ValueError("Erreur OpenAI : pas de reponse apres 3 tentatives.")
+
+    raw = response.choices[0].message.content or ""
+    try:
+        data = json.loads(raw)
+    except Exception:
+        data = {}
+    return {
+        "angles": data.get("angles", []) if isinstance(data, dict) else [],
+        "hooks": data.get("hooks", []) if isinstance(data, dict) else [],
+        "variants": data.get("variants", []) if isinstance(data, dict) else [],
+        "script_ugc_20s": data.get("script_ugc_20s", "") if isinstance(data, dict) else "",
+    }
