@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LRS — Pilote Audit</title>
+<style>
+  :root {
+    --bg: #000000;
+    --surface: #111114;
+    --surface-2: #1c1c20;
+    --border: rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-muted: #6e6e73;
+    --accent: #0a84ff;
+    --accent-soft: rgba(10,132,255,0.14);
+    --success: #30d158;
+    --success-soft: rgba(48,209,88,0.14);
+    --warning: #ff9f0a;
+    --warning-soft: rgba(255,159,10,0.14);
+    --danger: #ff453a;
+    --danger-soft: rgba(255,69,58,0.14);
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 96px 24px 120px;
+  }
+
+  .wrap { width: 100%; max-width: 720px; }
+
+  /* ── Header ── */
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+  }
+  .brand span {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  h1.hero {
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-align: center;
+    margin: 0 0 12px;
+    line-height: 1.08;
+  }
+  p.hero-sub {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 19px;
+    line-height: 1.5;
+    margin: 0 auto 56px;
+    max-width: 480px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 36px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  label.field-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  input[type="url"] {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-size: 17px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+  input[type="url"]::placeholder { color: var(--text-muted); }
+  input[type="url"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+
+  .row { display: flex; gap: 12px; margin-top: 20px; }
+  .row .field { flex: 1; }
+
+  /* Segmented control (Apple-style pill toggle) */
+  .segmented {
+    display: flex;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .segmented button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 8px;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+    font-family: inherit;
+  }
+  .segmented button.active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  button.cta {
+    width: 100%;
+    margin-top: 28px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    padding: 17px;
+    font-size: 17px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: transform 0.15s var(--ease), background 0.2s var(--ease), opacity 0.2s var(--ease);
+  }
+  button.cta:hover { background: #2b95ff; }
+  button.cta:active { transform: scale(0.98); }
+  button.cta:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  .error-box {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: var(--danger-soft);
+    border: 1px solid rgba(255,69,58,0.3);
+    border-radius: 12px;
+    font-size: 14px;
+    color: #ffb4ae;
+    display: none;
+  }
+
+  /* ── Loading state ── */
+  .loading {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: 64px 20px;
+  }
+  .loading .ring {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 3px solid var(--border-strong);
+    border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+    margin-bottom: 28px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading .stage {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: opacity 0.3s var(--ease);
+  }
+
+  /* ── Results ── */
+  .results { display: none; }
+  .fade-up {
+    animation: fadeUp 0.6s var(--ease) both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .score-hero {
+    text-align: center;
+    padding: 56px 20px 44px;
+  }
+  .score-num {
+    font-size: 96px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+  .score-den { font-size: 28px; color: var(--text-muted); font-weight: 500; }
+  .verdict-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 8px 18px;
+    border-radius: 100px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .verdict-badge .pip { width: 8px; height: 8px; border-radius: 50%; }
+
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    margin-top: 16px;
+  }
+  .section h2 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 20px;
+  }
+
+  .bar-row { margin-bottom: 18px; }
+  .bar-row:last-child { margin-bottom: 0; }
+  .bar-row .bar-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .bar-row .bar-label { font-size: 15px; font-weight: 600; }
+  .bar-row .bar-val { font-size: 15px; color: var(--text-secondary); }
+  .bar-track {
+    height: 8px;
+    background: var(--surface-2);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    width: 0%;
+    transition: width 1s var(--ease);
+  }
+
+  .reasons { margin: 0; padding: 0; list-style: none; }
+  .reasons li {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+  .reasons li:first-child { border-top: none; padding-top: 0; }
+  .reasons li .num {
+    flex-shrink: 0;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .priority-card {
+    background: var(--accent-soft);
+    border: 1px solid rgba(10,132,255,0.3);
+    border-radius: 16px;
+    padding: 20px;
+  }
+  .priority-card .tag {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--accent); margin-bottom: 8px;
+  }
+  .priority-card .what { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .priority-card .how { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+  .priority-card .meta { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+
+  .rewrite-field { margin-bottom: 16px; }
+  .rewrite-field:last-child { margin-bottom: 0; }
+  .rewrite-field .rw-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px;
+  }
+  .rewrite-field .rw-val {
+    font-size: 16px; line-height: 1.5;
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .restart-link {
+    display: block;
+    text-align: center;
+    margin-top: 28px;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: inherit;
+    width: 100%;
+  }
+  .restart-link:hover { color: var(--text-secondary); }
+
+  .demo-link {
+    display: block;
+    text-align: center;
+    margin-top: 18px;
+    color: var(--text-muted);
+    font-size: 13px;
+    text-decoration: none;
+  }
+  .demo-link:hover { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><span class="dot"></span><span>LRS — Pilote</span></div>
+    <div id="heroText">
+      <h1 class="hero">Votre landing page,<br/>évaluée en 15 secondes.</h1>
+      <p class="hero-sub">Collez une URL. LRS analyse le hook, l'offre, la confiance et la friction — et vous dit exactement quoi corriger avant de dépenser en pub.</p>
+    </div>
+
+    <div class="card" id="formCard">
+      <div class="field">
+        <label class="field-label" for="url">URL de la landing page</label>
+        <input type="url" id="url" placeholder="https://votre-page.com" autocomplete="off" />
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="platformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Type d'offre</label>
+          <div class="segmented" id="offerSeg">
+            <button class="active" data-val="Digital product">Digital</button>
+            <button data-val="Ecom (produit physique)">E-com</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Marque</label>
+          <div class="segmented" id="brandSeg">
+            <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
+            <button data-val="Marque etablie">Marque établie</button>
+          </div>
+        </div>
+      </div>
+
+      <button class="cta" id="runBtn">Lancer l'audit</button>
+      <div class="error-box" id="errorBox"></div>
+      <a href="#" class="demo-link" id="demoLink">Voir un exemple sans lancer d'audit réel →</a>
+    </div>
+
+    <div class="loading" id="loadingBox">
+      <div class="ring"></div>
+      <div class="stage" id="loadingStage">Lecture de la page…</div>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+<script>
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+function setupSegmented(id) {
+  const el = $('#' + id);
+  el.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', el).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+}
+['platformSeg', 'offerSeg', 'brandSeg'].forEach(setupSegmented);
+
+function getSegVal(id) {
+  return $('#' + id + ' button.active').dataset.val;
+}
+
+const LOADING_STAGES = [
+  "Lecture de la page…",
+  "Analyse du hook…",
+  "Évaluation de l'offre…",
+  "Vérification des preuves de confiance…",
+  "Calcul du score final…",
+];
+
+let loadingTimer = null;
+function startLoadingAnimation() {
+  const stageEl = $('#loadingStage');
+  let i = 0;
+  stageEl.textContent = LOADING_STAGES[0];
+  loadingTimer = setInterval(() => {
+    i = (i + 1) % LOADING_STAGES.length;
+    stageEl.style.opacity = 0;
+    setTimeout(() => {
+      stageEl.textContent = LOADING_STAGES[i];
+      stageEl.style.opacity = 1;
+    }, 300);
+  }, 2200);
+}
+function stopLoadingAnimation() {
+  if (loadingTimer) clearInterval(loadingTimer);
+  loadingTimer = null;
+}
+
+function showError(msg) {
+  const box = $('#errorBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+function hideError() {
+  $('#errorBox').style.display = 'none';
+}
+
+function scoreColor(score) {
+  if (score <= 9) return 'var(--danger)';
+  if (score <= 14) return 'var(--warning)';
+  return 'var(--success)';
+}
+function scoreSoft(score) {
+  if (score <= 9) return 'var(--danger-soft)';
+  if (score <= 14) return 'var(--warning-soft)';
+  return 'var(--success-soft)';
+}
+
+function renderResults(data) {
+  const c = data._c || {};
+  const why = data.why_this_score || {};
+  const fp = data.fix_plan || {};
+  const rw = data.rewrite || {};
+  const color = scoreColor(c.score);
+  const soft = scoreSoft(c.score);
+
+  const bars = [
+    ['Hook', c.hook], ['Offer', c.offer], ['Trust', c.trust], ['Friction', c.friction]
+  ];
+
+  const reasonsHtml = (why.top_3_reasons || []).map((r, i) => `
+    <li><span class="num">${i + 1}</span><span>${escapeHtml(r)}</span></li>
+  `).join('');
+
+  const quickWins = (fp.quick_wins || []).slice(0, 3);
+  const quickWinsHtml = quickWins.map(qw => `
+    <li><span class="num">✓</span><span><strong>${escapeHtml(qw.what || '')}</strong><br/>${escapeHtml(qw.how_exactly || '')}</span></li>
+  `).join('');
+
+  const topAction = fp.top_priority_action || {};
+
+  $('#results').innerHTML = `
+    <div class="score-hero fade-up">
+      <div class="score-num" style="color:${color}">${c.score}<span class="score-den">/20</span></div>
+      <div class="verdict-badge" style="background:${soft};color:${color}">
+        <span class="pip" style="background:${color}"></span>
+        ${escapeHtml(c.decision || '')}
+      </div>
+    </div>
+
+    <div class="section fade-up" style="animation-delay:0.05s">
+      <h2>Score détaillé</h2>
+      ${bars.map(([label, val]) => `
+        <div class="bar-row">
+          <div class="bar-top">
+            <span class="bar-label">${label}</span>
+            <span class="bar-val">${val}/5</span>
+          </div>
+          <div class="bar-track"><div class="bar-fill" data-w="${(val/5*100)}" style="background:${scoreColor(val <= 2 ? 9 : val === 3 ? 12 : 20)}"></div></div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${reasonsHtml ? `
+    <div class="section fade-up" style="animation-delay:0.1s">
+      <h2>Pourquoi ce score</h2>
+      <ul class="reasons">${reasonsHtml}</ul>
+    </div>` : ''}
+
+    ${topAction.what ? `
+    <div class="section fade-up" style="animation-delay:0.15s">
+      <h2>Action prioritaire</h2>
+      <div class="priority-card">
+        <div class="tag">Impact maximal</div>
+        <div class="what">${escapeHtml(topAction.what)}</div>
+        <div class="how">${escapeHtml(topAction.how_exactly || '')}</div>
+        ${topAction.time_estimate ? `<div class="meta">⏱ ${escapeHtml(topAction.time_estimate)}</div>` : ''}
+      </div>
+    </div>` : ''}
+
+    ${quickWinsHtml ? `
+    <div class="section fade-up" style="animation-delay:0.2s">
+      <h2>Quick wins</h2>
+      <ul class="reasons">${quickWinsHtml}</ul>
+    </div>` : ''}
+
+    ${(rw.headline || rw.cta_primary) ? `
+    <div class="section fade-up" style="animation-delay:0.25s">
+      <h2>Rewrite suggéré</h2>
+      ${rw.headline ? `<div class="rewrite-field"><div class="rw-label">Headline</div><div class="rw-val">${escapeHtml(rw.headline)}</div></div>` : ''}
+      ${rw.subheadline ? `<div class="rewrite-field"><div class="rw-label">Sous-titre</div><div class="rw-val">${escapeHtml(rw.subheadline)}</div></div>` : ''}
+      ${rw.cta_primary ? `<div class="rewrite-field"><div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(rw.cta_primary)}</div></div>` : ''}
+      ${rw.guarantee ? `<div class="rewrite-field"><div class="rw-label">Garantie</div><div class="rw-val">${escapeHtml(rw.guarantee)}</div></div>` : ''}
+    </div>` : ''}
+
+    <button class="restart-link" id="restartBtn">← Nouvel audit</button>
+  `;
+
+  $('#results').style.display = 'block';
+  requestAnimationFrame(() => {
+    $$('.bar-fill').forEach(el => { el.style.width = el.dataset.w + '%'; });
+  });
+  $('#restartBtn').addEventListener('click', resetToForm);
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+
+function resetToForm() {
+  $('#results').style.display = 'none';
+  $('#results').innerHTML = '';
+  $('#formCard').style.display = 'block';
+  $('#heroText').style.display = 'block';
+  hideError();
+}
+
+async function runAudit() {
+  const url = $('#url').value.trim();
+  if (!url) { showError('Merci de renseigner une URL.'); return; }
+  hideError();
+
+  $('#formCard').style.display = 'none';
+  $('#heroText').style.display = 'none';
+  $('#loadingBox').style.display = 'flex';
+  startLoadingAnimation();
+
+  try {
+    const res = await fetch('/api/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        platform: getSegVal('platformSeg'),
+        offer_type: getSegVal('offerSeg'),
+        brand_type: getSegVal('brandSeg'),
+      }),
+    });
+    const data = await res.json();
+    stopLoadingAnimation();
+    $('#loadingBox').style.display = 'none';
+
+    if (!res.ok) {
+      $('#formCard').style.display = 'block';
+      $('#heroText').style.display = 'block';
+      showError(data.detail || 'Erreur inconnue.');
+      return;
+    }
+    renderResults(data);
+  } catch (err) {
+    stopLoadingAnimation();
+    $('#loadingBox').style.display = 'none';
+    $('#formCard').style.display = 'block';
+    $('#heroText').style.display = 'block';
+    showError('Erreur réseau : ' + err.message);
+  }
+}
+
+$('#runBtn').addEventListener('click', runAudit);
+$('#url').addEventListener('keydown', (e) => { if (e.key === 'Enter') runAudit(); });
+
+$('#demoLink').addEventListener('click', (e) => {
+  e.preventDefault();
+  $('#formCard').style.display = 'none';
+  $('#heroText').style.display = 'none';
+  renderResults(DEMO_RESULT);
+});
+
+const DEMO_RESULT = {
+  "_c": {
+    "score": 11, "hook": 2, "offer": 3, "trust": 2, "friction": 2,
+    "decision": "Test small budget", "risk": "Moderate",
+    "cvr_cur": "0.8-1.5%", "cvr_fix": "1.5-2.5%", "cvr_up": "+0.5 a +1.5 pts"
+  },
+  "why_this_score": {
+    "hook_detail": "Le titre annonce le produit sans créer de tension ni promettre un résultat spécifique.",
+    "offer_detail": "Prix visible mais aucune ancre de valeur ni urgence pour pousser à l'achat.",
+    "trust_detail": "Quelques avis clients présents mais peu mis en avant, pas de preuve chiffrée.",
+    "friction_detail": "Le CTA n'est présent qu'une fois, en bas de page.",
+    "top_3_reasons": [
+      "Le hook ne crée aucune tension ni spécificité sur le résultat obtenu",
+      "L'offre manque d'ancrage de prix et d'urgence",
+      "Le CTA n'est pas répété assez souvent dans le parcours"
+    ],
+    "critical_gaps": ["Aucune garantie visible près du CTA"]
+  },
+  "fix_plan": {
+    "top_priority_action": {
+      "what": "Réécrire le hook avec un résultat chiffré et un délai",
+      "how_exactly": "Remplacer le titre générique par une formule [Résultat précis] + [Délai] + [Sans friction], par exemple : 'Doublez vos conversions en 30 jours, sans changer votre design'.",
+      "time_estimate": "20 min"
+    },
+    "quick_wins": [
+      { "what": "Répéter le CTA 3 fois dans la page", "how_exactly": "Ajouter le bouton principal juste après le hero et au milieu de page, pas seulement en bas.", "time_estimate": "10 min" },
+      { "what": "Ajouter une garantie visible sous le CTA", "how_exactly": "Insérer une ligne 'Remboursé sous 30 jours si non satisfait' directement sous chaque bouton d'achat.", "time_estimate": "15 min" }
+    ]
+  },
+  "rewrite": {
+    "headline": "Doublez vos conversions en 30 jours, sans changer votre design",
+    "subheadline": "La méthode utilisée par 200+ marques pour transformer leur trafic payant en clients, sans repartir de zéro.",
+    "cta_primary": "Je démarre mon audit gratuit",
+    "guarantee": "Remboursé intégralement sous 30 jours si vous ne voyez aucune amélioration."
+  },
+  "_meta": { "url": "https://exemple.com", "page_type": "Sales Page / Landing Page (offre unique)", "page_lang": "fr" }
+};
+</script>
+</body>
+</html>
