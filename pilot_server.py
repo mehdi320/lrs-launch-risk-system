@@ -20,8 +20,13 @@ app = FastAPI(title="LRS Pilot")
 _STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pilot_static")
 
 
+VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
+
+
 class AuditRequest(BaseModel):
-    url: str = Field(..., min_length=1)
+    mode: str = "Funnel Only"
+    url: str = ""
+    ad_text: str = ""
     platform: str = "Meta"
     offer_type: str = "Digital product"
     brand_type: str = "Nouveau lancement"
@@ -30,24 +35,32 @@ class AuditRequest(BaseModel):
 
 @app.post("/api/audit")
 def run_audit_endpoint(req: AuditRequest):
+    mode = req.mode if req.mode in VALID_MODES else "Funnel Only"
     url = req.url.strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="URL requise.")
+    ad_text = req.ad_text.strip()
 
-    landing_content, status, is_js_page = audit_engine.extract_page(url)
-    if not landing_content:
-        raise HTTPException(status_code=422, detail=f"Impossible d'extraire le contenu de la page : {status}")
+    if mode in ("Funnel Only", "Full Risk") and not url:
+        raise HTTPException(status_code=400, detail="URL de la landing page requise pour ce mode.")
+    if mode in ("Ads Only", "Full Risk") and not ad_text:
+        raise HTTPException(status_code=400, detail="Texte de la publicité requis pour ce mode.")
 
-    page_lang = audit_engine.detect_language(landing_content)
-    page_type = audit_engine.detect_page_type(landing_content, url)
+    landing_content, status, is_js_page = "", "", False
+    page_lang, page_type = "fr", "Non applicable (mode Ads Only)"
+
+    if mode in ("Funnel Only", "Full Risk") and url:
+        landing_content, status, is_js_page = audit_engine.extract_page(url)
+        if not landing_content:
+            raise HTTPException(status_code=422, detail=f"Impossible d'extraire le contenu de la page : {status}")
+        page_lang = audit_engine.detect_language(landing_content)
+        page_type = audit_engine.detect_page_type(landing_content, url)
 
     try:
         result = audit_engine.run_audit(
-            mode="Funnel Only",
+            mode=mode,
             platform=req.platform,
             offer_type=req.offer_type,
             landing_content=landing_content,
-            ad_text="",
+            ad_text=ad_text,
             market_context="",
             model=req.model,
             brand_type=req.brand_type,
@@ -58,6 +71,7 @@ def run_audit_endpoint(req: AuditRequest):
         raise HTTPException(status_code=502, detail=str(e))
 
     result["_meta"] = {
+        "mode": mode,
         "url": url,
         "extraction_status": status,
         "is_js_page": is_js_page,

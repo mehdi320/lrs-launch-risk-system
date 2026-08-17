@@ -116,7 +116,23 @@
     transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
   }
   input[type="url"]::placeholder { color: var(--text-muted); }
-  input[type="url"]:focus {
+  textarea {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+  textarea::placeholder { color: var(--text-muted); }
+  textarea:focus, input[type="url"]:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px var(--accent-soft);
   }
@@ -357,9 +373,23 @@
     </div>
 
     <div class="card" id="formCard">
-      <div class="field">
+      <div class="field" style="margin-bottom:20px">
+        <label class="field-label">Mode</label>
+        <div class="segmented" id="modeSeg">
+          <button class="active" data-val="Funnel Only">Funnel Only</button>
+          <button data-val="Ads Only">Ads Only</button>
+          <button data-val="Full Risk">Full Risk</button>
+        </div>
+      </div>
+
+      <div class="field" id="urlField">
         <label class="field-label" for="url">URL de la landing page</label>
         <input type="url" id="url" placeholder="https://votre-page.com" autocomplete="off" />
+      </div>
+
+      <div class="field" id="adTextField" style="display:none;margin-top:20px">
+        <label class="field-label" for="adText">Texte de la publicité</label>
+        <textarea id="adText" placeholder="Collez le texte de votre pub ici…"></textarea>
       </div>
 
       <div class="row">
@@ -416,30 +446,40 @@ function setupSegmented(id) {
     btn.classList.add('active');
   });
 }
-['platformSeg', 'offerSeg', 'brandSeg'].forEach(setupSegmented);
+['modeSeg', 'platformSeg', 'offerSeg', 'brandSeg'].forEach(setupSegmented);
 
 function getSegVal(id) {
   return $('#' + id + ' button.active').dataset.val;
 }
 
-const LOADING_STAGES = [
-  "Lecture de la page…",
-  "Analyse du hook…",
-  "Évaluation de l'offre…",
-  "Vérification des preuves de confiance…",
-  "Calcul du score final…",
-];
+function updateFieldsForMode() {
+  const mode = getSegVal('modeSeg');
+  $('#urlField').style.display = (mode === 'Ads Only') ? 'none' : 'block';
+  $('#adTextField').style.display = (mode === 'Funnel Only') ? 'none' : 'block';
+}
+$('#modeSeg').addEventListener('click', updateFieldsForMode);
+updateFieldsForMode();
+
+const LOADING_STAGES_BY_MODE = {
+  "Funnel Only": ["Lecture de la page…", "Analyse du hook…", "Évaluation de l'offre…",
+                  "Vérification des preuves de confiance…", "Calcul du score final…"],
+  "Ads Only": ["Lecture de la publicité…", "Analyse du hook…", "Évaluation de l'offre…",
+               "Vérification de la cohérence…", "Calcul du score final…"],
+  "Full Risk": ["Lecture de la page et de la publicité…", "Analyse du hook…", "Évaluation de l'offre…",
+                "Vérification du message match…", "Calcul du score final…"],
+};
 
 let loadingTimer = null;
-function startLoadingAnimation() {
+function startLoadingAnimation(mode) {
+  const stages = LOADING_STAGES_BY_MODE[mode] || LOADING_STAGES_BY_MODE["Funnel Only"];
   const stageEl = $('#loadingStage');
   let i = 0;
-  stageEl.textContent = LOADING_STAGES[0];
+  stageEl.textContent = stages[0];
   loadingTimer = setInterval(() => {
-    i = (i + 1) % LOADING_STAGES.length;
+    i = (i + 1) % stages.length;
     stageEl.style.opacity = 0;
     setTimeout(() => {
-      stageEl.textContent = LOADING_STAGES[i];
+      stageEl.textContent = stages[i];
       stageEl.style.opacity = 1;
     }, 300);
   }, 2200);
@@ -571,21 +611,27 @@ function resetToForm() {
 }
 
 async function runAudit() {
+  const mode = getSegVal('modeSeg');
   const url = $('#url').value.trim();
-  if (!url) { showError('Merci de renseigner une URL.'); return; }
+  const adText = $('#adText').value.trim();
+
+  if (mode !== 'Ads Only' && !url) { showError('Merci de renseigner une URL.'); return; }
+  if (mode !== 'Funnel Only' && !adText) { showError('Merci de coller le texte de votre publicité.'); return; }
   hideError();
 
   $('#formCard').style.display = 'none';
   $('#heroText').style.display = 'none';
   $('#loadingBox').style.display = 'flex';
-  startLoadingAnimation();
+  startLoadingAnimation(mode);
 
   try {
     const res = await fetch('/api/audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        mode,
         url,
+        ad_text: adText,
         platform: getSegVal('platformSeg'),
         offer_type: getSegVal('offerSeg'),
         brand_type: getSegVal('brandSeg'),
