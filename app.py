@@ -881,6 +881,87 @@ def fetch_tiktok_campaigns(access_token, advertiser_id, date_range_days=7):
     return results
 
 
+def _stage_campaign_import(camps, name_prefix, platform, source):
+    """Prépare des campagnes fraîchement importées (Meta/TikTok) pour une
+    liaison manuelle à un audit LRS avant sauvegarde définitive dans le
+    Campaign Tracker. L'API pub ne renvoie pas l'URL de la landing page —
+    aucun matching automatique n'est deviné ; sans ça, les campagnes
+    importées gardaient un lrs_score toujours vide et les diagnostics
+    croisés de _correlate_stats() qui en dépendent ne se déclenchaient
+    jamais pour elles.
+    """
+    pending = st.session_state.get("_pending_campaign_import", {})
+    snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
+    for c in camps:
+        cname = f"[{name_prefix}] {c['name'][:50]}"
+        extra_note = f" · {c['impressions']} impressions" if "impressions" in c else ""
+        pending[cname] = {
+            "name":         cname,
+            "platform":     platform,
+            "budget_daily": 0,
+            "ctr":          c["ctr"],
+            "cpc":          c["cpc"],
+            "roas":         c["roas"],
+            "cpa":          c["cpa"],
+            "notes":        f"Importé depuis {platform} Ads · {c['spend']}€ dépensés{extra_note}",
+            "updated":      datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "history_snaps": {snap_key: {"ctr": c["ctr"], "cpc": c["cpc"], "roas": c["roas"], "cpa": c["cpa"]}},
+            "campaign_id":  c["campaign_id"],
+            "source":       source,
+        }
+    st.session_state["_pending_campaign_import"] = pending
+
+
+def _render_pending_campaign_links():
+    """Étape de liaison manuelle affichée juste après un import Meta/TikTok
+    — tant qu'une campagne en attente n'est pas explicitement reliée (ou
+    volontairement laissée sans audit), elle n'est pas encore sauvegardée
+    dans le Campaign Tracker."""
+    pending = st.session_state.get("_pending_campaign_import")
+    if not pending:
+        return
+
+    history = st.session_state.audit_history
+    st.markdown("---")
+    st.markdown("##### 🔗 Relie chaque campagne importée à sa page LRS")
+    st.caption(
+        "L'API pub ne fournit pas l'URL de la landing page — choisis manuellement l'audit LRS "
+        "de chaque campagne (ou laisse « Aucun audit » si la page n'a pas encore été auditée). "
+        "Sans lien, les diagnostics croisés avec le score LRS ne s'afficheront pas pour cette campagne."
+    )
+
+    audit_opts = {"— Aucun audit —": None}
+    for i, e in enumerate(history[:30]):
+        url_e = str(e.get("url", "") or e.get("offer_type", ""))[:40]
+        ts_e  = e.get("timestamp", "")
+        sc_e  = e.get("score", 0)
+        audit_opts[f"{ts_e} — {url_e} — {sc_e}/20"] = i
+
+    choices = {}
+    for cname in pending:
+        choices[cname] = st.selectbox(cname, list(audit_opts.keys()), key=f"pending_link_{cname}")
+
+    col_confirm, col_cancel = st.columns(2)
+    with col_confirm:
+        if st.button("✅ Confirmer l'import", type="primary", key="confirm_pending_import"):
+            existing = load_campaigns()
+            for cname, cdata in pending.items():
+                chosen_idx = audit_opts[choices[cname]]
+                cdata["linked_audit_idx"] = chosen_idx
+                cdata["lrs_score"] = (
+                    history[chosen_idx].get("score") if chosen_idx is not None and chosen_idx < len(history) else None
+                )
+                existing[cname] = cdata
+            save_campaigns(existing)
+            st.session_state.pop("_pending_campaign_import", None)
+            st.success(f"{len(pending)} campagne(s) importée(s) et liée(s) dans le Campaign Tracker.")
+            st.rerun()
+    with col_cancel:
+        if st.button("❌ Annuler l'import", key="cancel_pending_import"):
+            st.session_state.pop("_pending_campaign_import", None)
+            st.rerun()
+
+
 def render_ads_connector():
     """
     Interface de connexion aux APIs pub Meta Ads et TikTok Ads.
@@ -939,31 +1020,9 @@ Votre **Ad Account ID** se trouve dans Meta Ads Manager → Paramètres du compt
                             if not camps:
                                 st.warning("Aucune campagne trouvée avec des données sur cette période.")
                             else:
-                                existing = load_campaigns()
-                                imported = 0
-                                for c in camps:
-                                    cname = f"[Meta] {c['name'][:50]}"
-                                    snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
-                                    existing[cname] = {
-                                        "name":         cname,
-                                        "platform":     "Meta",
-                                        "budget_daily": 0,
-                                        "ctr":          c["ctr"],
-                                        "cpc":          c["cpc"],
-                                        "roas":         c["roas"],
-                                        "cpa":          c["cpa"],
-                                        "notes":        f"Importé depuis Meta Ads · {c['spend']}€ dépensés · {c['impressions']} impressions",
-                                        "linked_audit_idx": 0,
-                                        "lrs_score":    None,
-                                        "updated":      datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
-                                        "history_snaps": {snap_key: {"ctr": c["ctr"], "cpc": c["cpc"], "roas": c["roas"], "cpa": c["cpa"]}},
-                                        "campaign_id":  c["campaign_id"],
-                                        "source":       "meta_api",
-                                    }
-                                    imported += 1
-                                save_campaigns(existing)
-                                st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
-                                st.caption("Allez dans **Suivi → Campagnes en cours** pour voir les diagnostics.")
+                                _stage_campaign_import(camps, "Meta", "Meta", "meta_api")
+                                st.success(f"✅ {len(camps)} campagne(s) importée(s) — relie-les à une page LRS ci-dessous pour activer les diagnostics croisés.")
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Erreur Meta API : {e}")
 
@@ -999,32 +1058,13 @@ Votre **Ad Account ID** se trouve dans Meta Ads Manager → Paramètres du compt
                             if not camps:
                                 st.warning("Aucune campagne trouvée sur cette période.")
                             else:
-                                existing = load_campaigns()
-                                imported = 0
-                                for c in camps:
-                                    cname = f"[TikTok] {c['name'][:50]}"
-                                    snap_key = datetime.datetime.now().strftime("%d/%m/%Y")
-                                    existing[cname] = {
-                                        "name":         cname,
-                                        "platform":     "TikTok",
-                                        "budget_daily": 0,
-                                        "ctr":          c["ctr"],
-                                        "cpc":          c["cpc"],
-                                        "roas":         c["roas"],
-                                        "cpa":          c["cpa"],
-                                        "notes":        f"Importé depuis TikTok Ads · {c['spend']}€ dépensés",
-                                        "linked_audit_idx": 0,
-                                        "lrs_score":    None,
-                                        "updated":      datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
-                                        "history_snaps": {snap_key: {"ctr": c["ctr"], "cpc": c["cpc"], "roas": c["roas"], "cpa": c["cpa"]}},
-                                        "campaign_id":  c["campaign_id"],
-                                        "source":       "tiktok_api",
-                                    }
-                                    imported += 1
-                                save_campaigns(existing)
-                                st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
+                                _stage_campaign_import(camps, "TikTok", "TikTok", "tiktok_api")
+                                st.success(f"✅ {len(camps)} campagne(s) importée(s) — relie-les à une page LRS ci-dessous pour activer les diagnostics croisés.")
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Erreur TikTok API : {e}")
+
+    _render_pending_campaign_links()
 
 
 # ── TRADUCTIONS (EN / FR) ────────────────────────────────────
@@ -3174,10 +3214,11 @@ def render_campaign_tracker():
                 sc_e  = e.get("score",0)
                 audit_opts[f"{ts_e} — {url_e} — {sc_e}/20"] = i
             audit_keys = list(audit_opts.keys())
-            linked_idx = camp_data.get("linked_audit_idx", 0)
+            linked_idx = camp_data.get("linked_audit_idx")  # None = pas encore lié
+            sel_index  = 0 if linked_idx is None else min(linked_idx, max(0, len(audit_keys) - 1))
             sel_audit  = st.selectbox("Page liée (audit LRS)",
                 audit_keys if audit_keys else ["Aucun audit"],
-                index=min(linked_idx, max(0, len(audit_keys)-1)),
+                index=sel_index,
                 key="camp_audit_link")
 
         st.markdown("**Stats actuelles de la campagne**")
@@ -3264,6 +3305,8 @@ def render_campaign_tracker():
                     st.metric(label, display)
             if sc_lrs is not None:
                 st.caption(f"Score LRS page liée : **{sc_lrs}/20**")
+            else:
+                st.caption("⚠️ Non reliée à un audit LRS — les diagnostics croisés avec le score de page sont désactivés. Sélectionne cette campagne ci-dessus pour la relier.")
 
             if diags:
                 st.markdown("**Diagnostics :**")
@@ -3299,8 +3342,8 @@ def render_campaign_tracker():
             act1, act2 = st.columns(2)
             with act1:
                 if st.button("🔁 Audit page maintenant", key=f"camp_audit_{cname[:20]}"):
-                    linked_i = cdata.get("linked_audit_idx", 0)
-                    if linked_i < len(history):
+                    linked_i = cdata.get("linked_audit_idx")
+                    if linked_i is not None and 0 <= linked_i < len(history):
                         url_link = history[linked_i].get("url","")
                         if url_link:
                             st.session_state.reaudit_url = url_link
