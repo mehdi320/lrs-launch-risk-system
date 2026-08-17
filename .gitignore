@@ -11,6 +11,11 @@
 .lrs_creative_studio.db-wal
 .lrs_creative_studio.db-shm
 
+# État runtime local (généré à l'exécution, non versionné)
+.lrs_history.json
+.lrs_onboarded.json
+.lrs_referral.json
+
 # Python
 __pycache__/
 *.py[cod]
