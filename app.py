@@ -9,6 +9,7 @@ import json
 import os
 import datetime
 import time
+import traceback
 from html.parser import HTMLParser
 
 try:
@@ -6324,7 +6325,7 @@ def render_comparison(api_key, model="gpt-4o-mini"):
 
     mode_c       = st.selectbox("Mode", ["Funnel Only","Full Risk"], key="comp_mode")
     platform_c   = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"], key="comp_plat")
-    offer_type_c = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="comp_offer")
+    offer_type_c = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="comp_offer_ab")
     brand_type_c = st.radio("Type de marque", ["Nouveau lancement","Marque etablie"], key="comp_brand", horizontal=True)
     market_c     = ""
 
@@ -7936,7 +7937,16 @@ def main():
                                         help="Score rapide : Hook/Offer/Trust + 1 action. Idéal pour un premier diagnostic.")
 
         with col_r:
-            if st.session_state.loaded_result and not run_btn:
+            # NOTE(fix 2026-08-17): cette colonne pilotait auparavant ses vues avec des
+            # st.stop() en cascade. st.stop() interrompt TOUT le script Streamlit — pas
+            # seulement ce bloc — donc dès que run_btn était False (le cas 99% du temps),
+            # le stop de la vue "accueil" empêchait tab2..tab7 (Suivi, Historique,
+            # Ressources, Studio créatif...) de jamais se rendre. Restructuré en
+            # if/elif/else mutuellement exclusif : plus aucun st.stop() dans cette colonne,
+            # donc les onglets suivants se rendent toujours, quel que soit l'état ici.
+            _show_loaded = bool(st.session_state.loaded_result) and not run_btn and not quick_audit_btn
+
+            if _show_loaded:
                 st.caption("Résultat chargé depuis l'historique")
                 _lr = st.session_state.loaded_result
                 render_results(_lr,
@@ -7945,9 +7955,228 @@ def main():
                 if st.button("✕ Fermer", key="close_loaded"):
                     st.session_state.loaded_result = None
                     st.rerun()
-                st.stop()
 
-            if not run_btn:
+            elif quick_audit_btn and not run_btn:
+                if not landing_url.strip():
+                    st.error("URL de la page requise pour l'Audit Express.")
+                else:
+                    with st.spinner("⚡ Analyse express en cours..."):
+                        try:
+                            qa_content, _, _ = extract_page(landing_url.strip())
+                            qr = run_quick_audit(qa_content, platform, offer_type, model="gpt-4o-mini")
+                            render_quick_audit_result(qr)
+                        except Exception as qe:
+                            st.error(f"Erreur Audit Express : {qe}")
+
+            elif run_btn:
+                _ok = True
+
+                errors = []
+                if mode in ("Funnel Only", "Full Risk") and not landing_url.strip():
+                    errors.append("URL landing page requise")
+                if mode in ("Ads Only", "Full Risk") and not ad_text.strip():
+                    errors.append("Texte de la pub requis")
+                for err in errors: st.error(err)
+                if errors:
+                    _ok = False
+
+                # ── Quota & plan enforcement ───────────────────────
+                if _ok:
+                    _active_plan = _get_plan()
+                    _allowed_modes = PLAN_LIMITS[_active_plan]["modes"]
+                    if mode not in _allowed_modes:
+                        st.error(t("mode_locked") + f" (Plan actuel : **{PLAN_LIMITS[_active_plan]['label']}**)")
+                        _ok = False
+                if _ok:
+                    _quota_ok, _used, _qlimit = _check_quota()
+                    if not _quota_ok:
+                        st.error(t("quota_exhausted"))
+                        _ok = False
+
+                detected_page_type = "Non applicable (mode Ads Only)"
+                page_lang          = "fr"
+                landing_content    = ""
+                if _ok and mode in ("Funnel Only", "Full Risk") and landing_url.strip():
+                    with st.spinner("Extraction du contenu de la page..."):
+                        landing_content, status, is_js_page = extract_page(landing_url.strip())
+                    st.info(status)
+                    if not landing_content:
+                        st.error("Impossible d'extraire le contenu. Verifiez l'URL.")
+                        _ok = False
+                    else:
+                        # Warning page JavaScript
+                        if is_js_page:
+                            st.warning(
+                                "⚠️ **Page JavaScript détectée** — Cette page semble être rendue dynamiquement "
+                                "(React, Next.js, Shopify Hydrogen, etc.). LRS n'a peut-être pas lu tout le contenu visible. "
+                                "Le score pourrait être **sous-estimé**. Pour un audit plus précis, copie-colle "
+                                "manuellement le texte de la page dans le champ ci-dessous."
+                            )
+                        elif len(landing_content) < 500:
+                            st.warning(
+                                "⚠️ **Contenu extrait très court** (" + str(len(landing_content)) + " caractères). "
+                                "La page n'a peut-être pas été lue correctement. Vérifiez l'aperçu ci-dessous."
+                            )
+
+                        # Détection langue
+                        page_lang = detect_language(landing_content)
+
+                        # Auto-detection du type de page
+                        detected_page_type = detect_page_type(landing_content, landing_url.strip())
+                        lang_label = {"fr": "🇫🇷 Français", "en": "🇬🇧 Anglais", "mixte": "🌐 Mixte", "autre": "❓"}.get(page_lang, "")
+                        st.caption("🔍 **" + detected_page_type + "**  |  " + lang_label)
+
+                        # Aperçu du contenu scrapé
+                        with st.expander("👁️ Aperçu du contenu extrait (debug)", expanded=False):
+                            st.caption("Ce texte est exactement ce que LRS analyse. S'il est vide ou incohérent, le score sera moins fiable.")
+                            st.text(landing_content[:1500] + ("..." if len(landing_content) > 1500 else ""))
+
+                result = None
+                if _ok:
+                    with st.status("🧠 LRS analyse votre page...", expanded=True) as _audit_status:
+                        _stage_ph  = st.empty()
+                        _tokens_ph = st.empty()
+                        try:
+                            result = run_audit_stream(
+                                mode, platform, offer_type, landing_content,
+                                ad_text, market_context, model,
+                                brand_type=brand_type,
+                                page_type=detected_page_type,
+                                page_lang=page_lang,
+                                status_stage=_stage_ph,
+                                status_tokens=_tokens_ph,
+                            )
+                            _audit_status.update(label="✅ Analyse complète !", state="complete", expanded=False)
+                        except Exception as _e:
+                            _audit_status.update(label="❌ Erreur d'analyse", state="error", expanded=False)
+                            st.error(str(_e))
+                            result = None
+
+                if result:
+                    _increment_usage()   # quota counter
+                    ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+                    meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
+                            "url": landing_url, "timestamp": ts,
+                            "brand_type": brand_type, "page_type": detected_page_type,
+                            "ad_text": ad_text, "model": model, "market_context": market_context}
+                    # Enrichir le résultat avec offer_type/platform pour benchmark contextuel
+                    result.setdefault("lrs", {})["offer_type"] = offer_type
+                    result.setdefault("lrs", {})["platform"]   = platform
+                    save_history(result, meta)
+                    # Auto-save swipe files from rewrites generated
+                    _new_swipes = auto_save_swipes_from_audit(result, meta)
+                    if _new_swipes:
+                        _sw_lib = load_swipefiles()
+                        for _sw in _new_swipes:
+                            _sw_lib.setdefault(_sw["type"], []).insert(0, _sw)
+                        save_swipefiles(_sw_lib)
+                    # Webhook générique (si configuré)
+                    fire_generic_webhook(result, meta)
+                    # Notification in-app
+                    _score_r = result.get("_c", {}).get("score", 0)
+                    _risk_r  = result.get("_c", {}).get("risk", "")
+                    push_notification(
+                        f"Audit terminé — Score {_score_r}/20 ({_risk_r})",
+                        icon="🚦", notif_type="audit"
+                    )
+                    # Auto-email post-audit (silencieux, si SMTP + email configurés)
+                    try:
+                        send_post_audit_email_auto(result, meta)
+                    except Exception:
+                        pass
+                    # Célébration progression si score > audit précédent
+                    _cur_hist = st.session_state.audit_history
+                    if len(_cur_hist) >= 2:
+                        _prev_score_cel = _cur_hist[1].get("score", 0)
+                        render_score_celebration(_score_r, _prev_score_cel)
+                    st.session_state.loaded_result = None
+                    if st.session_state.get("reaudit_url"):
+                        st.session_state.reaudit_url = ""
+                    render_results(result, offer_type=offer_type, platform=platform)
+
+                    # ── Mode Avant/Après ──────────────────────────────
+                    history = st.session_state.audit_history
+                    if len(history) >= 2:
+                        with st.expander("📊 Comparer avec un audit précédent (Avant/Après)", expanded=False):
+                            prev_options = {
+                                f"{e['timestamp']} — {str(e.get('url','') or e.get('offer_type',''))[:40]} — {e['score']}/20": i+1
+                                for i, e in enumerate(history[1:], 0)
+                            }
+                            selected = st.selectbox("Choisir l'audit de référence", list(prev_options.keys()), key="avant_apres_sel")
+                            if selected:
+                                prev_idx = prev_options[selected]
+                                prev = history[prev_idx]
+                                cur_score = result.get("_c",{}).get("score",0)
+                                prev_score = prev.get("score",0)
+                                delta = cur_score - prev_score
+                                delta_icon  = "▲" if delta > 0 else "▼" if delta < 0 else "="
+                                c1,c2,c3 = st.columns(3)
+                                with c1: st.metric("Score précédent", f"{prev_score}/20")
+                                with c2: st.metric("Score actuel",    f"{cur_score}/20")
+                                with c3: st.metric("Delta", f"{delta_icon} {abs(delta)} pts", delta=delta, delta_color="normal")
+                                pc = prev.get("result",{}).get("_c",{})
+                                cc = result.get("_c",{})
+                                rows = []
+                                for label, pk, ck in [("Hook","hook","hook"),("Offer","offer","offer"),
+                                                       ("Trust","trust","trust"),("Friction","friction","friction")]:
+                                    pv = pc.get(pk,0); cv = cc.get(ck,0); dv = cv-pv
+                                    arrow = "▲" if dv>0 else "▼" if dv<0 else "="
+                                    color = "🟢" if dv>0 else "🔴" if dv<0 else "⚪"
+                                    rows.append(f"**{label}** : {pv}/5 → {cv}/5  {color} {arrow}{abs(dv)}")
+                                for r in rows: st.markdown(r)
+
+                    st.markdown("---")
+                    # ── Exports ───────────────────────────────────────
+                    meta["version"] = APP_VERSION
+                    fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
+                    ecol1, ecol2, ecol3, ecol4 = st.columns(4)
+                    with ecol1:
+                        txt = export_txt(result, meta)
+                        st.download_button("📥 .txt", data=txt.encode("utf-8"),
+                                           file_name=fname_base+".txt", mime="text/plain",
+                                           use_container_width=True)
+                    with ecol2:
+                        if PDF_AVAILABLE:
+                            try:
+                                pdf_bytes = generate_pdf_report(result, meta)
+                                st.download_button("📄 PDF", data=pdf_bytes,
+                                                   file_name=fname_base+".pdf", mime="application/pdf",
+                                                   type="primary", use_container_width=True)
+                            except Exception as pdf_err:
+                                st.caption(f"PDF indisponible : {pdf_err}")
+                        else:
+                            st.caption("PDF non disponible")
+                    with ecol3:
+                        if PDF_AVAILABLE:
+                            with st.expander("👔 Rapport Client"):
+                                client_name_tab1 = st.text_input("Nom du client",
+                                    placeholder="Ex: Startup XYZ", key="client_name_tab1")
+                                if st.button("Générer", key="gen_client_pdf"):
+                                    try:
+                                        meta_c = {**meta, "client_name": client_name_tab1 or "",
+                                                  "report_mode": "client"}
+                                        pdf_c = generate_pdf_report(result, meta_c)
+                                        st.download_button("⬇️ Télécharger", data=pdf_c,
+                                            file_name=fname_base+"_client.pdf", mime="application/pdf",
+                                            key="dl_client_pdf")
+                                    except Exception as ce:
+                                        st.error(f"Erreur : {ce}")
+                    with ecol4:
+                        render_email_widget(result, meta, key_prefix="tab1_email")
+
+                    # Share widget full-width below exports
+                    render_share_widget(result, meta, key_prefix="tab1_share")
+
+                    # Integrations widget (Slack / Sheets / Notion) — Pro/Agency only
+                    render_integrations_widget(result, meta, key_prefix="tab1_integ")
+
+                    # Rewrite tracker — suivi des corrections appliquées
+                    render_rewrite_tracker(result, meta, key_prefix="tab1_rwt")
+
+                    # Agency branded report — white-label (Agency plan only)
+                    render_agency_report_widget(result, meta, key_prefix="tab1_agency")
+
+            else:
                 # ── Page d'accueil col droite ─────────────────
                 _no_history = len(st.session_state.audit_history) == 0
                 if _no_history:
@@ -7990,221 +8219,6 @@ def main():
                                 </div>""",
                                 unsafe_allow_html=True,
                             )
-                st.stop()
-
-            # ── Audit Express (Quick Audit) ───────────────────────
-            if quick_audit_btn and not run_btn:
-                if not landing_url.strip():
-                    st.error("URL de la page requise pour l'Audit Express.")
-                    st.stop()
-                with st.spinner("⚡ Analyse express en cours..."):
-                    try:
-                        qa_content, _, _ = extract_page(landing_url.strip())
-                        qr = run_quick_audit(qa_content, platform, offer_type, model="gpt-4o-mini")
-                        render_quick_audit_result(qr)
-                    except Exception as qe:
-                        st.error(f"Erreur Audit Express : {qe}")
-                st.stop()
-
-            errors = []
-            if mode in ("Funnel Only", "Full Risk") and not landing_url.strip():
-                errors.append("URL landing page requise")
-            if mode in ("Ads Only", "Full Risk") and not ad_text.strip():
-                errors.append("Texte de la pub requis")
-            for err in errors: st.error(err)
-            if errors: st.stop()
-
-            # ── Quota & plan enforcement ───────────────────────
-            _active_plan = _get_plan()
-            _allowed_modes = PLAN_LIMITS[_active_plan]["modes"]
-            if mode not in _allowed_modes:
-                st.error(t("mode_locked") + f" (Plan actuel : **{PLAN_LIMITS[_active_plan]['label']}**)")
-                st.stop()
-            _quota_ok, _used, _qlimit = _check_quota()
-            if not _quota_ok:
-                st.error(t("quota_exhausted"))
-                st.stop()
-
-            detected_page_type = "Non applicable (mode Ads Only)"
-            page_lang          = "fr"
-            if mode in ("Funnel Only", "Full Risk") and landing_url.strip():
-                with st.spinner("Extraction du contenu de la page..."):
-                    landing_content, status, is_js_page = extract_page(landing_url.strip())
-                st.info(status)
-                if not landing_content:
-                    st.error("Impossible d'extraire le contenu. Verifiez l'URL.")
-                    st.stop()
-
-                # Warning page JavaScript
-                if is_js_page:
-                    st.warning(
-                        "⚠️ **Page JavaScript détectée** — Cette page semble être rendue dynamiquement "
-                        "(React, Next.js, Shopify Hydrogen, etc.). LRS n'a peut-être pas lu tout le contenu visible. "
-                        "Le score pourrait être **sous-estimé**. Pour un audit plus précis, copie-colle "
-                        "manuellement le texte de la page dans le champ ci-dessous."
-                    )
-                elif len(landing_content) < 500:
-                    st.warning(
-                        "⚠️ **Contenu extrait très court** (" + str(len(landing_content)) + " caractères). "
-                        "La page n'a peut-être pas été lue correctement. Vérifiez l'aperçu ci-dessous."
-                    )
-
-                # Détection langue
-                page_lang = detect_language(landing_content)
-
-                # Auto-detection du type de page
-                detected_page_type = detect_page_type(landing_content, landing_url.strip())
-                lang_label = {"fr": "🇫🇷 Français", "en": "🇬🇧 Anglais", "mixte": "🌐 Mixte", "autre": "❓"}.get(page_lang, "")
-                st.caption("🔍 **" + detected_page_type + "**  |  " + lang_label)
-
-                # Aperçu du contenu scrapé
-                with st.expander("👁️ Aperçu du contenu extrait (debug)", expanded=False):
-                    st.caption("Ce texte est exactement ce que LRS analyse. S'il est vide ou incohérent, le score sera moins fiable.")
-                    st.text(landing_content[:1500] + ("..." if len(landing_content) > 1500 else ""))
-
-            result = None
-            with st.status("🧠 LRS analyse votre page...", expanded=True) as _audit_status:
-                _stage_ph  = st.empty()
-                _tokens_ph = st.empty()
-                try:
-                    result = run_audit_stream(
-                        mode, platform, offer_type, landing_content,
-                        ad_text, market_context, model,
-                        brand_type=brand_type,
-                        page_type=detected_page_type,
-                        page_lang=page_lang,
-                        status_stage=_stage_ph,
-                        status_tokens=_tokens_ph,
-                    )
-                    _audit_status.update(label="✅ Analyse complète !", state="complete", expanded=False)
-                except Exception as _e:
-                    _audit_status.update(label="❌ Erreur d'analyse", state="error", expanded=False)
-                    st.error(str(_e))
-                    st.stop()
-
-            if result:
-                _increment_usage()   # quota counter
-                ts   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-                meta = {"mode": mode, "platform": platform, "offer_type": offer_type,
-                        "url": landing_url, "timestamp": ts,
-                        "brand_type": brand_type, "page_type": detected_page_type,
-                        "ad_text": ad_text, "model": model, "market_context": market_context}
-                # Enrichir le résultat avec offer_type/platform pour benchmark contextuel
-                result.setdefault("lrs", {})["offer_type"] = offer_type
-                result.setdefault("lrs", {})["platform"]   = platform
-                save_history(result, meta)
-                # Auto-save swipe files from rewrites generated
-                _new_swipes = auto_save_swipes_from_audit(result, meta)
-                if _new_swipes:
-                    _sw_lib = load_swipefiles()
-                    for _sw in _new_swipes:
-                        _sw_lib.setdefault(_sw["type"], []).insert(0, _sw)
-                    save_swipefiles(_sw_lib)
-                # Webhook générique (si configuré)
-                fire_generic_webhook(result, meta)
-                # Notification in-app
-                _score_r = result.get("_c", {}).get("score", 0)
-                _risk_r  = result.get("_c", {}).get("risk", "")
-                push_notification(
-                    f"Audit terminé — Score {_score_r}/20 ({_risk_r})",
-                    icon="🚦", notif_type="audit"
-                )
-                # Auto-email post-audit (silencieux, si SMTP + email configurés)
-                try:
-                    send_post_audit_email_auto(result, meta)
-                except Exception:
-                    pass
-                # Célébration progression si score > audit précédent
-                _cur_hist = st.session_state.audit_history
-                if len(_cur_hist) >= 2:
-                    _prev_score_cel = _cur_hist[1].get("score", 0)
-                    render_score_celebration(_score_r, _prev_score_cel)
-                st.session_state.loaded_result = None
-                if st.session_state.get("reaudit_url"):
-                    st.session_state.reaudit_url = ""
-                render_results(result, offer_type=offer_type, platform=platform)
-
-                # ── Mode Avant/Après ──────────────────────────────
-                history = st.session_state.audit_history
-                if len(history) >= 2:
-                    with st.expander("📊 Comparer avec un audit précédent (Avant/Après)", expanded=False):
-                        prev_options = {
-                            f"{e['timestamp']} — {str(e.get('url','') or e.get('offer_type',''))[:40]} — {e['score']}/20": i+1
-                            for i, e in enumerate(history[1:], 0)
-                        }
-                        selected = st.selectbox("Choisir l'audit de référence", list(prev_options.keys()), key="avant_apres_sel")
-                        if selected:
-                            prev_idx = prev_options[selected]
-                            prev = history[prev_idx]
-                            cur_score = result.get("_c",{}).get("score",0)
-                            prev_score = prev.get("score",0)
-                            delta = cur_score - prev_score
-                            delta_icon  = "▲" if delta > 0 else "▼" if delta < 0 else "="
-                            c1,c2,c3 = st.columns(3)
-                            with c1: st.metric("Score précédent", f"{prev_score}/20")
-                            with c2: st.metric("Score actuel",    f"{cur_score}/20")
-                            with c3: st.metric("Delta", f"{delta_icon} {abs(delta)} pts", delta=delta, delta_color="normal")
-                            pc = prev.get("result",{}).get("_c",{})
-                            cc = result.get("_c",{})
-                            rows = []
-                            for label, pk, ck in [("Hook","hook","hook"),("Offer","offer","offer"),
-                                                   ("Trust","trust","trust"),("Friction","friction","friction")]:
-                                pv = pc.get(pk,0); cv = cc.get(ck,0); dv = cv-pv
-                                arrow = "▲" if dv>0 else "▼" if dv<0 else "="
-                                color = "🟢" if dv>0 else "🔴" if dv<0 else "⚪"
-                                rows.append(f"**{label}** : {pv}/5 → {cv}/5  {color} {arrow}{abs(dv)}")
-                            for r in rows: st.markdown(r)
-
-                st.markdown("---")
-                # ── Exports ───────────────────────────────────────
-                meta["version"] = APP_VERSION
-                fname_base = "LRS_" + ts.replace("/","-").replace(":","-").replace(" ","_")
-                ecol1, ecol2, ecol3, ecol4 = st.columns(4)
-                with ecol1:
-                    txt = export_txt(result, meta)
-                    st.download_button("📥 .txt", data=txt.encode("utf-8"),
-                                       file_name=fname_base+".txt", mime="text/plain",
-                                       use_container_width=True)
-                with ecol2:
-                    if PDF_AVAILABLE:
-                        try:
-                            pdf_bytes = generate_pdf_report(result, meta)
-                            st.download_button("📄 PDF", data=pdf_bytes,
-                                               file_name=fname_base+".pdf", mime="application/pdf",
-                                               type="primary", use_container_width=True)
-                        except Exception as pdf_err:
-                            st.caption(f"PDF indisponible : {pdf_err}")
-                    else:
-                        st.caption("PDF non disponible")
-                with ecol3:
-                    if PDF_AVAILABLE:
-                        with st.expander("👔 Rapport Client"):
-                            client_name_tab1 = st.text_input("Nom du client",
-                                placeholder="Ex: Startup XYZ", key="client_name_tab1")
-                            if st.button("Générer", key="gen_client_pdf"):
-                                try:
-                                    meta_c = {**meta, "client_name": client_name_tab1 or "",
-                                              "report_mode": "client"}
-                                    pdf_c = generate_pdf_report(result, meta_c)
-                                    st.download_button("⬇️ Télécharger", data=pdf_c,
-                                        file_name=fname_base+"_client.pdf", mime="application/pdf",
-                                        key="dl_client_pdf")
-                                except Exception as ce:
-                                    st.error(f"Erreur : {ce}")
-                with ecol4:
-                    render_email_widget(result, meta, key_prefix="tab1_email")
-
-                # Share widget full-width below exports
-                render_share_widget(result, meta, key_prefix="tab1_share")
-
-                # Integrations widget (Slack / Sheets / Notion) — Pro/Agency only
-                render_integrations_widget(result, meta, key_prefix="tab1_integ")
-
-                # Rewrite tracker — suivi des corrections appliquées
-                render_rewrite_tracker(result, meta, key_prefix="tab1_rwt")
-
-                # Agency branded report — white-label (Agency plan only)
-                render_agency_report_widget(result, meta, key_prefix="tab1_agency")
 
     # ── tab2 : Multi-Audit (Bulk + Comparaison + Concurrents) ─
     with tab2:
@@ -8272,7 +8286,12 @@ def main():
 
     with tab_cs:
         if CREATIVE_STUDIO_AVAILABLE:
-            render_creative_studio(run_lrs_audit_fn=_creative_studio_lrs_audit)
+            try:
+                render_creative_studio(run_lrs_audit_fn=_creative_studio_lrs_audit)
+            except Exception as _cs_err:
+                st.error(f"❌ Erreur dans Studio créatif : {_cs_err}")
+                with st.expander("Détails techniques (traceback)"):
+                    st.code(traceback.format_exc())
         else:
             st.info(
                 "Module Creative Studio indisponible — installez les dépendances : "
