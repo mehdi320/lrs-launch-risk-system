@@ -46,127 +46,214 @@ st.set_page_config(
 )
 
 # ── CSS GLOBAL ───────────────────────────────────────────────
+# Design system : 1 fond, 1 accent, gris pour le texte secondaire,
+# 3 tailles de police max (titre / sous-titre / corps), espacement généreux.
+# Palette de référence : dashboards SaaS sobres (Linear, Stripe, Vercel).
 _DARK_VARS = """
-    --bg-base: #07071a;
-    --bg-card: #0f0f1a;
-    --bg-card2: #1a1a2e;
-    --bg-input: #0f0f1a;
-    --border: #1e1e3a;
-    --border2: #2a2a4a;
-    --text-primary: #e0e0e0;
-    --text-secondary: #aaa;
-    --text-muted: #666;
-    --tab-bg: #0f0f1a;
-    --tab-active: #1a1a2e;
-    --expander-bg: #0f0f1a;
-    --expander-content: #0a0a14;
-    --caption-color: #666;
-    --streamlit-bg: #07071a;
+    --bg: #08080c;
+    --bg-surface: #121216;
+    --bg-surface-2: #1a1a20;
+    --bg-input: #121216;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --text: #f2f2f5;
+    --text-secondary: #9a9aa6;
+    --text-muted: #63636e;
+    --accent: #6366f1;
+    --accent-hover: #7b7df3;
+    --accent-soft: rgba(99,102,241,0.14);
+    --accent-soft-border: rgba(99,102,241,0.35);
+    --success: #22c55e;
+    --success-soft: rgba(34,197,94,0.12);
+    --warning: #f59e0b;
+    --warning-soft: rgba(245,158,11,0.12);
+    --danger: #ef4444;
+    --danger-soft: rgba(239,68,68,0.12);
+    --tab-bg: #121216;
+    --tab-active-bg: var(--accent);
+    --tab-active-text: #ffffff;
+    --expander-bg: #121216;
+    --expander-content: #0d0d11;
 """
 _LIGHT_VARS = """
-    --bg-base: #f4f4f8;
-    --bg-card: #ffffff;
-    --bg-card2: #f0f0f8;
+    --bg: #f5f5f8;
+    --bg-surface: #ffffff;
+    --bg-surface-2: #eeeef4;
     --bg-input: #ffffff;
-    --border: #dde0ef;
-    --border2: #c8cbdf;
-    --text-primary: #1a1a2e;
-    --text-secondary: #444;
-    --text-muted: #888;
-    --tab-bg: #e8e8f0;
-    --tab-active: #ffffff;
+    --border: rgba(20,20,40,0.10);
+    --border-strong: rgba(20,20,40,0.18);
+    --text: #16161d;
+    --text-secondary: #62626e;
+    --text-muted: #9494a0;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-soft: rgba(99,102,241,0.10);
+    --accent-soft-border: rgba(99,102,241,0.30);
+    --success: #16a34a;
+    --success-soft: rgba(22,163,74,0.10);
+    --warning: #d97706;
+    --warning-soft: rgba(217,119,6,0.10);
+    --danger: #dc2626;
+    --danger-soft: rgba(220,38,38,0.10);
+    --tab-bg: #eceef4;
+    --tab-active-bg: var(--accent);
+    --tab-active-text: #ffffff;
     --expander-bg: #ffffff;
     --expander-content: #f8f8fc;
-    --caption-color: #888;
-    --streamlit-bg: #f4f4f8;
+"""
+
+# Échelle typographique unique (3 tailles) + espacement, partagés par les deux thèmes.
+_SHARED_VARS = """
+    --fs-title: 1.5rem;
+    --fs-subtitle: 1rem;
+    --fs-body: 0.875rem;
+    --fw-regular: 400;
+    --fw-medium: 500;
+    --fw-semibold: 600;
+    --fw-bold: 700;
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
 """
 
 _CSS_TEMPLATE = """
 <style>
-:root { VARS_PLACEHOLDER }
+:root { VARS_PLACEHOLDER """ + _SHARED_VARS + """ }
 
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: var(--bg-base) !important;
-    color: var(--text-primary) !important;
+    background-color: var(--bg) !important;
+    color: var(--text) !important;
+    font-size: var(--fs-body);
 }
-h1, h2, h3 { letter-spacing: -0.3px; color: var(--text-primary) !important; }
+h1, h2, h3 {
+    letter-spacing: -0.3px;
+    color: var(--text) !important;
+    font-weight: var(--fw-bold) !important;
+}
+h1 { font-size: var(--fs-title) !important; }
+h2, h3 { font-size: var(--fs-subtitle) !important; }
+p, span, div, label { font-size: var(--fs-body); }
 
 #MainMenu, footer, header { visibility: hidden; }
 .block-container {
-    padding-top: 1.5rem !important;
-    padding-bottom: 2rem !important;
-    max-width: 1100px !important;
-    background-color: var(--bg-base) !important;
+    padding-top: 2rem !important;
+    padding-bottom: 3rem !important;
+    max-width: 1120px !important;
+    background-color: var(--bg) !important;
 }
-.main { background-color: var(--bg-base) !important; }
-.stApp { background-color: var(--bg-base) !important; }
+.main { background-color: var(--bg) !important; }
+.stApp { background-color: var(--bg) !important; }
 
-/* ── Tabs ── */
+/* Rythme vertical : plus d'air entre les blocs successifs */
+[data-testid="stVerticalBlock"] > [data-testid="stElementContainer"] {
+    margin-bottom: var(--space-1);
+}
+[data-testid="stVerticalBlockBorderWrapper"] { margin-bottom: var(--space-3); }
+
+/* ── Tabs : état actif net (pastille pleine), regroupement visuel ── */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 4px;
+    gap: 2px;
     background: var(--tab-bg);
-    padding: 6px 8px;
-    border-radius: 12px;
+    padding: 5px;
+    border-radius: var(--radius);
     border: 1px solid var(--border);
+    flex-wrap: wrap;
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px;
-    padding: 8px 18px;
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-muted) !important;
+    border-radius: var(--radius-sm);
+    padding: 9px 16px;
+    font-size: var(--fs-body);
+    font-weight: var(--fw-medium);
+    color: var(--text-secondary) !important;
     background: transparent !important;
     border: none !important;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: var(--text) !important;
+    background: var(--bg-surface-2) !important;
 }
 .stTabs [aria-selected="true"] {
-    background: var(--tab-active) !important;
-    color: var(--text-primary) !important;
-    border: 1px solid var(--border2) !important;
+    background: var(--tab-active-bg) !important;
+    color: var(--tab-active-text) !important;
+    font-weight: var(--fw-semibold) !important;
 }
+.stTabs [aria-selected="true"]:hover { background: var(--tab-active-bg) !important; }
+/* Séparateur léger après les 2 onglets les plus utilisés (Tableau de bord, Audit) */
+.stTabs [data-baseweb="tab-list"] > button:nth-child(2) {
+    margin-right: var(--space-2);
+    padding-right: 16px;
+    border-right: 1px solid var(--border-strong) !important;
+}
+.stTabs [data-baseweb="tab-highlight"] { display: none; }
+.stTabs [data-baseweb="tab-border"] { display: none; }
 
-/* ── Buttons ── */
+/* ── Boutons ── */
 .stButton > button {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    font-size: 0.88rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-weight: var(--fw-semibold) !important;
+    font-size: var(--fs-body) !important;
     transition: all 0.15s ease !important;
-    border: 1px solid var(--border2) !important;
-    background: var(--bg-card) !important;
-    color: var(--text-primary) !important;
+    border: 1px solid var(--border-strong) !important;
+    background: var(--bg-surface) !important;
+    color: var(--text) !important;
+    padding: 0.5rem 1rem !important;
+}
+.stButton > button:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
 }
 .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
-    border-color: #6366f1 !important;
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
     color: #fff !important;
 }
 .stButton > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #7c7ff7, #6366f1) !important;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 15px rgba(99,102,241,0.35) !important;
+    background: var(--accent-hover) !important;
+    border-color: var(--accent-hover) !important;
+    color: #fff !important;
 }
 
-/* ── Inputs ── */
+/* ── Inputs (sélecteurs legacy + data-testid pour compat multi-versions Streamlit) ── */
 .stTextInput > div > div > input,
 .stTextArea > div > div > textarea,
-.stSelectbox > div > div {
+.stSelectbox > div > div,
+.stNumberInput > div > div > input,
+[data-testid="stTextInputRootElement"] input,
+[data-testid="stTextAreaRootElement"] textarea,
+[data-testid="stNumberInputContainer"] input,
+[data-testid="stNumberInputRootElement"] input {
     background: var(--bg-input) !important;
-    border: 1px solid var(--border2) !important;
-    border-radius: 8px !important;
-    color: var(--text-primary) !important;
-    font-size: 0.88rem !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text) !important;
+    font-size: var(--fs-body) !important;
 }
 .stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus {
-    border-color: #6366f1 !important;
-    box-shadow: 0 0 0 2px rgba(99,102,241,0.2) !important;
+.stTextArea > div > div > textarea:focus,
+[data-testid="stTextInputRootElement"] input:focus,
+[data-testid="stTextAreaRootElement"] textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--accent-soft) !important;
+}
+[data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {
+    background: var(--bg-surface-2) !important;
+    border-color: var(--border-strong) !important;
+    color: var(--text-secondary) !important;
 }
 
 /* ── Labels ── */
 .stTextInput label, .stTextArea label, .stSelectbox label,
-.stRadio label, .stFileUploader label {
-    font-size: 0.82rem !important;
-    font-weight: 500 !important;
+.stRadio label, .stFileUploader label, .stNumberInput label {
+    font-size: 0.75rem !important;
+    font-weight: var(--fw-semibold) !important;
     color: var(--text-secondary) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
@@ -176,78 +263,124 @@ h1, h2, h3 { letter-spacing: -0.3px; color: var(--text-primary) !important; }
 .streamlit-expanderHeader {
     background: var(--expander-bg) !important;
     border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    font-size: 0.88rem !important;
-    font-weight: 500 !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: var(--fs-body) !important;
+    font-weight: var(--fw-medium) !important;
     color: var(--text-secondary) !important;
 }
 .streamlit-expanderContent {
     background: var(--expander-content) !important;
     border: 1px solid var(--border) !important;
     border-top: none !important;
-    border-radius: 0 0 8px 8px !important;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important;
 }
 
 /* ── Métriques ── */
 [data-testid="metric-container"] {
-    background: var(--bg-card);
+    background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
+    border-radius: var(--radius);
+    padding: var(--space-4);
 }
 [data-testid="metric-container"] label {
     color: var(--text-secondary) !important;
-    font-size: 0.75rem !important;
+    font-size: 0.72rem !important;
+    font-weight: var(--fw-semibold) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size: 1.6rem !important;
-    font-weight: 700 !important;
-    color: var(--text-primary) !important;
+    font-size: var(--fs-title) !important;
+    font-weight: var(--fw-bold) !important;
+    color: var(--text) !important;
 }
 
 /* ── Dataframes ── */
 [data-testid="stDataFrame"] {
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius);
     overflow: hidden;
 }
 
-/* ── Info / Warning / Error ── */
-.stInfo, .stSuccess, .stWarning, .stError {
-    border-radius: 8px !important;
-    font-size: 0.88rem !important;
+/* ── Info / Warning / Error natifs Streamlit : même système que .lrs-alert ── */
+.stAlert {
+    border-radius: var(--radius) !important;
+    font-size: var(--fs-body) !important;
+    border: 1px solid var(--border) !important;
+    border-left-width: 3px !important;
 }
+div[data-testid="stAlertContentInfo"] { color: var(--text) !important; }
+.stAlert:has(div[data-testid="stAlertContentInfo"]) { border-left-color: var(--accent) !important; background: var(--accent-soft) !important; }
+.stAlert:has(div[data-testid="stAlertContentSuccess"]) { border-left-color: var(--success) !important; background: var(--success-soft) !important; }
+.stAlert:has(div[data-testid="stAlertContentWarning"]) { border-left-color: var(--warning) !important; background: var(--warning-soft) !important; }
+.stAlert:has(div[data-testid="stAlertContentError"]) { border-left-color: var(--danger) !important; background: var(--danger-soft) !important; }
 
 /* ── Progress bar ── */
 .stProgress > div > div > div {
-    background: linear-gradient(90deg, #6366f1, #22c55e) !important;
+    background: var(--accent) !important;
     border-radius: 4px !important;
 }
 
 /* ── Download button ── */
 .stDownloadButton > button {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border2) !important;
-    border-radius: 8px !important;
+    background: var(--bg-surface) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--radius-sm) !important;
     color: var(--text-secondary) !important;
     font-size: 0.85rem !important;
-    font-weight: 500 !important;
+    font-weight: var(--fw-medium) !important;
 }
 .stDownloadButton > button:hover {
-    border-color: #6366f1 !important;
-    color: var(--text-primary) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
 }
 
 /* ── Divider ── */
-hr { border-color: var(--border) !important; margin: 1rem 0 !important; }
+hr { border-color: var(--border) !important; margin: var(--space-5) 0 !important; }
 
 /* ── Caption ── */
-.stCaption { color: var(--caption-color) !important; font-size: 0.78rem !important; }
+.stCaption, [data-testid="stCaptionContainer"] { color: var(--text-muted) !important; font-size: 0.78rem !important; }
 
 /* ── Sidebar (cachée par défaut) ── */
 [data-testid="stSidebar"] { display: none; }
+
+/* ── Composants réutilisables (badges / alertes / cartes) ──────
+   À utiliser dans le HTML injecté via st.markdown(unsafe_allow_html=True)
+   pour remplacer les styles ad hoc par un système visuel unique. */
+.lrs-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space-5);
+}
+.lrs-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7rem;
+    font-weight: var(--fw-bold);
+    letter-spacing: 0.4px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+.lrs-badge-neutral { background: var(--bg-surface-2); color: var(--text-secondary); border: 1px solid var(--border-strong); }
+.lrs-badge-accent  { background: var(--accent); color: #fff; }
+.lrs-badge-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent-soft-border); }
+
+.lrs-alert {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--fs-body);
+    color: var(--text);
+}
+.lrs-alert-title { font-weight: var(--fw-semibold); margin-bottom: 2px; color: var(--text); }
+.lrs-alert-danger  { border-left-color: var(--danger);  background: var(--danger-soft); }
+.lrs-alert-warning { border-left-color: var(--warning); background: var(--warning-soft); }
+.lrs-alert-success { border-left-color: var(--success); background: var(--success-soft); }
 </style>
 """
 
@@ -3633,9 +3766,9 @@ def render_rewrite_tracker(result, meta, key_prefix="rwt"):
 # ── DASHBOARD VUE D'ENSEMBLE ─────────────────────────────────
 
 def _score_color(score):
-    if score <= 9:  return "#ef4444"
-    if score <= 14: return "#f59e0b"
-    return "#22c55e"
+    if score <= 9:  return "var(--danger)"
+    if score <= 14: return "var(--warning)"
+    return "var(--success)"
 
 def _score_emoji(score):
     if score <= 9:  return "🔴"
@@ -3725,11 +3858,10 @@ def render_dashboard():
     """
     history  = st.session_state.audit_history
     projects = st.session_state.projects
-    light    = st.session_state.get("light_mode", False)
-    bg_card  = "#ffffff" if light else "#0f0f1a"
-    border   = "#e5e7eb" if light else "#1e1e3a"
-    txt      = "#1a1a2e" if light else "#e0e0e0"
-    txt2     = "#6b7280" if light else "#888"
+    bg_card  = "var(--bg-surface)"
+    border   = "var(--border)"
+    txt      = "var(--text)"
+    txt2     = "var(--text-secondary)"
     plan_key = _get_plan()
 
     st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>📊 Portfolio — Vue d'ensemble</h3>", unsafe_allow_html=True)
@@ -3738,10 +3870,9 @@ def render_dashboard():
 
     if not history:
         st.markdown(
-            f"<div style='background:{bg_card};border:1px solid {border};border-radius:12px;"
-            f"padding:40px;text-align:center'>"
+            f"<div class='lrs-card' style='padding:var(--space-6);text-align:center'>"
             f"<div style='font-size:2.5rem'>🚀</div>"
-            f"<div style='color:{txt};font-size:1.1rem;font-weight:700;margin:12px 0 6px'>Aucun audit pour l'instant</div>"
+            f"<div style='color:{txt};font-size:1.1rem;font-weight:var(--fw-bold);margin:var(--space-3) 0 6px'>Aucun audit pour l'instant</div>"
             f"<div style='color:{txt2};font-size:0.9rem'>Lancez votre premier audit dans l'onglet <strong>Audit</strong></div>"
             f"</div>",
             unsafe_allow_html=True,
@@ -3760,16 +3891,15 @@ def render_dashboard():
     for col, label, val, sub, color in [
         (k1, "Audits total",    len(history),    "",           txt),
         (k2, "Score moyen",     f"{avg_score}/20","",          _score_color(avg_score)),
-        (k3, "Meilleur score",  f"{best_score}/20","",         "#22c55e"),
-        (k4, "Pages en danger", danger_count,    "score ≤ 9",  "#ef4444"),
-        (k5, "Prêtes à scaler", ready_count,     "score ≥ 15", "#22c55e"),
+        (k3, "Meilleur score",  f"{best_score}/20","",         "var(--success)"),
+        (k4, "Pages en danger", danger_count,    "score ≤ 9",  "var(--danger)"),
+        (k5, "Prêtes à scaler", ready_count,     "score ≥ 15", "var(--success)"),
     ]:
         with col:
             st.markdown(
-                f"<div style='background:{bg_card};border:1px solid {border};border-radius:10px;"
-                f"padding:16px;text-align:center'>"
+                f"<div class='lrs-card' style='padding:var(--space-4);text-align:center'>"
                 f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>{label}</div>"
-                f"<div style='color:{color};font-size:1.8rem;font-weight:800;line-height:1.2'>{val}</div>"
+                f"<div style='color:{color};font-size:1.8rem;font-weight:var(--fw-bold);line-height:1.2'>{val}</div>"
                 f"<div style='color:{txt2};font-size:0.72rem'>{sub}</div>"
                 f"</div>",
                 unsafe_allow_html=True,
@@ -3793,11 +3923,11 @@ def render_dashboard():
 
     _latest_score = all_scores[0] if all_scores else 0
     if _latest_score <= 9:
-        _next_thresh, _next_label, _next_color = 10, "Test small budget", "#FF8C00"
+        _next_thresh, _next_label, _next_color = 10, "Test small budget", "var(--warning)"
     elif _latest_score <= 14:
-        _next_thresh, _next_label, _next_color = 15, "Ready to scale 🚀", "#22c55e"
+        _next_thresh, _next_label, _next_color = 15, "Ready to scale 🚀", "var(--success)"
     else:
-        _next_thresh, _next_label, _next_color = 20, "Score parfait !", "#6366f1"
+        _next_thresh, _next_label, _next_color = 20, "Score parfait !", "var(--accent)"
     _gap = max(0, _next_thresh - _latest_score)
 
     streak_html = ""
@@ -3807,7 +3937,7 @@ def render_dashboard():
             f"<div style='text-align:center;flex:1;min-width:120px;background:{bg_card};"
             f"border:1px solid {border};border-radius:10px;padding:14px'>"
             f"<div style='color:{txt2};font-size:0.72rem;text-transform:uppercase;letter-spacing:1px'>Streak</div>"
-            f"<div style='color:#f59e0b;font-size:1.8rem;font-weight:800'>{streak_emoji} {_streak_days}j</div>"
+            f"<div style='color:var(--warning);font-size:1.8rem;font-weight:800'>{streak_emoji} {_streak_days}j</div>"
             f"<div style='color:{txt2};font-size:0.72rem'>consécutifs</div></div>"
         )
 
@@ -3833,14 +3963,14 @@ def render_dashboard():
     # ── Pages en danger ───────────────────────────────────────
     danger_pages = [e for e in history if e.get("score", 20) <= 9]
     if danger_pages:
-        st.markdown(f"<div style='color:#ef4444;font-weight:700;font-size:0.95rem;margin-bottom:8px'>🔴 Pages en danger immédiat ({len(danger_pages)})</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='color:var(--danger);font-weight:700;font-size:0.95rem;margin-bottom:8px'>🔴 Pages en danger immédiat ({len(danger_pages)})</div>", unsafe_allow_html=True)
         for e in danger_pages[:5]:
             url_d = str(e.get("url","") or e.get("offer_type",""))[:55]
             sc    = e.get("score", 0)
             ts    = e.get("timestamp", "")
             c1, c2, c3, c4 = st.columns([5, 1, 2, 2])
             with c1: st.markdown(f"<span style='color:{txt};font-size:0.88rem'>{url_d}</span>", unsafe_allow_html=True)
-            with c2: st.markdown(f"<span style='color:#ef4444;font-weight:700'>{sc}/20</span>", unsafe_allow_html=True)
+            with c2: st.markdown(f"<span style='color:var(--danger);font-weight:700'>{sc}/20</span>", unsafe_allow_html=True)
             with c3: st.caption(ts)
             with c4:
                 if st.button("🔁 Re-auditer", key=f"dash_reaudit_{url_d[:20]}", use_container_width=True):
@@ -3903,7 +4033,7 @@ def render_dashboard():
                 what   = qw.get("what", "")
                 impact = qw.get("impact", "")
                 effort = qw.get("effort", "")
-                tag_c  = "#22c55e" if effort == "Faible" else "#f59e0b"
+                tag_c  = "var(--success)" if effort == "Faible" else "var(--warning)"
                 st.markdown(
                     f"<div style='background:{bg_card};border-left:3px solid {tag_c};"
                     f"border:1px solid {border};border-left:3px solid {tag_c};"
@@ -3943,7 +4073,7 @@ def render_dashboard():
         st.progress(_pct / 100)
         for ok, label in _chk_items:
             icon = "✅" if ok else "⬜"
-            c_l  = "#22c55e" if ok else txt2
+            c_l  = "var(--success)" if ok else txt2
             st.markdown(
                 f"<div style='color:{c_l};font-size:0.87rem;padding:3px 0'>{icon} {label}</div>",
                 unsafe_allow_html=True,
@@ -6415,9 +6545,9 @@ def render_comparison(api_key, model="gpt-4o-mini"):
 
 def _score_color_str(v, mx=5):
     r = v / mx
-    if r <= 0.45: return "#FF4444"
-    if r <= 0.65: return "#FF8C00"
-    return "#22c55e"
+    if r <= 0.45: return "var(--danger)"
+    if r <= 0.65: return "var(--warning)"
+    return "var(--success)"
 
 # ── ONBOARDING ───────────────────────────────────────────────
 def render_onboarding_banner():
@@ -7684,32 +7814,28 @@ def main():
 
     # ── Header ───────────────────────────────────────────────
     hdr_l, hdr_r = st.columns([5, 1])
-    border_col = "#dde0ef" if light_mode else "#1e1e3a"
-    txt_col    = "#1a1a2e" if light_mode else "#fff"
-    sub_col    = "#888"    if light_mode else "#555"
-    tag_col    = "#aaa"    if light_mode else "#444"
     with hdr_l:
         st.markdown(
-            f"""<div style='display:flex;align-items:center;
-                margin-bottom:1.2rem;padding-bottom:0.8rem;border-bottom:1px solid {border_col}'>
+            """<div style='display:flex;align-items:baseline;
+                margin-bottom:var(--space-5);padding-bottom:var(--space-3);border-bottom:1px solid var(--border)'>
               <div>
-                <span style='font-size:1.6rem;font-weight:800;color:{txt_col};letter-spacing:-0.5px'>
+                <span style='font-size:var(--fs-title);font-weight:var(--fw-bold);color:var(--text);letter-spacing:-0.5px'>
                   🚦 LRS™
                 </span>
-                <span style='color:{sub_col};font-size:0.85rem;margin-left:10px'>
-                  Launch Risk System · V{APP_VERSION}
+                <span style='color:var(--text-muted);font-size:var(--fs-body);margin-left:10px'>
+                  Launch Risk System · V""" + APP_VERSION + """
                 </span>
               </div>
-              <span style='color:{tag_col};font-size:0.78rem;margin-left:auto'>Paid Traffic Pre-Launch Audit</span>
+              <span style='color:var(--text-muted);font-size:0.78rem;margin-left:auto'>Paid Traffic Pre-Launch Audit</span>
             </div>""",
             unsafe_allow_html=True,
         )
     with hdr_r:
-        # ── Plan badge ────────────────────────────────────────
+        # ── Plan badge : gris neutre (Free/Starter), accent (Pro/Agency) ──
         _plan_key   = _get_plan()
         _plan_info  = PLAN_LIMITS[_plan_key]
-        _pbg        = _plan_info["badge_color"]
         _plabel     = _plan_info["label"]
+        _badge_cls  = "lrs-badge-neutral" if _plan_key in ("free", "starter") else "lrs-badge-accent"
         _remaining, _limit = get_remaining_audits()
         if _remaining == -1:
             _quota_txt = "∞"
@@ -7718,9 +7844,8 @@ def main():
         st.markdown(
             f"<div style='display:flex;align-items:center;gap:8px;justify-content:flex-end;"
             f"margin-bottom:4px'>"
-            f"<span style='background:{_pbg};color:#fff;font-size:0.7rem;font-weight:700;"
-            f"padding:3px 10px;border-radius:20px;letter-spacing:0.5px'>{_plabel.upper()}</span>"
-            f"<span style='color:#888;font-size:0.72rem'>{_quota_txt} audits</span>"
+            f"<span class='lrs-badge {_badge_cls}'>{_plabel.upper()}</span>"
+            f"<span style='color:var(--text-muted);font-size:0.72rem'>{_quota_txt} audits</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
@@ -7752,12 +7877,9 @@ def main():
     api_key = get_api_key()
     if not api_key:
         st.markdown(
-            """<div style='background:#1a0a0a;border:1px solid #FF4444;border-radius:10px;
-                padding:20px 24px;margin:8px 0'>
-              <div style='color:#FF4444;font-weight:700;margin-bottom:6px'>
-                🔑 Clé API OpenAI manquante
-              </div>
-              <div style='color:#ccc;font-size:0.88rem'>
+            """<div class='lrs-alert lrs-alert-danger'>
+              <div class='lrs-alert-title'>🔑 Clé API OpenAI manquante</div>
+              <div style='color:var(--text-secondary)'>
                 Ajoutez <code>OPENAI_API_KEY = "sk-..."</code> dans vos
                 <strong>Streamlit Secrets</strong> (App settings → Secrets)
                 ou dans votre fichier <code>.env</code> en local.
@@ -7793,18 +7915,17 @@ def main():
     if _cur_plan == "free":
         _rem_free, _lim_free = get_remaining_audits()
         _used_free = _lim_free - _rem_free if _rem_free >= 0 else 0
-        _light_b   = st.session_state.get("light_mode", False)
-        _bg_b      = "#fffbeb" if _light_b else "#1a1500"
-        _brd_b     = "#f59e0b"
         if _rem_free == 0:
-            _msg_b = "🚨 **Vous avez utilisé vos 3 audits gratuits ce mois.** Passez en Starter (19€/mois) pour 20 audits + monitoring + email d'alertes."
+            _msg_b   = "🚨 **Vous avez utilisé vos 3 audits gratuits ce mois.** Passez en Starter (19€/mois) pour 20 audits + monitoring + email d'alertes."
+            _tier_b  = "lrs-alert-danger"
         elif _rem_free <= 1:
-            _msg_b = f"⚠️ **{_rem_free} audit gratuit restant ce mois.** Passez en Starter (19€/mois) pour continuer sans limite mensuelle."
+            _msg_b   = f"⚠️ **{_rem_free} audit gratuit restant ce mois.** Passez en Starter (19€/mois) pour continuer sans limite mensuelle."
+            _tier_b  = "lrs-alert-warning"
         else:
-            _msg_b = f"✨ Plan Gratuit — {_rem_free} audits restants ce mois. Passez en **Starter (19€)** pour 20 audits + monitoring, ou **Pro (49€)** pour tout débloquer."
+            _msg_b   = f"✨ Plan Gratuit — {_rem_free} audits restants ce mois. Passez en **Starter (19€)** pour 20 audits + monitoring, ou **Pro (49€)** pour tout débloquer."
+            _tier_b  = ""
         st.markdown(
-            f"<div style='background:{_bg_b};border:1px solid {_brd_b};border-radius:8px;"
-            f"padding:10px 16px;margin-bottom:12px;font-size:0.87rem'>{_msg_b}</div>",
+            f"<div class='lrs-alert {_tier_b}' style='margin-bottom:var(--space-4)'>{_msg_b}</div>",
             unsafe_allow_html=True,
         )
 
@@ -8184,38 +8305,36 @@ def main():
                     render_demo_mode()
                 else:
                     st.markdown(
-                        """<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;
-                            padding:28px 32px;margin-top:8px'>
-                          <div style='color:#6366f1;font-size:0.75rem;font-weight:600;
-                               text-transform:uppercase;letter-spacing:1px;margin-bottom:12px'>
+                        """<div class='lrs-card' style='margin-top:var(--space-2)'>
+                          <div style='color:var(--accent);font-size:0.75rem;font-weight:var(--fw-semibold);
+                               text-transform:uppercase;letter-spacing:1px;margin-bottom:var(--space-3)'>
                             Comment ça marche
                           </div>
-                          <div style='color:#ccc;font-size:0.92rem;line-height:1.9'>
-                            <span style='color:#6366f1;font-weight:700'>①</span>&nbsp;
+                          <div style='color:var(--text-secondary);font-size:var(--fs-body);line-height:1.9'>
+                            <span style='color:var(--accent);font-weight:var(--fw-bold)'>①</span>&nbsp;
                             Collez l'URL de votre landing page<br>
-                            <span style='color:#6366f1;font-weight:700'>②</span>&nbsp;
+                            <span style='color:var(--accent);font-weight:var(--fw-bold)'>②</span>&nbsp;
                             Choisissez votre plateforme et type d'offre<br>
-                            <span style='color:#6366f1;font-weight:700'>③</span>&nbsp;
+                            <span style='color:var(--accent);font-weight:var(--fw-bold)'>③</span>&nbsp;
                             Cliquez <strong>Lancer l'audit</strong> — résultats en ~15s
                           </div>
                         </div>""",
                         unsafe_allow_html=True,
                     )
                     st.markdown("")
-                    # Modes
+                    # Modes — même carte pour les 3, différenciées par icône/texte (pas par couleur)
                     m1, m2, m3 = st.columns(3)
-                    for col, title, desc, color in [
-                        (m1, "Funnel Only", "Score /20 · Analyse · Rewrite", "#6366f1"),
-                        (m2, "Ads Only",    "Score /20 · Hooks · Variantes", "#22c55e"),
-                        (m3, "Full Risk",   "Audit complet + Message Match", "#FF8C00"),
+                    for col, icon, title, desc in [
+                        (m1, "◐", "Funnel Only", "Score /20 · Analyse · Rewrite"),
+                        (m2, "◑", "Ads Only",    "Score /20 · Hooks · Variantes"),
+                        (m3, "●", "Full Risk",   "Audit complet + Message Match"),
                     ]:
                         with col:
                             st.markdown(
-                                f"""<div style='background:#0f0f1a;border:1px solid #1e1e3a;
-                                    border-top:3px solid {color};border-radius:10px;
-                                    padding:14px 16px;text-align:center'>
-                                  <div style='color:#fff;font-weight:700;font-size:0.88rem'>{title}</div>
-                                  <div style='color:#666;font-size:0.78rem;margin-top:4px'>{desc}</div>
+                                f"""<div class='lrs-card' style='padding:var(--space-4);text-align:center'>
+                                  <div style='color:var(--accent);font-size:1rem;margin-bottom:4px'>{icon}</div>
+                                  <div style='color:var(--text);font-weight:var(--fw-semibold);font-size:0.88rem'>{title}</div>
+                                  <div style='color:var(--text-muted);font-size:0.78rem;margin-top:4px'>{desc}</div>
                                 </div>""",
                                 unsafe_allow_html=True,
                             )
