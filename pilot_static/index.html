@@ -685,11 +685,57 @@
   .plan-card ul { list-style: none; margin: 0; padding: 0; }
   .plan-card li { font-size: 12.5px; color: var(--text-secondary); padding: 4px 0; }
   .plan-card li:before { content: "✓ "; color: var(--success); }
+
+  /* ── Login gate (mot de passe partagé) ── */
+  #loginGate { display: none; max-width: 420px; padding-top: 12vh; }
+  #mainWrap { display: none; }
+  .login-title { font-size: 24px; font-weight: 800; text-align: center; margin: 0 0 6px; }
+  .login-sub { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
+
+  /* ── Onboarding banner ── */
+  .onboarding-banner {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 2px solid var(--accent); border-radius: 14px;
+    padding: 24px 28px; margin-bottom: 24px;
+  }
+  .onboarding-banner .ob-title { color: var(--accent); font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .onboarding-banner .ob-body { color: #ccc; font-size: 13.5px; line-height: 1.8; }
+  .onboarding-banner .ob-body b { color: #fff; }
+  .onboarding-banner .ob-step { color: var(--accent); }
+
+  /* ── Monitoring (Suivi) ── */
+  .trend-metrics { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .trend-metrics .tm-card {
+    flex: 1; min-width: 120px; background: var(--surface-2); border-radius: 12px;
+    padding: 14px 16px; text-align: center;
+  }
+  .trend-metrics .tm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+  .trend-metrics .tm-val { font-size: 20px; font-weight: 800; }
+  .sched-status-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12.5px; color: var(--text-secondary); margin: 10px 0; }
+  .sched-status-row b { color: var(--text); }
+  .sched-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .sched-actions .cta-secondary { flex: 1; min-width: 120px; }
 </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="wrap" id="loginGate">
     <div class="brand"><span class="dot"></span><span>LRS — Pilote</span></div>
+    <div class="card">
+      <div class="login-title">🚦 LRS™ — Launch Risk System</div>
+      <div class="login-sub">Entrez votre mot de passe d'accès</div>
+      <div class="field">
+        <label class="field-label" for="loginPwd">Password</label>
+        <input type="password" id="loginPwd" placeholder="Enter your password..." autocomplete="current-password" />
+      </div>
+      <button class="cta" id="loginBtn">Access LRS →</button>
+      <div class="error-box" id="loginError"></div>
+    </div>
+  </div>
+
+  <div class="wrap" id="mainWrap">
+    <div class="brand"><span class="dot"></span><span>LRS — Pilote</span></div>
+
+    <div id="onboardingBanner" style="display:none"></div>
 
     <div class="nav-tabs" id="navTabs">
       <button class="nav-tab active" data-view="dashboard">Dashboard</button>
@@ -781,6 +827,92 @@
 <script>
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+// ── Auth (mot de passe partagé) ──────────────────────────
+async function attemptLogin() {
+  const pwd = $('#loginPwd').value;
+  const errBox = $('#loginError');
+  errBox.style.display = 'none';
+  const res = await fetch('/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pwd }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    errBox.textContent = data.detail || 'Mot de passe invalide.';
+    errBox.style.display = 'block';
+    return;
+  }
+  showApp();
+}
+
+function showApp() {
+  $('#loginGate').style.display = 'none';
+  $('#mainWrap').style.display = 'block';
+  initApp();
+}
+
+function setupLoginGate() {
+  $('#loginBtn').addEventListener('click', attemptLogin);
+  $('#loginPwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
+}
+setupLoginGate();
+
+async function bootstrapAuth() {
+  try {
+    const res = await fetch('/api/auth/status');
+    const data = await res.json();
+    if (data.password_required && !data.authenticated) {
+      $('#loginGate').style.display = 'block';
+      $('#loginPwd').focus();
+    } else {
+      showApp();
+    }
+  } catch (err) {
+    // API inaccessible : on affiche quand même l'app plutôt que de bloquer l'utilisateur.
+    showApp();
+  }
+}
+
+// ── Onboarding interactif ─────────────────────────────────
+async function setupOnboarding() {
+  try {
+    const res = await fetch('/api/onboarding/status');
+    const data = await res.json();
+    if (data.onboarded) return;
+  } catch (err) { return; }
+
+  $('#onboardingBanner').innerHTML = `
+    <div class="onboarding-banner fade-up">
+      <div class="ob-title">👋 Bienvenue sur LRS™ — Launch Risk System</div>
+      <div class="ob-body">
+        <b>3 étapes pour votre premier audit :</b><br/>
+        <span class="ob-step">①</span>&nbsp;Collez l'URL de votre landing page dans l'onglet <b>Audit</b><br/>
+        <span class="ob-step">②</span>&nbsp;Choisissez votre plateforme publicitaire et le type d'offre<br/>
+        <span class="ob-step">③</span>&nbsp;Cliquez <b>Lancer l'audit</b> — résultats en 15 secondes<br/><br/>
+        <b>Fonctionnalités disponibles :</b>
+        Audit · Comparaison · Projets multi-pages · Bulk audit · Monitoring planifié · Export PDF client
+      </div>
+      <button class="cta-secondary" id="onboardingOkBtn" style="margin-top:16px">✅ Compris, démarrer</button>
+    </div>
+  `;
+  $('#onboardingBanner').style.display = 'block';
+  $('#onboardingOkBtn').addEventListener('click', async () => {
+    $('#onboardingBanner').style.display = 'none';
+    try { await fetch('/api/onboarding/complete', { method: 'POST' }); } catch (err) {}
+  });
+}
+
+// ── Monitoring : vérification des audits planifiés en retard ─
+function checkDueMonitoring() {
+  fetch('/api/monitoring/check', { method: 'POST' }).catch(() => {});
+}
+
+function initApp() {
+  setupOnboarding();
+  checkDueMonitoring();
+  loadDashboard();
+}
 
 function setupSegmented(id) {
   const el = $('#' + id);
@@ -1461,6 +1593,7 @@ function renderExistingABTests(abtests) {
 // ══════════════════════════════════════════════════════════
 const SUIVI_SUBVIEWS = {
   alertes: { label: 'Alertes', render: loadSuiviAlertes },
+  monitoring: { label: 'Monitoring', render: loadSuiviMonitoring },
   projets: { label: 'Projets', render: loadSuiviProjects },
   campagnes: { label: 'Campagnes', render: loadSuiviCampaigns },
   api: { label: 'API Pub', render: loadSuiviAdsConnector },
@@ -1521,6 +1654,240 @@ function renderSuiviAlertes(alerts) {
       `).join('')}
     </div>
   `;
+}
+
+// ── Monitoring : Score Trend + Audits Planifiés ───────────────
+let _monitoringHistory = [];
+let _monitoringSchedule = {};
+
+async function loadSuiviMonitoring(selectedUrl) {
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const [histRes, schedRes] = await Promise.all([fetch('/api/history'), fetch('/api/monitoring/schedule')]);
+    const histData = await histRes.json();
+    const schedData = await schedRes.json();
+    _monitoringHistory = histData.entries || [];
+    // GET /api/monitoring/schedule est la seule route qui calcule next_run_hint —
+    // on recharge toujours par ce endpoint après une mutation (create/toggle/run)
+    // plutôt que de garder la réponse brute du POST, qui ne le contient pas.
+    _monitoringSchedule = schedData.schedule || {};
+    renderSuiviMonitoring(selectedUrl);
+  } catch (err) {
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function _monitoringTrackedUrls() {
+  // /api/history renvoie les entrées du plus récent au plus ancien ; on
+  // reconstruit l'ordre chronologique par URL, comme app.py::render_monitoring().
+  const map = {};
+  for (const e of [..._monitoringHistory].reverse()) {
+    if (!e.url) continue;
+    (map[e.url] = map[e.url] || []).push(e);
+  }
+  return Object.fromEntries(Object.entries(map).filter(([, v]) => v.length >= 2));
+}
+
+const SEL_STYLE = 'width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:12px 14px;color:var(--text);font-size:14px;font-family:inherit';
+
+function renderSuiviMonitoring(selectedUrl) {
+  const tracked = _monitoringTrackedUrls();
+  const urls = Object.keys(tracked);
+  if (!selectedUrl || !tracked[selectedUrl]) selectedUrl = urls[0];
+
+  let trendHtml = `
+    <div class="dash-section fade-up" style="margin-top:0">
+      <h2>📈 Score Trend par page</h2>
+      <div class="empty-dash" style="padding:32px 24px">
+        <div class="emoji">📈</div>
+        <div class="title">Pas encore de tendance</div>
+        <div class="sub">Auditez la même URL plusieurs fois pour voir son évolution ici.</div>
+      </div>
+    </div>
+  `;
+  if (urls.length) {
+    const entries = tracked[selectedUrl];
+    const points = entries.map((e, i) => ({ index: i + 1, score: e.score }));
+    const first = entries[0].score, last = entries[entries.length - 1].score;
+    const delta = last - first;
+    const deltaColor = delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-secondary)';
+    const sign = delta >= 0 ? '+' : '';
+    trendHtml = `
+      <div class="dash-section fade-up" style="margin-top:0">
+        <h2>📈 Score Trend par page</h2>
+        <div class="field">
+          <label class="field-label" for="trendUrlSel">Choisir une page suivie</label>
+          <select id="trendUrlSel" style="${SEL_STYLE}">
+            ${urls.map(u => `<option value="${escapeHtml(u)}" ${u === selectedUrl ? 'selected' : ''}>${escapeHtml(u.replace(/^https?:\/\//, '').slice(0, 60))}</option>`).join('')}
+          </select>
+        </div>
+        <div class="sparkline-wrap" style="margin-top:16px">${buildSparkline(points)}</div>
+        <div class="trend-metrics">
+          <div class="tm-card"><div class="tm-label">Premier audit</div><div class="tm-val">${first}/20</div></div>
+          <div class="tm-card"><div class="tm-label">Dernier audit</div><div class="tm-val">${last}/20</div></div>
+          <div class="tm-card"><div class="tm-label">Progression</div><div class="tm-val" style="color:${deltaColor}">${sign}${delta} pts</div></div>
+        </div>
+      </div>
+    `;
+  }
+
+  const schedFormHtml = `
+    <div class="card" style="margin-top:20px">
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">⏰ Planifier un audit</h2>
+      <div class="field">
+        <label class="field-label" for="schUrl">URL à surveiller</label>
+        <input type="url" id="schUrl" placeholder="https://ma-landing.com" />
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <label class="field-label" for="schFreq">Fréquence</label>
+          <select id="schFreq" style="${SEL_STYLE}">
+            <option value="7">7 jours</option>
+            <option value="14">14 jours</option>
+            <option value="30">30 jours</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="schMode">Mode</label>
+          <select id="schMode" style="${SEL_STYLE}">
+            <option value="Funnel Only">Funnel Only</option>
+            <option value="Full Risk">Full Risk</option>
+          </select>
+        </div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <label class="field-label" for="schPlat">Plateforme</label>
+          <select id="schPlat" style="${SEL_STYLE}">
+            <option value="Meta">Meta</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Google">Google</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="schOffer">Offre</label>
+          <select id="schOffer" style="${SEL_STYLE}">
+            <option value="Digital product">Digital product</option>
+            <option value="Ecom (produit physique)">Ecom (produit physique)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label">Marque</label>
+        <div class="segmented" id="schBrandSeg">
+          <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
+          <button data-val="Marque etablie">Marque établie</button>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="schAlertEmail">📧 Email alerte (optionnel)</label>
+        <input type="text" id="schAlertEmail" placeholder="vous@email.com — alerte si le score chute de ≥2 pts" />
+      </div>
+      <button class="cta" id="schCreateBtn">⏰ Planifier</button>
+      <div class="error-box" id="schErrorBox"></div>
+    </div>
+  `;
+
+  const sids = Object.keys(_monitoringSchedule);
+  const schedListHtml = sids.length ? `
+    <div class="dash-section fade-up">
+      <h2>Audits en cours de surveillance (${sids.length})</h2>
+      ${sids.map(sid => {
+        const s = _monitoringSchedule[sid];
+        const urlShort = (s.url || '').replace(/^https?:\/\//, '').slice(0, 50);
+        const lastSc = s.last_score;
+        const scIcon = lastSc == null ? '⚪' : lastSc >= 15 ? '🟢' : lastSc >= 10 ? '🟡' : '🔴';
+        const statusIcon = s.enabled ? '✅' : '⏸️';
+        return `
+          <div class="entity-card">
+            <div class="entity-head">
+              <div>
+                <div class="entity-title">${statusIcon} ${escapeHtml(urlShort)}</div>
+                <div class="entity-sub">Toutes les ${s.freq_days}j · ${scIcon} ${lastSc != null ? lastSc + '/20' : 'pas encore audité'}</div>
+              </div>
+              <button class="icon-btn" data-del-sched="${sid}">🗑️</button>
+            </div>
+            <div class="sched-status-row">
+              <span><b>Dernier audit :</b> ${escapeHtml(s.last_run || 'Jamais')}</span>
+              <span><b>Prochain :</b> ${escapeHtml(s.next_run_hint || '')}</span>
+              <span><b>Mode :</b> ${escapeHtml(s.mode || '')}</span>
+            </div>
+            ${s.last_error ? `<div class="error-box" style="display:block">Erreur : ${escapeHtml(String(s.last_error).slice(0, 120))}</div>` : ''}
+            <div class="sched-actions">
+              <button class="cta-secondary" data-run-sched="${sid}">▶️ Lancer maintenant</button>
+              <button class="cta-secondary" data-tog-sched="${sid}">${s.enabled ? '⏸️ Désactiver' : '▶️ Activer'}</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : `
+    <div class="empty-dash fade-up" style="margin-top:20px">
+      <div class="emoji">⏰</div>
+      <div class="title">Aucun audit planifié</div>
+      <div class="sub">Planifiez un audit récurrent ci-dessus pour être alerté automatiquement des variations de score.</div>
+    </div>
+  `;
+
+  $('#suiviSubContent').innerHTML = trendHtml + schedFormHtml + schedListHtml;
+
+  if (urls.length) {
+    $('#trendUrlSel').addEventListener('change', (e) => renderSuiviMonitoring(e.target.value));
+  }
+  setupSegmented('schBrandSeg');
+
+  $('#schCreateBtn').addEventListener('click', async () => {
+    const url = $('#schUrl').value.trim();
+    const errBox = $('#schErrorBox');
+    errBox.style.display = 'none';
+    if (!url) {
+      errBox.textContent = 'Renseignez une URL.';
+      errBox.style.display = 'block';
+      return;
+    }
+    const brandBtn = $('#schBrandSeg button.active');
+    const res = await fetch('/api/monitoring/schedule', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        freq_days: parseInt($('#schFreq').value, 10),
+        mode: $('#schMode').value,
+        platform: $('#schPlat').value,
+        offer_type: $('#schOffer').value,
+        brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
+        alert_email: $('#schAlertEmail').value.trim(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+    loadSuiviMonitoring(selectedUrl);
+  });
+
+  $$('#suiviSubContent [data-del-sched]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.delSched), { method: 'DELETE' });
+      loadSuiviMonitoring(selectedUrl);
+    });
+  });
+  $$('#suiviSubContent [data-tog-sched]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.togSched) + '/toggle', { method: 'POST' });
+      loadSuiviMonitoring(selectedUrl);
+    });
+  });
+  $$('#suiviSubContent [data-run-sched]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '⏳ Audit en cours…';
+      try {
+        await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.runSched) + '/run', { method: 'POST' });
+        loadSuiviMonitoring(selectedUrl);
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Erreur — réessayer';
+      }
+    });
+  });
 }
 
 // ── Projets multi-pages ──────────────────────────────────────
@@ -3211,7 +3578,7 @@ const DEMO_RESULT = {
   "_meta": { "url": "https://exemple.com", "page_type": "Sales Page / Landing Page (offre unique)", "page_lang": "fr" }
 };
 
-loadDashboard();
+bootstrapAuth();
 </script>
 </body>
 </html>

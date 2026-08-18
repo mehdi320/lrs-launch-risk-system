@@ -8,14 +8,17 @@
 
 import datetime
 import os
+import secrets as _secrets
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.sessions import SessionMiddleware
 
 import ads_api
 import audit_engine
+import email_alerts
 import integrations
 import resources_content
 from jsonstore import load_json_file, save_json_file
@@ -39,6 +42,36 @@ CAMPAIGN_FILE = os.path.join(_BASE_DIR, ".lrs_campaigns.json")
 AB_FILE = os.path.join(_BASE_DIR, ".lrs_abtests.json")
 SWIPE_FILE = os.path.join(_BASE_DIR, ".lrs_swipefiles.json")
 ADS_CREDS_FILE = os.path.join(_BASE_DIR, ".lrs_ads_creds.json")
+SCHEDULE_FILE = os.path.join(_BASE_DIR, ".lrs_schedule.json")
+ONBOARDING_FILE = os.path.join(_BASE_DIR, ".lrs_onboarded.json")
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Accès par mot de passe (miroir de app.py::check_access) ────
+# Un seul mot de passe partagé (pas de comptes multi-utilisateurs — l'app
+# Streamlit de référence n'en a pas non plus : l'accès payant se fait via
+# un lien d'achat externe qui donne ce mot de passe).
+# ══════════════════════════════════════════════════════════════
+
+def _get_app_password():
+    return os.getenv("APP_PASSWORD", "")
+
+
+@app.middleware("http")
+async def _require_auth(request: Request, call_next):
+    pwd_required = _get_app_password()
+    path = request.url.path
+    if not pwd_required or not path.startswith("/api/") or path in ("/api/auth/login", "/api/auth/status"):
+        return await call_next(request)
+    if request.session.get("authenticated"):
+        return await call_next(request)
+    return JSONResponse({"detail": "Authentification requise."}, status_code=401)
+
+
+# Clé de session : fixe si fournie (recommandé en prod pour survivre aux
+# redémarrages), sinon générée aléatoirement au démarrage (les sessions
+# ouvertes sont invalidées à chaque redémarrage — acceptable pour un pilote).
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32))
 
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
@@ -1052,6 +1085,231 @@ def studio_generate(req: StudioGenerateRequest):
         "body_sections": copy.body_sections, "cta": copy.cta,
         "framework": framework.value, "kind": kind.value,
     }
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Authentification (mot de passe partagé) ─────────────────────
+# ══════════════════════════════════════════════════════════════
+
+class LoginRequest(BaseModel):
+    password: str = ""
+
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest, request: Request):
+    pwd_required = _get_app_password()
+    if not pwd_required or req.password == pwd_required:
+        request.session["authenticated"] = True
+        return {"ok": True}
+    raise HTTPException(status_code=401, detail="Mot de passe invalide.")
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request):
+    pwd_required = _get_app_password()
+    return {
+        "password_required": bool(pwd_required),
+        "authenticated": (not pwd_required) or bool(request.session.get("authenticated")),
+    }
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Onboarding interactif ────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/onboarding/status")
+def onboarding_status():
+    return {"onboarded": os.path.exists(ONBOARDING_FILE)}
+
+
+@app.post("/api/onboarding/complete")
+def onboarding_complete():
+    save_json_file(ONBOARDING_FILE, {"done": True, "date": datetime.datetime.now().strftime("%d/%m/%Y")})
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Monitoring : audits planifiés automatiques ──────────────────
+# Pas de scheduler serveur permanent (comme app.py, qui vérifie les audits
+# en retard une fois par session Streamlit) : le frontend appelle
+# /api/monitoring/check une fois à l'ouverture du pilote.
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/monitoring/schedule")
+def list_schedule():
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    now = datetime.datetime.now()
+    out = {}
+    for sid, sched in schedule.items():
+        last_run = sched.get("last_run", "")
+        freq = int(sched.get("freq_days", 7))
+        next_str = "à la prochaine vérification"
+        try:
+            if last_run:
+                lr_dt = datetime.datetime.strptime(last_run, "%d/%m/%Y %H:%M")
+                next_run = lr_dt + datetime.timedelta(days=freq)
+                days_left = (next_run - now).days
+                if days_left > 0:
+                    next_str = f"dans {days_left}j"
+        except Exception:
+            pass
+        out[sid] = {**sched, "next_run_hint": next_str}
+    return {"schedule": out}
+
+
+class ScheduleCreateRequest(BaseModel):
+    url: str = ""
+    freq_days: int = 7
+    mode: str = "Funnel Only"
+    platform: str = "Meta"
+    offer_type: str = "Digital product"
+    brand_type: str = "Nouveau lancement"
+    alert_email: str = ""
+
+
+@app.post("/api/monitoring/schedule")
+def create_schedule(req: ScheduleCreateRequest):
+    url = req.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="URL requise.")
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    sid = "sc_" + str(int(datetime.datetime.now().timestamp()))
+    schedule[sid] = {
+        "url": url, "freq_days": req.freq_days, "mode": req.mode,
+        "platform": req.platform, "offer_type": req.offer_type, "brand_type": req.brand_type,
+        "enabled": True, "last_run": "", "last_score": None, "last_error": "",
+        "alert_email": req.alert_email.strip(),
+        "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+    }
+    save_json_file(SCHEDULE_FILE, schedule)
+    return {"schedule": schedule}
+
+
+@app.post("/api/monitoring/schedule/{sid}/toggle")
+def toggle_schedule(sid: str):
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    if sid not in schedule:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
+    schedule[sid]["enabled"] = not schedule[sid].get("enabled", True)
+    save_json_file(SCHEDULE_FILE, schedule)
+    return {"schedule": schedule}
+
+
+@app.delete("/api/monitoring/schedule/{sid}")
+def delete_schedule(sid: str):
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule.pop(sid, None)
+    save_json_file(SCHEDULE_FILE, schedule)
+    return {"ok": True}
+
+
+def _run_one_scheduled_audit(sid, sched, schedule):
+    """Exécute un audit planifié et met à jour son entrée dans `schedule` (en place)."""
+    url = sched.get("url", "")
+    now = datetime.datetime.now()
+    ts = now.strftime("%d/%m/%Y %H:%M")
+    if not url:
+        return False
+    try:
+        content, status, is_js = audit_engine.extract_page(url)
+        if not content:
+            schedule[sid]["last_error"] = status
+            schedule[sid]["last_run"] = ts
+            return True
+        page_type = audit_engine.detect_page_type(content, url)
+        page_lang = audit_engine.detect_language(content)
+        result = audit_engine.run_audit(
+            mode=sched.get("mode", "Funnel Only"), platform=sched.get("platform", "Meta"),
+            offer_type=sched.get("offer_type", "Digital product"),
+            landing_content=content, ad_text="", market_context="",
+            model="gpt-4o-mini", brand_type=sched.get("brand_type", "Nouveau lancement"),
+            page_type=page_type, page_lang=page_lang,
+        )
+        new_score = result.get("_c", {}).get("score", 0)
+        prev_score = schedule[sid].get("last_score")
+        meta = {
+            "mode": sched.get("mode", "Funnel Only"), "platform": sched.get("platform", "Meta"),
+            "offer_type": sched.get("offer_type", "Digital product"), "url": url, "timestamp": ts,
+            "brand_type": sched.get("brand_type", "Nouveau lancement"), "page_type": page_type,
+            "ad_text": "", "model": "gpt-4o-mini", "scheduled": True,
+        }
+        _save_history_entry(result, meta)
+        schedule[sid]["last_run"] = ts
+        schedule[sid]["last_error"] = ""
+        schedule[sid]["last_score"] = new_score
+
+        alert_email = sched.get("alert_email", "") or os.getenv("LRS_ALERT_EMAIL", "")
+        if alert_email and prev_score is not None:
+            drop = new_score - int(prev_score)
+            if drop <= -2:
+                try:
+                    email_alerts.send_score_drop_alert(
+                        {**meta, "score": new_score, "decision": result.get("_c", {}).get("decision", "")},
+                        int(prev_score), alert_email,
+                    )
+                except Exception:
+                    pass
+        return True
+    except Exception as e:
+        schedule[sid]["last_error"] = str(e)[:200]
+        schedule[sid]["last_run"] = ts
+        return True
+
+
+@app.post("/api/monitoring/schedule/{sid}/run")
+def run_schedule_now(sid: str):
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    sched = schedule.get(sid)
+    if not sched:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
+    _run_one_scheduled_audit(sid, sched, schedule)
+    save_json_file(SCHEDULE_FILE, schedule)
+    return {"schedule": schedule}
+
+
+@app.post("/api/monitoring/check")
+def check_due_schedules():
+    """Vérifie les audits planifiés en retard et les exécute — équivalent de
+    app.py::run_scheduled_audits(), appelé une fois par le frontend à l'ouverture."""
+    schedule = load_json_file(SCHEDULE_FILE, dict)
+    if not schedule:
+        return {"ran": 0}
+    now = datetime.datetime.now()
+    ran = 0
+    for sid, sched in list(schedule.items()):
+        if not sched.get("enabled", True):
+            continue
+        last_run_str = sched.get("last_run", "")
+        freq_days = int(sched.get("freq_days", 7))
+        try:
+            last_run = (datetime.datetime.strptime(last_run_str, "%d/%m/%Y %H:%M")
+                        if last_run_str else datetime.datetime(2000, 1, 1))
+        except Exception:
+            last_run = datetime.datetime(2000, 1, 1)
+        if (now - last_run).days < freq_days:
+            continue
+        if _run_one_scheduled_audit(sid, sched, schedule):
+            ran += 1
+
+    if ran:
+        save_json_file(SCHEDULE_FILE, schedule)
+        digest_email = os.getenv("LRS_DIGEST_EMAIL", "")
+        if digest_email and schedule:
+            digest_entries = [
+                {"url": s.get("url", ""), "score": s.get("last_score", 0), "decision": "", "timestamp": s.get("last_run", "")}
+                for s in schedule.values()
+            ]
+            try:
+                email_alerts.send_monitoring_digest(digest_entries, digest_email)
+            except Exception:
+                pass
+    return {"ran": ran, "schedule": schedule}
 
 
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
