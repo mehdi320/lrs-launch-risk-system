@@ -1,15 +1,49 @@
-# LRS — Contenu statique de l'onglet Ressources (Ads Library, Changelog, Benchmark)
+# LRS — Contenu statique de l'onglet Ressources (Checklist, Ads Library, Changelog, Benchmark)
 #
-# Extrait de app.py (render_ads_library, render_changelog, render_benchmark_tab)
-# pour être consommé à la fois par l'app Streamlit et par pilot_server.py,
-# sans dupliquer le contenu texte dans les deux endroits.
+# Extrait de app.py (render_checklist, render_ads_library, render_changelog,
+# render_benchmark_tab) pour être consommé à la fois par l'app Streamlit et
+# par pilot_server.py, sans dupliquer le contenu texte dans les deux endroits.
+
+CHECKLIST = [
+    ("Hook & Headline", [
+        "La headline repond clairement : qu'est-ce que j'obtiens ?",
+        "La headline contient un chiffre, timeframe ou persona specifique",
+        "L'image hero montre le produit en action ou le resultat visible",
+        "Le visiteur comprend la valeur en moins de 5 secondes",
+    ]),
+    ("Offre", [
+        "Le prix est visible sans scroller",
+        "Il y a un offer stack avec valeurs chiffrees",
+        "La garantie est visible directement sous le CTA principal",
+        "Il y a une urgence ou rarete credible",
+    ]),
+    ("Trust", [
+        "Il y a au moins 10 avis ou temoignages",
+        "Les temoignages ont prenom + resultat specifique",
+        "Il y a un badge de paiement securise visible",
+        "Le nombre total d'acheteurs est mentionne",
+    ]),
+    ("Friction & CTA", [
+        "Il y a un seul CTA principal",
+        "Le CTA est repete au moins 3 fois sur la page",
+        "Pas de menu de navigation distrayant",
+        "Le parcours d'achat fait moins de 3 clics",
+    ]),
+    ("Tracking", [
+        "Le Pixel Meta ou TikTok est installe et verifie",
+        "L'evenement Purchase est configure",
+        "Google Analytics est actif",
+        "Un test d'achat a ete effectue",
+    ]),
+]
 
 ADS_LIBRARY = {
     "meta": {
         "label": "Meta Ads",
+        "cards_heading": "Frameworks rapides", "guides_heading": "Guide complet Meta Ads",
         "cards": [
             {
-                "title": "Hook Formula — 4 types", "color": "accent",
+                "title": "Hook Formula — 4 types", "color": "accent", "icon": "🎯",
                 "items": [
                     "Question : « Pourquoi vos pubs Meta ne convertissent pas ? »",
                     "Stat choc : « 73% des campagnes échouent dès J1 — voici pourquoi »",
@@ -18,7 +52,7 @@ ADS_LIBRARY = {
                 ],
             },
             {
-                "title": "Structure pub Meta", "color": "success",
+                "title": "Structure pub Meta", "color": "success", "icon": "📐",
                 "items": [
                     "0–3s : Hook visuel + texte overlay (une phrase max)",
                     "3–15s : Corps — problème → solution → preuve",
@@ -27,7 +61,7 @@ ADS_LIBRARY = {
                 ],
             },
             {
-                "title": "Benchmarks CTR (cold traffic)", "color": "warning",
+                "title": "Benchmarks CTR (cold traffic)", "color": "warning", "icon": "📊",
                 "items": [
                     "> 2% CTR : bon — publiez davantage",
                     "> 4% CTR : excellent — scalez le budget",
@@ -37,7 +71,7 @@ ADS_LIBRARY = {
                 ],
             },
             {
-                "title": "Modèles de primary text", "color": "cyan",
+                "title": "Modèles de primary text", "color": "cyan", "icon": "✍️",
                 "items": [
                     "PAS : Problème → Agitate (« tu perds X€/j ») → Solve",
                     "Social Proof : « [Prénom] a obtenu [résultat] en [durée] »",
@@ -47,7 +81,7 @@ ADS_LIBRARY = {
             },
         ],
         "guides": [
-            {"title": "Stratégie d'audiences — de zéro à scale", "body": """**Phase 1 — Testing cold traffic**
+            {"title": "🎯 Stratégie d'audiences — de zéro à scale", "body": """**Phase 1 — Testing cold traffic**
 - Broad (sans intérêts) sur comportements d'achat larges — budget 20€/j par adset
 - Lookalike 1-3% sur vos meilleurs acheteurs (LAL)
 - 1-2 intérêts larges très ciblés (pas les intérêts évidents)
@@ -61,7 +95,7 @@ ADS_LIBRARY = {
 - Visiteurs 7j non-acheteurs : montrez les preuves sociales (reviews, résultats)
 - ATC 14j non-acheteurs : urgence + offre légèrement différente
 - Acheteurs 180j : upsell / cross-sell — CPM ultra-bas, ROAS élevé"""},
-            {"title": "Formats créatifs gagnants en 2025", "body": """**Image statique avec texte overlay** (fonctionne toujours)
+            {"title": "📐 Formats créatifs gagnants en 2025", "body": """**Image statique avec texte overlay** (fonctionne toujours)
 - Fond simple ou produit seul — texte blanc sur fond sombre
 - La règle : 1 image = 1 message = 1 CTA
 - Ratio 1:1 pour Feed, 9:16 pour Stories/Reels
@@ -80,7 +114,7 @@ ADS_LIBRARY = {
 - Slide 1 : bénéfice principal (pas le produit)
 - Slides 2-4 : preuves, features, résultats
 - Slide finale : CTA + offre"""},
-            {"title": "Structure de compte optimale", "body": """**Structure recommandée 2025 :**
+            {"title": "⚙️ Structure de compte optimale", "body": """**Structure recommandée 2025 :**
 ```
 Campagne CBO — [Objectif : Ventes]
   +-- Adset 1 : Broad 18-45 (pas d'intérêts)
@@ -100,9 +134,10 @@ Campagne CBO — [Objectif : Ventes]
     },
     "tiktok": {
         "label": "TikTok Ads",
+        "cards_heading": "Frameworks rapides", "guides_heading": "Guide complet TikTok Ads",
         "cards": [
             {
-                "title": "La règle des 2 premières secondes", "color": "tiktok",
+                "title": "La règle des 2 premières secondes", "color": "tiktok", "icon": "⚡",
                 "items": [
                     "Le scroll dure 0.5s — votre hook doit arrêter le pouce",
                     "✅ Visuel inattendu OU texte choc en overlay immédiat",
@@ -112,7 +147,7 @@ Campagne CBO — [Objectif : Ventes]
                 ],
             },
             {
-                "title": "Structure vidéo TikTok Ads", "color": "tiktok",
+                "title": "Structure vidéo TikTok Ads", "color": "tiktok", "icon": "📱",
                 "items": [
                     "0-2s : Hook visuel + texte (pattern interrupt)",
                     "2-8s : Problème ou identification (« Si tu fais X... »)",
@@ -122,7 +157,7 @@ Campagne CBO — [Objectif : Ventes]
                 ],
             },
             {
-                "title": "Benchmarks TikTok Ads", "color": "success",
+                "title": "Benchmarks TikTok Ads", "color": "success", "icon": "📊",
                 "items": [
                     "✅ CTR > 2.5% : bon pour cold traffic",
                     "✅ CPM : 5–12€ (FR) — plus bas que Meta",
@@ -132,7 +167,7 @@ Campagne CBO — [Objectif : Ventes]
                 ],
             },
             {
-                "title": "Formats natifs gagnants", "color": "cyan",
+                "title": "Formats natifs gagnants", "color": "cyan", "icon": "🎬",
                 "items": [
                     "UGC face caméra : 15–30s, son naturel ambiant",
                     "Spark Ads : boostez vos contenus organiques TikTok",
@@ -143,7 +178,7 @@ Campagne CBO — [Objectif : Ventes]
             },
         ],
         "guides": [
-            {"title": "Créer des hooks qui stoppent le scroll", "body": """**Les 5 types de hooks qui convertissent :**
+            {"title": "🎬 Créer des hooks qui stoppent le scroll", "body": """**Les 5 types de hooks qui convertissent :**
 
 1. **La question directe** : « Tu sais pourquoi ton ROAS chute chaque mois ? »
 2. **Le résultat choquant** : « J'ai fait 12 000€ en 4 jours avec une pub de 300€ »
@@ -156,7 +191,7 @@ Campagne CBO — [Objectif : Ventes]
 - Visage hors cadre ou mal éclairé
 - Audio de mauvaise qualité (deal breaker sur TikTok)
 - CTA vague (« cliquez ici ») → soyez précis (« Lien en bio — offre 48h »)"""},
-            {"title": "Setup campagne TikTok Ads (structure 2025)", "body": """**Budget minimum :** 30–50€/jour pour que l'algo apprenne correctement.
+            {"title": "⚙️ Setup campagne TikTok Ads (structure 2025)", "body": """**Budget minimum :** 30–50€/jour pour que l'algo apprenne correctement.
 
 **Structure recommandée :**
 ```
@@ -175,7 +210,7 @@ Campagne — [Objectif : Conversions / Achat]
 - Recommandation : testez les 2 et comparez le CTR
 
 **Pixel TikTok :** Installez le pixel TikTok ET l'API Conversions (server-side) pour contourner les adblockers — impact +15-25% sur les données remontées."""},
-            {"title": "Rythme de testing créatif", "body": """**Règle d'or TikTok :** Les créas se fatiguent 3x plus vite que sur Meta.
+            {"title": "🔄 Rythme de testing créatif", "body": """**Règle d'or TikTok :** Les créas se fatiguent 3x plus vite que sur Meta.
 
 **Cycle recommandé :**
 - Semaine 1-2 : testez 3-5 créas, budget 30-50€/j par adset
@@ -189,9 +224,10 @@ Campagne — [Objectif : Conversions / Achat]
     },
     "google": {
         "label": "Google Ads",
+        "cards_heading": "Frameworks rapides", "guides_heading": "Guide complet Google Ads",
         "cards": [
             {
-                "title": "Structure d'annonce Search RSA", "color": "google_blue",
+                "title": "Structure d'annonce Search RSA", "color": "google_blue", "icon": "🔍",
                 "items": [
                     "Headline 1 (30 car.) : mot clé principal exact",
                     "Headline 2 (30 car.) : bénéfice principal + chiffre",
@@ -201,7 +237,7 @@ Campagne — [Objectif : Conversions / Achat]
                 ],
             },
             {
-                "title": "Extensions indispensables", "color": "google_blue",
+                "title": "Extensions indispensables", "color": "google_blue", "icon": "🔧",
                 "items": [
                     "Sitelinks : 4 liens vers pages clés (FAQ, Prix, Témoignages...)",
                     "Callouts : USP courtes (« Livraison 24h », « Garantie 30j »)",
@@ -211,7 +247,7 @@ Campagne — [Objectif : Conversions / Achat]
                 ],
             },
             {
-                "title": "Types de correspondance", "color": "google_green",
+                "title": "Types de correspondance", "color": "google_green", "icon": "🎯",
                 "items": [
                     "[Exact] : contrôle maximum, volume faible",
                     "« Expression » : équilibre volume / pertinence",
@@ -221,7 +257,7 @@ Campagne — [Objectif : Conversions / Achat]
                 ],
             },
             {
-                "title": "Quality Score — les 3 piliers", "color": "google_yellow",
+                "title": "Quality Score — les 3 piliers", "color": "google_yellow", "icon": "⭐",
                 "items": [
                     "1. Pertinence annonce (mot clé dans headline = +QS)",
                     "2. CTR attendu vs concurrents (créa = différenciation)",
@@ -232,7 +268,7 @@ Campagne — [Objectif : Conversions / Achat]
             },
         ],
         "guides": [
-            {"title": "Structure de compte recommandée", "body": """**Principe SKAG vs. thématique (2025) :**
+            {"title": "🏗️ Structure de compte recommandée", "body": """**Principe SKAG vs. thématique (2025) :**
 Les SKAGs (1 mot clé par adset) sont dépassés. Google favorise les RSA et le broad match intelligent.
 
 **Structure thématique recommandée :**
@@ -249,7 +285,7 @@ Compte
 ```
 
 **Budget testing :** 20€/j minimum par campagne Search pour que l'algo ait assez de données en 7-14 jours."""},
-            {"title": "Stratégies d'enchères — quand utiliser quoi", "body": """| Stratégie | Quand l'utiliser |
+            {"title": "📈 Stratégies d'enchères — quand utiliser quoi", "body": """| Stratégie | Quand l'utiliser |
 |-----------|-----------------|
 | Maximiser les clics | Lancement, objectif = données |
 | Maximiser les conversions | Après 30+ conversions/mois |
@@ -260,7 +296,7 @@ Compte
 **Règle :** Ne changez jamais la stratégie d'enchères les 2 premières semaines. L'algo a besoin de 7-14 jours pour apprendre.
 
 **Performance Max :** Évitez en cold traffic pur — PMax cannibalisera vos campagnes Search. Activez-le une fois que Search fonctionne et que vous avez des données de conversion."""},
-            {"title": "Google Shopping — optimiser son flux", "body": """**Les 3 éléments qui font 80% du succès Shopping :**
+            {"title": "🛒 Google Shopping — optimiser son flux", "body": """**Les 3 éléments qui font 80% du succès Shopping :**
 
 1. **Titre produit** (le plus important) :
    - Format : `[Marque] [Type produit] [Attribut principal] [Taille/Couleur/Variante]`
@@ -282,9 +318,10 @@ Compte
     },
     "funnel": {
         "label": "Funnel Écom",
+        "cards_heading": "Structures de funnels", "guides_heading": "Les règles immuables d'une landing page qui convertit",
         "cards": [
             {
-                "title": "Funnel Direct Response", "color": "accent",
+                "title": "Funnel Direct Response", "color": "accent", "icon": "🎯",
                 "items": [
                     "Ad → Landing Page courte → Checkout",
                     "⚡ Le plus simple, idéal pour tester",
@@ -294,7 +331,7 @@ Compte
                 ],
             },
             {
-                "title": "Funnel VSL (Video Sales Letter)", "color": "success",
+                "title": "Funnel VSL (Video Sales Letter)", "color": "success", "icon": "🎬",
                 "items": [
                     "Ad → LP avec vidéo → Checkout → Upsells",
                     "📹 VSL 8-20 min pour produits 97€+",
@@ -304,7 +341,7 @@ Compte
                 ],
             },
             {
-                "title": "Funnel Lead Magnet", "color": "warning",
+                "title": "Funnel Lead Magnet", "color": "warning", "icon": "📧",
                 "items": [
                     "Ad → Optin (email) → Email nurturing → Vente",
                     "🎁 Idéal : info-produit, coaching, SaaS",
@@ -316,7 +353,7 @@ Compte
         ],
         "cards2": [
             {
-                "title": "Structure LP haute conversion", "color": "accent",
+                "title": "Structure LP haute conversion", "color": "accent", "icon": "📄",
                 "items": [
                     "① Hero : headline + sous-titre + CTA above the fold",
                     "② Problème : « Vous aussi vous souffrez de... »",
@@ -328,7 +365,7 @@ Compte
                 ],
             },
             {
-                "title": "Les erreurs qui tuent la conversion", "color": "danger",
+                "title": "Les erreurs qui tuent la conversion", "color": "danger", "icon": "⚠️",
                 "items": [
                     "❌ Navigation header visible (fuite = -20-40% CVR)",
                     "❌ CTA générique (« En savoir plus », « Cliquer ici »)",
@@ -339,7 +376,7 @@ Compte
                 ],
             },
             {
-                "title": "Offer Stack — comment présenter l'offre", "color": "success",
+                "title": "Offer Stack — comment présenter l'offre", "color": "success", "icon": "🎁",
                 "items": [
                     "Listez TOUT ce que le client obtient avec valeur €",
                     "Produit principal : « Valeur : 197€ »",
@@ -350,7 +387,7 @@ Compte
                 ],
             },
             {
-                "title": "Optimisation du checkout", "color": "warning",
+                "title": "Optimisation du checkout", "color": "warning", "icon": "🛒",
                 "items": [
                     "1-page checkout = meilleur CVR (Shopify, ThriveCart...)",
                     "Bump offer visible (+15-25% revenu moyen)",
@@ -361,7 +398,7 @@ Compte
             },
         ],
         "guides": [
-            {"title": "Benchmarks CVR par type de page", "body": """| Type de page | CVR faible | CVR moyen | CVR excellent |
+            {"title": "📊 Benchmarks CVR par type de page", "body": """| Type de page | CVR faible | CVR moyen | CVR excellent |
 |---|---|---|---|
 | Landing page cold traffic | < 1% | 1.5–3% | > 4% |
 | Page produit ecom | < 1.5% | 2–4% | > 5% |
@@ -374,9 +411,10 @@ Compte
     },
     "copywriting": {
         "label": "Copywriting",
+        "cards_heading": "Frameworks de copywriting", "guides_heading": "Templates prêts à l'emploi",
         "cards": [
             {
-                "title": "PAS — Problem · Agitate · Solve", "color": "accent",
+                "title": "PAS — Problem · Agitate · Solve", "color": "accent", "icon": "🔥",
                 "items": [
                     "P : Nommez le problème EXACTEMENT comme le client le ressent",
                     "A : Agitez — « Et ça coûte X€ par mois / détruit votre... »",
@@ -385,7 +423,7 @@ Compte
                 ],
             },
             {
-                "title": "AIDA — Attention · Interest · Desire · Action", "color": "success",
+                "title": "AIDA — Attention · Interest · Desire · Action", "color": "success", "icon": "📈",
                 "items": [
                     "A : Attention — hook fort (stat, question, choc)",
                     "I : Interest — pourquoi c'est pertinent POUR EUX",
@@ -395,7 +433,7 @@ Compte
                 ],
             },
             {
-                "title": "BAB — Before · After · Bridge", "color": "warning",
+                "title": "BAB — Before · After · Bridge", "color": "warning", "icon": "🌉",
                 "items": [
                     "Before : « Avant, tu passais 2h à optimiser tes pubs... »",
                     "After : « Imagine avoir le score exact avant de dépenser 1€ »",
@@ -404,7 +442,7 @@ Compte
                 ],
             },
             {
-                "title": "Les 4U — Urgent · Unique · Utile · Ultra-spécifique", "color": "cyan",
+                "title": "Les 4U — Urgent · Unique · Utile · Ultra-spécifique", "color": "cyan", "icon": "✅",
                 "items": [
                     "Urgent : pourquoi agir maintenant ? (prix, stock, délai)",
                     "Unique : qu'est-ce que VOUS avez que personne d'autre n'a ?",
@@ -414,7 +452,7 @@ Compte
                 ],
             },
             {
-                "title": "Formules d'hooks éprouvées", "color": "danger",
+                "title": "Formules d'hooks éprouvées", "color": "danger", "icon": "💡",
                 "items": [
                     "« [Chiffre] [persona] ont [résultat] en [durée] »",
                     "« La vraie raison pourquoi [problème persiste] »",
@@ -425,7 +463,7 @@ Compte
             },
         ],
         "guides": [
-            {"title": "Templates primary text Meta Ads (copy-paste)", "body": """**Template PAS (30-60 mots) :**
+            {"title": "📝 Templates primary text Meta Ads (copy-paste)", "body": """**Template PAS (30-60 mots) :**
 ```
 Tu dépenses 500€/mois en pubs Meta et tu te demandes pourquoi ton ROAS plafonne à 1.2?
 
@@ -459,7 +497,7 @@ Utilisé par [X] media buyers en France.
 
 Testez maintenant → [Lien]
 ```"""},
-            {"title": "Comment écrire une headline qui convertit", "body": """**Les 3 composantes d'une headline parfaite :**
+            {"title": "🎯 Comment écrire une headline qui convertit", "body": """**Les 3 composantes d'une headline parfaite :**
 
 1. **Bénéfice spécifique** (pas une feature) + **timeframe** + **sans douleur**
    - ❌ « Améliorez vos pubs avec notre outil IA »
@@ -474,7 +512,7 @@ Testez maintenant → [Lien]
    - ✅ « Le premier outil d'audit paid traffic qui vous dit exactement QUOI corriger »
 
 **Test rapide :** Si votre headline peut s'appliquer à n'importe quel concurrent, elle est trop générique. Retravaillez-la."""},
-            {"title": "Rédiger un CTA qui convertit", "body": """**Règle : le CTA doit être une continuation logique de la promesse**
+            {"title": "⚡ Rédiger un CTA qui convertit", "body": """**Règle : le CTA doit être une continuation logique de la promesse**
 
 | ❌ CTA générique | ✅ CTA spécifique |
 |---|---|

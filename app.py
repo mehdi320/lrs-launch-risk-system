@@ -12,6 +12,11 @@ import time
 import traceback
 from html.parser import HTMLParser
 
+import ads_api
+import integrations
+import resources_content
+from jsonstore import load_json_file, save_json_file
+
 try:
     from lrs_pdf_report import generate_pdf_report
     PDF_AVAILABLE = True
@@ -37,6 +42,7 @@ except ImportError:
 
 APP_VERSION    = "3.5"
 MAX_PAGE_CHARS = 8000
+integrations.APP_VERSION = APP_VERSION  # garde integrations.py synchronisé avec la version affichée
 
 st.set_page_config(
     page_title="LRS - Launch Risk System",
@@ -724,20 +730,10 @@ DRIP_SEQUENCE = [
 
 
 def load_drip_data():
-    try:
-        if os.path.exists(DRIP_FILE):
-            with open(DRIP_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(DRIP_FILE, dict)
 
 def save_drip_data(data):
-    try:
-        with open(DRIP_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(DRIP_FILE, data)
 
 def register_drip_email(email, name=""):
     """Enregistre l'email de l'utilisateur pour la séquence drip."""
@@ -846,168 +842,15 @@ def render_email_capture_widget():
 # ══════════════════════════════════════════════════════════════
 
 def load_ads_creds():
-    try:
-        if os.path.exists(ADS_CREDS_FILE):
-            with open(ADS_CREDS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(ADS_CREDS_FILE, dict)
 
 def save_ads_creds(data):
-    try:
-        with open(ADS_CREDS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(ADS_CREDS_FILE, data)
 
-def fetch_meta_campaigns(access_token, ad_account_id, date_preset="last_7d"):
-    """
-    Récupère les campagnes Meta Ads avec leurs métriques via Marketing API v19.
-    Retourne une liste de dicts {name, campaign_id, spend, impressions, clicks, ctr, cpc, actions}.
-    """
-    acc_id = ad_account_id.strip().lstrip("act_")
-    url    = f"https://graph.facebook.com/v19.0/act_{acc_id}/campaigns"
-    params = {
-        "access_token": access_token,
-        "fields":       "id,name,status,objective",
-        "limit":        20,
-    }
-    resp = requests.get(url, params=params, timeout=15)
-    if resp.status_code != 200:
-        raise ValueError(f"Meta API {resp.status_code}: {resp.json().get('error',{}).get('message','Erreur inconnue')}")
-
-    campaigns_raw = resp.json().get("data", [])
-    results = []
-
-    for camp in campaigns_raw[:10]:
-        cid   = camp["id"]
-        cname = camp["name"]
-        cstat = camp.get("status","")
-
-        # Insights
-        ins_url = f"https://graph.facebook.com/v19.0/{cid}/insights"
-        ins_params = {
-            "access_token": access_token,
-            "date_preset":  date_preset,
-            "fields":       "spend,impressions,clicks,ctr,cpc,actions,purchase_roas",
-            "level":        "campaign",
-        }
-        ins_resp = requests.get(ins_url, params=ins_params, timeout=15)
-        if ins_resp.status_code != 200:
-            continue
-        ins_data = ins_resp.json().get("data", [])
-        if not ins_data:
-            continue
-        ins = ins_data[0]
-
-        spend       = float(ins.get("spend", 0))
-        impressions = int(ins.get("impressions", 0))
-        clicks      = int(ins.get("clicks", 0))
-        ctr_v       = float(ins.get("ctr", 0))
-        cpc_v       = float(ins.get("cpc", 0))
-
-        # ROAS
-        roas_raw = ins.get("purchase_roas", [])
-        roas_v   = float(roas_raw[0]["value"]) if roas_raw else 0.0
-
-        # Purchases → CPA
-        actions  = ins.get("actions", [])
-        purchases = next((int(a["value"]) for a in actions if a["action_type"] == "purchase"), 0)
-        cpa_v    = round(spend / purchases, 2) if purchases > 0 else 0.0
-
-        results.append({
-            "name":        cname,
-            "campaign_id": cid,
-            "status":      cstat,
-            "spend":       round(spend, 2),
-            "impressions": impressions,
-            "clicks":      clicks,
-            "ctr":         round(ctr_v, 2),
-            "cpc":         round(cpc_v, 2),
-            "roas":        round(roas_v, 2),
-            "cpa":         cpa_v,
-            "purchases":   purchases,
-        })
-
-    return results
-
-
-def fetch_tiktok_campaigns(access_token, advertiser_id, date_range_days=7):
-    """
-    Récupère les campagnes TikTok Ads via Marketing API v1.3.
-    Retourne une liste de dicts similaires à Meta.
-    """
-    end_date   = datetime.datetime.now()
-    start_date = end_date - datetime.timedelta(days=date_range_days)
-
-    headers = {"Access-Token": access_token, "Content-Type": "application/json"}
-
-    # Liste des campagnes
-    camp_url  = "https://business-api.tiktok.com/open_api/v1.3/campaign/get/"
-    camp_resp = requests.get(camp_url, headers=headers, params={
-        "advertiser_id": advertiser_id,
-        "page_size":     10,
-        "fields":        '["campaign_id","campaign_name","status","objective_type"]',
-    }, timeout=15)
-
-    if camp_resp.status_code != 200:
-        raise ValueError(f"TikTok API {camp_resp.status_code}: {camp_resp.text[:200]}")
-
-    data_tt = camp_resp.json()
-    if data_tt.get("code") != 0:
-        raise ValueError(f"TikTok: {data_tt.get('message','Erreur inconnue')}")
-
-    campaigns_tt = data_tt.get("data", {}).get("list", [])[:10]
-    results = []
-
-    for camp in campaigns_tt:
-        cid   = camp["campaign_id"]
-        cname = camp["campaign_name"]
-
-        # Insights
-        ins_url  = "https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/"
-        ins_resp = requests.get(ins_url, headers=headers, params={
-            "advertiser_id":  advertiser_id,
-            "report_type":    "BASIC",
-            "dimensions":     '["campaign_id"]',
-            "metrics":        '["spend","impressions","clicks","ctr","cpc","conversion","cost_per_conversion","real_time_conversion_rate"]',
-            "start_date":     start_date.strftime("%Y-%m-%d"),
-            "end_date":       end_date.strftime("%Y-%m-%d"),
-            "filters":        f'[{{"field_name":"campaign_id","filter_type":"IN","filter_value":"[\\"{cid}\\"]"}}]',
-            "page_size":      1,
-        }, timeout=15)
-
-        if ins_resp.status_code != 200:
-            continue
-        ins_data_tt = ins_resp.json().get("data", {}).get("list", [])
-        if not ins_data_tt:
-            continue
-
-        m       = ins_data_tt[0].get("metrics", {})
-        spend   = float(m.get("spend", 0))
-        clicks  = int(m.get("clicks", 0))
-        ctr_v   = float(m.get("ctr", 0))
-        cpc_v   = float(m.get("cpc", 0))
-        conv    = int(m.get("conversion", 0))
-        cpa_v   = float(m.get("cost_per_conversion", 0))
-        roas_v  = round(spend / cpa_v, 2) if cpa_v > 0 and spend > 0 else 0.0
-
-        results.append({
-            "name":        cname,
-            "campaign_id": str(cid),
-            "status":      camp.get("status",""),
-            "spend":       round(spend, 2),
-            "impressions": int(m.get("impressions", 0)),
-            "clicks":      clicks,
-            "ctr":         round(ctr_v * 100, 2),
-            "cpc":         round(cpc_v, 2),
-            "roas":        roas_v,
-            "cpa":         round(cpa_v, 2),
-            "purchases":   conv,
-        })
-
-    return results
+# fetch_meta_campaigns / fetch_tiktok_campaigns extraites dans ads_api.py
+# (module partagé avec le pilote FastAPI, pilot_server.py).
+fetch_meta_campaigns = ads_api.fetch_meta_campaigns
+fetch_tiktok_campaigns = ads_api.fetch_tiktok_campaigns
 
 
 def _stage_campaign_import(camps, name_prefix, platform, source):
@@ -1275,20 +1118,10 @@ def write_history_file(history):
 
 # ── PROFILS SAUVEGARDÉS ──────────────────────────────────────
 def load_profiles():
-    try:
-        if os.path.exists(PROFILES_FILE):
-            with open(PROFILES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(PROFILES_FILE, dict)
 
 def save_profiles(profiles):
-    try:
-        with open(PROFILES_FILE, "w", encoding="utf-8") as f:
-            json.dump(profiles, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(PROFILES_FILE, profiles)
 
 def save_profile(name, config):
     profiles = load_profiles()
@@ -1302,20 +1135,10 @@ def delete_profile(name):
 
 # ── AUDITS PLANIFIÉS ─────────────────────────────────────────
 def load_schedule():
-    try:
-        if os.path.exists(SCHEDULE_FILE):
-            with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(SCHEDULE_FILE, dict)
 
 def save_schedule(schedule):
-    try:
-        with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
-            json.dump(schedule, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(SCHEDULE_FILE, schedule)
 
 # ── ONBOARDING ───────────────────────────────────────────────
 def is_onboarded():
@@ -1335,20 +1158,10 @@ def mark_onboarded():
 
 # ── PROJETS MULTI-PAGES ──────────────────────────────────────
 def load_projects():
-    try:
-        if os.path.exists(PROJECTS_FILE):
-            with open(PROJECTS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(PROJECTS_FILE, dict)
 
 def save_projects(projects):
-    try:
-        with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
-            json.dump(projects, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(PROJECTS_FILE, projects)
 
 # ── SESSION STATE ────────────────────────────────────────────
 def init_session():
@@ -2616,235 +2429,13 @@ def render_share_widget(result, meta, key_prefix="share"):
 
 # ── INTÉGRATIONS : Slack / Google Sheets / Notion ────────────
 
-def _get_integration_config():
-    """Lit les clés d'intégration depuis Streamlit Secrets ou variables d'env."""
-    try:
-        cfg = st.secrets
-        slack_webhook    = cfg.get("SLACK_WEBHOOK_URL",    os.getenv("SLACK_WEBHOOK_URL", ""))
-        sheets_creds     = cfg.get("GOOGLE_SHEETS_CREDS",  os.getenv("GOOGLE_SHEETS_CREDS", ""))
-        sheets_id        = cfg.get("GOOGLE_SHEETS_ID",     os.getenv("GOOGLE_SHEETS_ID", ""))
-        notion_token     = cfg.get("NOTION_TOKEN",         os.getenv("NOTION_TOKEN", ""))
-        notion_db        = cfg.get("NOTION_DATABASE_ID",   os.getenv("NOTION_DATABASE_ID", ""))
-    except Exception:
-        slack_webhook = os.getenv("SLACK_WEBHOOK_URL", "")
-        sheets_creds  = os.getenv("GOOGLE_SHEETS_CREDS", "")
-        sheets_id     = os.getenv("GOOGLE_SHEETS_ID", "")
-        notion_token  = os.getenv("NOTION_TOKEN", "")
-        notion_db     = os.getenv("NOTION_DATABASE_ID", "")
-    return {
-        "slack_webhook": slack_webhook,
-        "sheets_creds":  sheets_creds,
-        "sheets_id":     sheets_id,
-        "notion_token":  notion_token,
-        "notion_db":     notion_db,
-    }
-
-
-def send_slack_notification(result, meta):
-    """
-    Envoie une notification Slack avec le résumé de l'audit.
-    Configure SLACK_WEBHOOK_URL dans Streamlit Secrets ou .env.
-    """
-    cfg     = _get_integration_config()
-    webhook = cfg["slack_webhook"]
-    if not webhook:
-        raise ValueError("SLACK_WEBHOOK_URL non configuré.")
-
-    c        = result.get("_c", {})
-    score    = c.get("score", 0)
-    decision = c.get("decision", "")
-    url_or_offer = meta.get("url") or meta.get("offer_type", "")
-    ts       = meta.get("timestamp", "")
-    mode     = meta.get("mode", "")
-    emoji    = "🔴" if score <= 9 else "🟡" if score <= 14 else "🟢"
-
-    fp       = result.get("fix_plan", {})
-    top      = fp.get("top_priority_action", {})
-    top_txt  = top.get("what", "") if top else ""
-
-    text = (
-        f"{emoji} *LRS™ Audit — {score}/20 — {decision}*\n"
-        f"*{url_or_offer}*  ·  {ts}  ·  {mode}\n"
-    )
-    if top_txt:
-        text += f">🎯 {top_txt}\n"
-
-    payload = {
-        "text": text,
-        "blocks": [
-            {"type": "section", "text": {"type": "mrkdwn", "text": text}},
-            {"type": "divider"},
-            {"type": "context", "elements": [
-                {"type": "mrkdwn",
-                 "text": f"Généré par *LRS™ V{APP_VERSION}* — Launch Risk System"}
-            ]}
-        ]
-    }
-    resp = requests.post(webhook, json=payload, timeout=10)
-    if resp.status_code not in (200, 204):
-        raise ValueError(f"Slack répondu {resp.status_code}: {resp.text[:200]}")
-
-
-def export_to_sheets(result, meta):
-    """
-    Ajoute une ligne dans un Google Sheet via l'API Sheets v4 (service account).
-    Configurez dans Streamlit Secrets :
-      GOOGLE_SHEETS_CREDS = '<json service account en string>'
-      GOOGLE_SHEETS_ID    = '<spreadsheet id>'
-    """
-    cfg      = _get_integration_config()
-    creds_s  = cfg["sheets_creds"]
-    sheet_id = cfg["sheets_id"]
-    if not creds_s or not sheet_id:
-        raise ValueError("GOOGLE_SHEETS_CREDS ou GOOGLE_SHEETS_ID non configurés.")
-
-    try:
-        creds_dict = json.loads(creds_s)
-    except Exception:
-        raise ValueError("GOOGLE_SHEETS_CREDS : JSON invalide.")
-
-    # ── 1. Obtenir un access token (OAuth2 service account) ──
-    import base64, hashlib, struct, time as _time
-    # Build JWT header + claims
-    iat   = int(_time.time())
-    exp   = iat + 3600
-    scope = "https://www.googleapis.com/auth/spreadsheets"
-    jwt_header  = base64.urlsafe_b64encode(json.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b"=")
-    jwt_claims  = base64.urlsafe_b64encode(json.dumps({
-        "iss": creds_dict["client_email"],
-        "sub": creds_dict["client_email"],
-        "aud": "https://oauth2.googleapis.com/token",
-        "iat": iat, "exp": exp, "scope": scope,
-    }).encode()).rstrip(b"=")
-    signing_input = jwt_header + b"." + jwt_claims
-
-    # Sign with RS256 using private key
-    try:
-        from cryptography.hazmat.primitives import hashes, serialization
-        from cryptography.hazmat.primitives.asymmetric import padding
-        private_key = serialization.load_pem_private_key(
-            creds_dict["private_key"].encode(), password=None)
-        signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-        sig_b64 = base64.urlsafe_b64encode(signature).rstrip(b"=")
-        jwt_token = (signing_input + b"." + sig_b64).decode()
-    except ImportError:
-        raise ValueError("Package 'cryptography' requis pour Google Sheets. "
-                         "Ajoutez `cryptography` à requirements.txt.")
-
-    token_resp = requests.post("https://oauth2.googleapis.com/token", data={
-        "grant_type":  "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        "assertion":   jwt_token,
-    }, timeout=15)
-    if token_resp.status_code != 200:
-        raise ValueError(f"Erreur token Google: {token_resp.text[:200]}")
-    access_token = token_resp.json()["access_token"]
-
-    # ── 2. Append row ──────────────────────────────────────────
-    c        = result.get("_c", {})
-    score    = c.get("score", 0)
-    decision = c.get("decision", "")
-    ts       = meta.get("timestamp", "")
-    url_val  = meta.get("url", meta.get("offer_type", ""))
-    mode     = meta.get("mode", "")
-    platform = meta.get("platform", "")
-    hook     = c.get("hook", 0)
-    offer    = c.get("offer", 0)
-    trust    = c.get("trust", 0)
-    friction = c.get("friction", 0)
-    fp       = result.get("fix_plan", {})
-    top      = fp.get("top_priority_action", {})
-    top_txt  = top.get("what", "") if top else ""
-
-    row = [ts, url_val, mode, platform, score, decision,
-           hook, offer, trust, friction, top_txt]
-
-    url_api = (
-        f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}"
-        f"/values/A1:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS"
-    )
-    resp = requests.post(
-        url_api,
-        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
-        json={"values": [row]},
-        timeout=15,
-    )
-    if resp.status_code not in (200, 201):
-        raise ValueError(f"Sheets API {resp.status_code}: {resp.text[:200]}")
-
-
-def export_to_notion(result, meta):
-    """
-    Crée une page dans une base Notion via l'API Notion v1.
-    Configurez dans Streamlit Secrets :
-      NOTION_TOKEN       = 'secret_xxx'
-      NOTION_DATABASE_ID = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-    """
-    cfg     = _get_integration_config()
-    token   = cfg["notion_token"]
-    db_id   = cfg["notion_db"]
-    if not token or not db_id:
-        raise ValueError("NOTION_TOKEN ou NOTION_DATABASE_ID non configurés.")
-
-    c        = result.get("_c", {})
-    score    = c.get("score", 0)
-    decision = c.get("decision", "")
-    ts       = meta.get("timestamp", "")
-    url_val  = meta.get("url", meta.get("offer_type", ""))
-    mode     = meta.get("mode", "")
-    platform = meta.get("platform", "")
-    hook     = c.get("hook", 0)
-    offer_sc = c.get("offer", 0)
-    trust    = c.get("trust", 0)
-    friction = c.get("friction", 0)
-    fp       = result.get("fix_plan", {})
-    top      = fp.get("top_priority_action", {})
-    top_txt  = top.get("what", "") if top else ""
-
-    page_title = f"LRS Audit — {score}/20 — {url_val[:60]}"
-
-    notion_payload = {
-        "parent": {"database_id": db_id},
-        "properties": {
-            "Name":      {"title":  [{"text": {"content": page_title}}]},
-            "Date":      {"rich_text": [{"text": {"content": ts}}]},
-            "URL":       {"url": url_val if url_val.startswith("http") else None},
-            "Mode":      {"select": {"name": mode}},
-            "Platform":  {"select": {"name": platform}},
-            "Score":     {"number": score},
-            "Decision":  {"rich_text": [{"text": {"content": decision}}]},
-            "Hook":      {"number": hook},
-            "Offer":     {"number": offer_sc},
-            "Trust":     {"number": trust},
-            "Friction":  {"number": friction},
-            "Top Action":{"rich_text": [{"text": {"content": top_txt}}]},
-        },
-        "children": [
-            {
-                "object": "block", "type": "paragraph",
-                "paragraph": {"rich_text": [{"text": {"content":
-                    f"Score: {score}/20 — {decision}\n"
-                    f"Hook: {hook}/5 · Offer: {offer_sc}/5 · Trust: {trust}/5 · Friction: {friction}/5\n"
-                    f"Top action: {top_txt}\n\nGénéré par LRS™ V{APP_VERSION}"
-                }}]}
-            }
-        ]
-    }
-    # Remove None values in properties (URL field)
-    if not url_val.startswith("http"):
-        notion_payload["properties"]["URL"] = {"rich_text": [{"text": {"content": url_val}}]}
-
-    resp = requests.post(
-        "https://api.notion.com/v1/pages",
-        headers={
-            "Authorization":  f"Bearer {token}",
-            "Content-Type":   "application/json",
-            "Notion-Version": "2022-06-28",
-        },
-        json=notion_payload,
-        timeout=15,
-    )
-    if resp.status_code not in (200, 201):
-        raise ValueError(f"Notion API {resp.status_code}: {resp.text[:200]}")
+# _get_integration_config / send_slack_notification / export_to_sheets /
+# export_to_notion extraites dans integrations.py (module partagé avec le
+# pilote FastAPI, pilot_server.py).
+_get_integration_config = integrations.get_integration_config
+send_slack_notification = integrations.send_slack_notification
+export_to_sheets = integrations.export_to_sheets
+export_to_notion = integrations.export_to_notion
 
 
 def render_integrations_widget(result, meta, key_prefix="integ"):
@@ -3202,93 +2793,13 @@ def render_cumulative_intel():
 CAMPAIGN_FILE = os.path.join(os.path.dirname(__file__), ".lrs_campaigns.json")
 
 def load_campaigns():
-    try:
-        if os.path.exists(CAMPAIGN_FILE):
-            with open(CAMPAIGN_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(CAMPAIGN_FILE, dict)
 
 def save_campaigns(data):
-    try:
-        with open(CAMPAIGN_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(CAMPAIGN_FILE, data)
 
-def _correlate_stats(lrs_score, ctr, cpc, roas, cpa):
-    """
-    Croise les stats de campagne avec le score LRS pour générer des diagnostics.
-    Retourne une liste de messages diagnostics priorisés.
-    """
-    diags = []
-
-    # CTR faible = problème Hook
-    if ctr is not None and ctr < 1.0:
-        diags.append({
-            "level": "danger",
-            "crit":  "Hook",
-            "msg":   f"CTR {ctr:.2f}% est très faible (< 1%). Ton hook pub ne capte pas l'attention. "
-                     "Teste 3 nouvelles accroches et change le visuel.",
-        })
-    elif ctr is not None and ctr < 2.0:
-        diags.append({
-            "level": "warning",
-            "crit":  "Hook",
-            "msg":   f"CTR {ctr:.2f}% est perfectible. Un bon CTR Meta est > 2%. Revois ton angle créatif.",
-        })
-
-    # CPC élevé = compétition + Hook faible
-    if cpc is not None and cpc > 1.5:
-        diags.append({
-            "level": "warning",
-            "crit":  "Hook",
-            "msg":   f"CPC {cpc:.2f}€ est élevé. Soit ta niche est très compétitive, soit ton Quality Score pub souffre d'un CTR bas.",
-        })
-
-    # ROAS faible = problème Offer ou Trust
-    if roas is not None and roas < 2.0:
-        diags.append({
-            "level": "danger",
-            "crit":  "Offer / Trust",
-            "msg":   f"ROAS {roas:.1f}x est sous le seuil de rentabilité. "
-                     "Le trafic arrive mais ne convertit pas — ton Offer Stack ou tes preuves sociales sont insuffisants.",
-        })
-    elif roas is not None and roas < 3.0:
-        diags.append({
-            "level": "warning",
-            "crit":  "Offer",
-            "msg":   f"ROAS {roas:.1f}x est rentable mais optimisable. "
-                     "Renforce ta garantie et ton offer stack pour augmenter la valeur perçue.",
-        })
-
-    # CPA élevé vs score
-    if cpa is not None and lrs_score is not None:
-        if cpa > 50 and lrs_score < 12:
-            diags.append({
-                "level": "danger",
-                "crit":  "Friction",
-                "msg":   f"CPA {cpa:.0f}€ avec un score LRS de {lrs_score}/20 — le problème est clairement sur ta page. "
-                         "Améliore ton score d'au moins 3 pts pour réduire significativement ton CPA.",
-            })
-
-    # Corrélation score LRS
-    if lrs_score is not None:
-        if lrs_score >= 15:
-            diags.append({
-                "level": "ok",
-                "crit":  "Score LRS",
-                "msg":   f"Score LRS {lrs_score}/20 — page bien optimisée. Si le ROAS reste bas, le problème est dans la qualité du trafic (audience, créa pub), pas dans la page.",
-            })
-        elif lrs_score < 10:
-            diags.append({
-                "level": "danger",
-                "crit":  "Score LRS",
-                "msg":   f"Score LRS {lrs_score}/20 — ta page est le goulot d'étranglement principal. Corriger les quick wins LRS avant d'augmenter le budget.",
-            })
-
-    return diags
+# Extraite dans ads_api.py (module partagé avec le pilote FastAPI).
+_correlate_stats = ads_api.correlate_stats
 
 
 def render_campaign_tracker():
@@ -3486,20 +2997,10 @@ def render_campaign_tracker():
 SWIPE_FILE = os.path.join(os.path.dirname(__file__), ".lrs_swipefiles.json")
 
 def load_swipefiles():
-    try:
-        if os.path.exists(SWIPE_FILE):
-            with open(SWIPE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {"hooks": [], "headlines": [], "ctas": [], "angles": []}
+    return load_json_file(SWIPE_FILE, lambda: {"hooks": [], "headlines": [], "ctas": [], "angles": []})
 
 def save_swipefiles(data):
-    try:
-        with open(SWIPE_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(SWIPE_FILE, data)
 
 def auto_save_swipes_from_audit(result, meta):
     """
@@ -3652,20 +3153,10 @@ def render_swipe_library():
 REWRITES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_rewrites.json")
 
 def load_rewrites():
-    try:
-        if os.path.exists(REWRITES_FILE):
-            with open(REWRITES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(REWRITES_FILE, dict)
 
 def save_rewrites(data):
-    try:
-        with open(REWRITES_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(REWRITES_FILE, data)
 
 def render_rewrite_tracker(result, meta, key_prefix="rwt"):
     """
@@ -4530,38 +4021,7 @@ def render_email_widget(result, meta, key_prefix="email"):
 
 
 # ── CHECKLIST ────────────────────────────────────────────────
-CHECKLIST = [
-    ("Hook & Headline", [
-        "La headline repond clairement : qu'est-ce que j'obtiens ?",
-        "La headline contient un chiffre, timeframe ou persona specifique",
-        "L'image hero montre le produit en action ou le resultat visible",
-        "Le visiteur comprend la valeur en moins de 5 secondes",
-    ]),
-    ("Offre", [
-        "Le prix est visible sans scroller",
-        "Il y a un offer stack avec valeurs chiffrees",
-        "La garantie est visible directement sous le CTA principal",
-        "Il y a une urgence ou rarete credible",
-    ]),
-    ("Trust", [
-        "Il y a au moins 10 avis ou temoignages",
-        "Les temoignages ont prenom + resultat specifique",
-        "Il y a un badge de paiement securise visible",
-        "Le nombre total d'acheteurs est mentionne",
-    ]),
-    ("Friction & CTA", [
-        "Il y a un seul CTA principal",
-        "Le CTA est repete au moins 3 fois sur la page",
-        "Pas de menu de navigation distrayant",
-        "Le parcours d'achat fait moins de 3 clics",
-    ]),
-    ("Tracking", [
-        "Le Pixel Meta ou TikTok est installe et verifie",
-        "L'evenement Purchase est configure",
-        "Google Analytics est actif",
-        "Un test d'achat a ete effectue",
-    ]),
-]
+CHECKLIST = resources_content.CHECKLIST  # défini dans resources_content.py (partagé avec le pilote)
 
 def render_checklist():
     st.subheader("Checklist Pre-Lancement")
@@ -4762,20 +4222,10 @@ def render_benchmark_context(score, offer_type, platform):
 NOTIF_FILE = os.path.join(os.path.dirname(__file__), ".lrs_notifications.json")
 
 def load_notifications():
-    try:
-        if os.path.exists(NOTIF_FILE):
-            with open(NOTIF_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return []
+    return load_json_file(NOTIF_FILE, list)
 
 def save_notifications(data):
-    try:
-        with open(NOTIF_FILE, "w", encoding="utf-8") as f:
-            json.dump(data[-50:], f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(NOTIF_FILE, data[-50:])
 
 def push_notification(title, message, level="info", url=""):
     """Ajoute une notification au centre de notifications."""
@@ -4847,20 +4297,10 @@ def render_notification_center():
 REFERRAL_FILE = os.path.join(os.path.dirname(__file__), ".lrs_referral.json")
 
 def load_referral():
-    try:
-        if os.path.exists(REFERRAL_FILE):
-            with open(REFERRAL_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(REFERRAL_FILE, dict)
 
 def save_referral(data):
-    try:
-        with open(REFERRAL_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(REFERRAL_FILE, data)
 
 def get_or_create_referral_code():
     """Génère ou récupère le code de referral unique de l'utilisateur."""
@@ -4966,20 +4406,10 @@ def render_referral_widget():
 AB_FILE = os.path.join(os.path.dirname(__file__), ".lrs_abtests.json")
 
 def load_abtests():
-    try:
-        if os.path.exists(AB_FILE):
-            with open(AB_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return {}
+    return load_json_file(AB_FILE, dict)
 
 def save_abtests(data):
-    try:
-        with open(AB_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    save_json_file(AB_FILE, data)
 
 def render_ab_tracker(api_key):
     """
@@ -6584,6 +6014,27 @@ def _card(title, items, color="var(--accent)", icon=""):
         unsafe_allow_html=True,
     )
 
+# Traduit les clés de couleur de resources_content.ADS_LIBRARY (partagées
+# avec le pilote FastAPI, où elles sont mappées côté JS) vers les valeurs
+# CSS attendues par _card().
+_LIB_COLOR_MAP = {
+    "accent": "var(--accent)", "success": "var(--success)", "warning": "var(--warning)",
+    "danger": "var(--danger)", "cyan": "#06b6d4", "tiktok": "#FF0050",
+    "google_blue": "#4285F4", "google_green": "#34A853", "google_yellow": "#FBBC05",
+}
+
+def _render_lib_card_row(cards, n_cols):
+    cols = st.columns(n_cols)
+    chunk_size = -(-len(cards) // n_cols)  # division entière arrondie au sup.
+    for i, col in enumerate(cols):
+        with col:
+            for card in cards[i * chunk_size:(i + 1) * chunk_size]:
+                _card(
+                    card["title"], card["items"],
+                    color=_LIB_COLOR_MAP.get(card["color"], "var(--accent)"),
+                    icon=card.get("icon", ""),
+                )
+
 def render_ads_library():
     st.markdown(
         """<div style='background:linear-gradient(135deg,#1a1a2e,#0f0f1a);
@@ -6597,493 +6048,28 @@ def render_ads_library():
         unsafe_allow_html=True,
     )
 
-    tab_meta, tab_tik, tab_ggl, tab_funnel, tab_copy = st.tabs([
-        "📘 Meta Ads", "🎵 TikTok Ads", "🔍 Google Ads", "🛒 Funnel Écom", "✍️ Copywriting"
+    platform_tabs = st.tabs([
+        "📘 Meta Ads", "🎵 TikTok Ads", "🔍 Google Ads",
+        "🛒 Funnel Écom", "✍️ Copywriting",
     ])
-
-    # ── META ADS ──────────────────────────────────────────────
-    with tab_meta:
-        st.markdown("#### Frameworks rapides")
-        col1, col2 = st.columns(2)
-        with col1:
-            _card("Hook Formula — 4 types", [
-                "❓ Question : 'Pourquoi vos pubs Meta ne convertissent pas?'",
-                "📊 Stat choc : '73% des campagnes échouent dès J1 — voici pourquoi'",
-                "🛑 Pattern interrupt : visuel inattendu + texte court",
-                "👤 Identification : 'Si tu fais du paid traffic...'",
-            ], color="var(--accent)", icon="🎯")
-            _card("Structure pub Meta", [
-                "0–3s : Hook visuel + texte overlay (une phrase max)",
-                "3–15s : Corps — problème → solution → preuve",
-                "15–30s : CTA clair + urgence ('Offre se termine dimanche')",
-                "Primary text : 125 car. avant 'Voir plus' → hook obligatoire",
-            ], color="var(--success)", icon="📐")
-        with col2:
-            _card("Benchmarks CTR (cold traffic)", [
-                "✅ > 2% CTR : bon — publiez davantage",
-                "🚀 > 4% CTR : excellent — scalez le budget",
-                "⚠️  < 1% CTR : créa à revoir ou audience trop large",
-                "CPM acceptable : 8–18€ (FR, ecom/digital)",
-                "Fréquence > 3.5 : creative fatigue, changez la créa",
-            ], color="var(--warning)", icon="📊")
-            _card("Modèles de primary text", [
-                "PAS : Problème → Agitate ('tu perds X€/j') → Solve",
-                "Social Proof : '[Prénom] a obtenu [résultat] en [durée]'",
-                "Direct : '[Bénéfice] sans [douleur] — voici comment'",
-                "Question + Réponse : 'Tu veux X? Voilà ce que font les pros'",
-            ], color="#06b6d4", icon="✍️")
-
-        st.markdown("---")
-        st.markdown("#### Guide complet Meta Ads")
-
-        with st.expander("🎯 Stratégie d'audiences — de zéro à scale"):
-            st.markdown("""
-**Phase 1 — Testing cold traffic**
-- Broad (sans intérêts) sur comportements d'achat larges — budget 20€/j par adset
-- Lookalike 1-3% sur vos meilleurs acheteurs (LAL)
-- 1-2 intérêts larges très ciblés (pas les intérêts évidents)
-
-**Phase 2 — Scale ce qui marche**
-- ROAS > 2.5 → doublez le budget tous les 3 jours max (pas tous les jours)
-- CBO (Campaign Budget Optimization) une fois que vous avez 2+ adsets gagnants
-- Évitez de toucher une adset active les 3 premiers jours — laissez l'algo apprendre
-
-**Phase 3 — Retargeting**
-- Visiteurs 7j non-acheteurs : montrez les preuves sociales (reviews, résultats)
-- ATC 14j non-acheteurs : urgence + offre légèrement différente
-- Acheteurs 180j : upsell / cross-sell — CPM ultra-bas, ROAS élevé
-""")
-
-        with st.expander("📐 Formats créatifs gagnants en 2025"):
-            st.markdown("""
-**Image statique avec texte overlay** (fonctionne toujours)
-- Fond simple ou produit seul — texte blanc sur fond sombre
-- La règle : 1 image = 1 message = 1 CTA
-- Ratio 1:1 pour Feed, 9:16 pour Stories/Reels
-
-**UGC 15–30s** (meilleur ROAS actuellement)
-- Personne réelle face caméra, son naturel, tenu décontractée
-- Structure : pain point 0-3s → solution → démonstration → résultat
-- Pas de musique de fond, pas de logo au début — must feel native
-
-**Reels natifs avec voiceover**
-- Tendances visuelles TikTok adaptées à Meta
-- Hook textuel sur les 2 premières secondes
-- Sous-titres obligatoires (85% regardent sans son)
-
-**Carousel ecom**
-- Slide 1 : bénéfice principal (pas le produit)
-- Slides 2-4 : preuves, features, résultats
-- Slide finale : CTA + offre
-""")
-
-        with st.expander("⚙️ Structure de compte optimale"):
-            st.markdown("""
-**Structure recommandée 2025 :**
-```
-Campagne CBO — [Objectif : Ventes]
-  ├── Adset 1 : Broad 18-45 (pas d'intérêts)
-  ├── Adset 2 : LAL 1-3% acheteurs
-  └── Adset 3 : Intérêt large #1
-      ├── Créa A (image statique)
-      ├── Créa B (UGC 15s)
-      └── Créa C (Reels natif)
-```
-
-**Règles d'or :**
-- 1 campagne Prospection + 1 campagne Retargeting (séparées !)
-- Minimum 3 créas par adset pour donner de l'espace à l'algo
-- Ne changez pas le budget de + 20% en une seule fois — reset la phase d'apprentissage
-- Pixel : Event Purchase obligatoire avant de lancer (conversion event)
-""")
-
-    # ── TIKTOK ADS ────────────────────────────────────────────
-    with tab_tik:
-        st.markdown("#### Frameworks rapides")
-        col1, col2 = st.columns(2)
-        with col1:
-            _card("La règle des 2 premières secondes", [
-                "Le scroll dure 0.5s — votre hook doit arrêter le pouce",
-                "✅ Visuel inattendu OU texte choc en overlay immédiat",
-                "✅ Commencer IN MEDIAS RES (milieu d'action)",
-                "❌ Logo au début = skip garanti",
-                "❌ Intro lente avec musique = perte d'audience",
-            ], color="#FF0050", icon="⚡")
-            _card("Structure vidéo TikTok Ads", [
-                "0-2s : Hook visuel + texte (pattern interrupt)",
-                "2-8s : Problème ou identification ('Si tu fais X...')",
-                "8-18s : Solution + démonstration rapide",
-                "18-25s : Preuve sociale (before/after, témoignage)",
-                "25-30s : CTA clair + urgence",
-            ], color="#FF0050", icon="📱")
-        with col2:
-            _card("Benchmarks TikTok Ads", [
-                "✅ CTR > 2.5% : bon pour cold traffic",
-                "✅ CPM : 5–12€ (FR) — plus bas que Meta",
-                "⚠️  VTR (View-Through Rate) > 25% à 6s : hook OK",
-                "🚀 ROAS > 2.0 avant de scale",
-                "Fréquence > 2.5 en 7j : nouvelle créa urgente",
-            ], color="var(--success)", icon="📊")
-            _card("Formats natifs gagnants", [
-                "UGC face caméra : 15–30s, son naturel ambiant",
-                "Spark Ads : boostez vos contenus organiques TikTok",
-                "Trending audio : utilisez les sons tendance dans les 48h",
-                "Text-overlay : sous-titres auto OU manuels stylisés",
-                "Duet / Reaction : réaction au produit en temps réel",
-            ], color="#06b6d4", icon="🎬")
-
-        st.markdown("---")
-        st.markdown("#### Guide complet TikTok Ads")
-
-        with st.expander("🎬 Créer des hooks qui stoppent le scroll"):
-            st.markdown("""
-**Les 5 types de hooks qui convertissent :**
-
-1. **La question directe** : "Tu sais pourquoi ton ROAS chute chaque mois?"
-2. **Le résultat choquant** : "J'ai fait 12 000€ en 4 jours avec une pub de 300€"
-3. **Le contre-intuitif** : "Stop de cibler tes concurrents sur Meta — voici pourquoi"
-4. **L'identification** : "Ce problème concerne TOUS les e-commerçants en 2025"
-5. **Le teaser** : "Je vais te montrer exactement comment j'ai fait... regarde jusqu'à la fin"
-
-**Erreurs communes :**
-- Texte overlay trop long (max 6 mots en hook)
-- Visage hors cadre ou mal éclairé
-- Audio de mauvaise qualité (deal breaker sur TikTok)
-- CTA vague ("cliquez ici") → soyez précis ("Lien en bio — offre 48h")
-""")
-
-        with st.expander("⚙️ Setup campagne TikTok Ads (structure 2025)"):
-            st.markdown("""
-**Budget minimum :** 30–50€/jour pour que l'algo apprenne correctement.
-
-**Structure recommandée :**
-```
-Campagne — [Objectif : Conversions / Achat]
-  ├── Adset 1 : Broad (18-35, FR) — pas d'intérêts
-  ├── Adset 2 : Custom Audience (visiteurs 30j)
-  └── Adset 3 : Lookalike 1-5% acheteurs
-      ├── Créa 1 (UGC 15s)
-      ├── Créa 2 (Texte overlay + produit)
-      └── Créa 3 (Témoignage 20s)
-```
-
-**Spark Ads vs. non-Spark :**
-- Spark Ads (boost d'un post organique) = meilleure crédibilité sociale, commentaires visibles
-- Non-Spark = contrôle total, idéal pour tester des angles sans compromettre votre compte organique
-- Recommandation : testez les 2 et comparez le CTR
-
-**Pixel TikTok :** Installez le pixel TikTok ET l'API Conversions (server-side) pour contourner les adblockers — impact +15-25% sur les données remontées.
-""")
-
-        with st.expander("🔄 Rythme de testing créatif"):
-            st.markdown("""
-**Règle d'or TikTok :** Les créas se fatiguent 3x plus vite que sur Meta.
-
-**Cycle recommandé :**
-- Semaine 1-2 : testez 3-5 créas, budget 30-50€/j par adset
-- J3 : regardez le VTR à 6s. < 20% = hook raté, coupez la créa
-- J5 : regardez le CTR et le CPA. > objectif = scalez le budget x1.5
-- Semaine 3 : créez 2-3 variations des créas gagnantes (même angle, format différent)
-- Semaine 4+ : nouvelles créas sur nouveaux angles si le ROAS baisse
-
-**Rotation créative :** 1 nouvelle créa par semaine minimum pour maintenir les performances.
-""")
-
-    # ── GOOGLE ADS ────────────────────────────────────────────
-    with tab_ggl:
-        st.markdown("#### Frameworks rapides")
-        col1, col2 = st.columns(2)
-        with col1:
-            _card("Structure d'annonce Search RSA", [
-                "Headline 1 (30 car.) : mot clé principal exact",
-                "Headline 2 (30 car.) : bénéfice principal + chiffre",
-                "Headline 3 (30 car.) : CTA ou urgence ('Dès 47€')",
-                "Description 1 (90 car.) : USP principale + preuve",
-                "Description 2 (90 car.) : objection principale + garantie",
-            ], color="#4285F4", icon="🔍")
-            _card("Extensions indispensables", [
-                "Sitelinks : 4 liens vers pages clés (FAQ, Prix, Témoignages...)",
-                "Callouts : USP courtes ('Livraison 24h', 'Garantie 30j')",
-                "Structured snippets : liste de produits/services",
-                "Call extension : numéro visible (B2B++)",
-                "Price extension : vos offres avec prix visible",
-            ], color="#4285F4", icon="🔧")
-        with col2:
-            _card("Types de correspondance", [
-                "[Exact] : contrôle maximum, volume faible",
-                "\"Expression\" : équilibre volume / pertinence",
-                "Large : volume élevé, nécessite liste de mots exclus",
-                "→ Commencez en Exact, élargissez quand CPA OK",
-                "→ Liste de négatifs : mots hors-cible à exclure dès J1",
-            ], color="#34A853", icon="🎯")
-            _card("Quality Score — les 3 piliers", [
-                "1. Pertinence annonce (mot clé dans headline = +QS)",
-                "2. CTR attendu vs concurrents (créa = différenciation)",
-                "3. Expérience landing page (LRS vous aide ici 🚦)",
-                "QS 7-10 : CPC réduit jusqu'à 50% vs. QS < 5",
-                "LP lente (> 3s) = QS pénalisé — optimisez le Core Web Vitals",
-            ], color="#FBBC05", icon="⭐")
-
-        st.markdown("---")
-        st.markdown("#### Guide complet Google Ads")
-
-        with st.expander("🏗️ Structure de compte recommandée"):
-            st.markdown("""
-**Principe SKAG vs. thématique (2025) :**
-Les SKAGs (1 mot clé par adset) sont dépassés. Google favorise les RSA et le broad match intelligent.
-
-**Structure thématique recommandée :**
-```
-Compte
-  ├── Campagne Search — [Produit Principal]
-  │     ├── Adgroup : mots clés achat ("acheter X", "prix X", "commander X")
-  │     ├── Adgroup : mots clés comparaison ("X vs Y", "meilleur X")
-  │     └── Adgroup : mots clés problème ("comment [résoudre problème]")
-  │
-  ├── Campagne Shopping — [Flux produit optimisé]
-  │
-  └── Campagne Retargeting — [RLSA + Display]
-```
-
-**Budget testing :** 20€/j minimum par campagne Search pour que l'algo ait assez de données en 7-14 jours.
-""")
-
-        with st.expander("📈 Stratégies d'enchères — quand utiliser quoi"):
-            st.markdown("""
-| Stratégie | Quand l'utiliser |
-|-----------|-----------------|
-| Maximiser les clics | Lancement, objectif = données |
-| Maximiser les conversions | Après 30+ conversions/mois |
-| CPA cible | Budget stable + historique conversions fiable |
-| ROAS cible | E-com avec valeurs paniers variables |
-| CPM cible | Display/YouTube — notoriété uniquement |
-
-**Règle :** Ne changez jamais la stratégie d'enchères les 2 premières semaines. L'algo a besoin de 7-14 jours pour apprendre.
-
-**Performance Max :** Évitez en cold traffic pur — PMax cannibalisera vos campagnes Search. Activez-le une fois que Search fonctionne et que vous avez des données de conversion.
-""")
-
-        with st.expander("🛒 Google Shopping — optimiser son flux"):
-            st.markdown("""
-**Les 3 éléments qui font 80% du succès Shopping :**
-
-1. **Titre produit** (le plus important) :
-   - Format : `[Marque] [Type produit] [Attribut principal] [Taille/Couleur/Variante]`
-   - Exemple : "Nike Air Max 90 Blanc Homme 42 — Chaussures Running"
-   - Le mot clé doit être dans les 70 premiers caractères
-
-2. **Image produit** :
-   - Fond blanc ou transparent — pas de lifestyle pour Shopping
-   - Produit bien centré, occupe > 75% du cadre
-   - PNG haute résolution (min. 800x800)
-
-3. **Prix** :
-   - Prix barré (prix_comparaison) très visible améliore le CTR
-   - Frais de port clairement affichés (ou 'Livraison gratuite')
-   - Promotions Merchant Center = badge "Promotion" sur l'annonce
-
-**Segmentation des enchères :** Créez des groupes de produits séparés pour vos bestsellers (enchère haute) vs. catalogue complet (enchère basse).
-""")
-
-    # ── FUNNEL ÉCOM ───────────────────────────────────────────
-    with tab_funnel:
-        st.markdown("#### Structures de funnels")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            _card("Funnel Direct Response", [
-                "Ad → Landing Page courte → Checkout",
-                "⚡ Le plus simple, idéal pour tester",
-                "LP : 500-800 mots, 1 CTA, pas de nav",
-                "Checkout : 1-page, confiance++",
-                "Upsell : bump offer sur checkout",
-            ], color="var(--accent)", icon="🎯")
-        with col2:
-            _card("Funnel VSL (Video Sales Letter)", [
-                "Ad → LP avec vidéo → Checkout → Upsells",
-                "📹 VSL 8-20 min pour produits 97€+",
-                "Vidéo autoplay sans controls (dès possible)",
-                "CTA apparaît à 60% de la vidéo",
-                "Upsell 1 (complémentaire) + Upsell 2 (premium)",
-            ], color="var(--success)", icon="🎬")
-        with col3:
-            _card("Funnel Lead Magnet", [
-                "Ad → Optin (email) → Email nurturing → Vente",
-                "🎁 Idéal : info-produit, coaching, SaaS",
-                "Lead magnet : valeur perçue élevée, résultat rapide",
-                "Sequence 5 emails : valeur → valeur → pitch → urgence → dernière chance",
-                "Retargeting parallèle sur les optins non-convertis",
-            ], color="var(--warning)", icon="📧")
-
-        st.markdown("---")
-        st.markdown("#### Les règles immuables d'une landing page qui convertit")
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            _card("Structure LP haute conversion", [
-                "① Hero : headline + sous-titre + CTA above the fold",
-                "② Problème : 'Vous aussi vous souffrez de...'",
-                "③ Solution : votre produit = le pont",
-                "④ Preuves : before/after, témoignages, chiffres",
-                "⑤ Offre : ce que vous obtenez (offer stack)",
-                "⑥ Garantie : réduction du risque perçu",
-                "⑦ CTA final : urgence + bouton",
-            ], color="var(--accent)", icon="📄")
-            _card("Les erreurs qui tuent la conversion", [
-                "❌ Navigation header visible (fuite = -20-40% CVR)",
-                "❌ CTA générique ('En savoir plus', 'Cliquer ici')",
-                "❌ Prix sans contexte (pas de comparaison / barré)",
-                "❌ Garantie absente ou invisible",
-                "❌ Pas de preuve sociale above the fold",
-                "❌ Page trop lente > 3s (Google = -53% de taux de rebond)",
-            ], color="var(--danger)", icon="⚠️")
-        with col_b:
-            _card("Offer Stack — comment présenter l'offre", [
-                "Listez TOUT ce que le client obtient avec valeur €",
-                "Produit principal : 'Valeur : 197€'",
-                "Bonus 1 : 'Valeur : 97€' (doit sembler plus cher que le prix)",
-                "Bonus 2 : 'Valeur : 47€'",
-                "Garantie 30j : 'Risque zéro'",
-                "Prix total barré → 'Aujourd'hui seulement : 47€'",
-            ], color="var(--success)", icon="🎁")
-            _card("Optimisation du checkout", [
-                "1-page checkout = meilleur CVR (Shopify, ThriveCart...)",
-                "Bump offer visible (+15-25% revenu moyen)",
-                "Logos de paiement sécurisé sous le bouton",
-                "Résumé commande visible à droite du formulaire",
-                "Testimonial ou stat sous le CTA checkout",
-            ], color="var(--warning)", icon="🛒")
-
-        with st.expander("📊 Benchmarks CVR par type de page"):
-            st.markdown("""
-| Type de page | CVR faible | CVR moyen | CVR excellent |
-|---|---|---|---|
-| Landing page cold traffic | < 1% | 1.5–3% | > 4% |
-| Page produit ecom | < 1.5% | 2–4% | > 5% |
-| Checkout (visiteurs LP) | < 30% | 40–60% | > 70% |
-| Optin page (lead magnet) | < 20% | 30–50% | > 60% |
-| Upsell 1 | < 10% | 15–25% | > 35% |
-
-*Ces benchmarks varient selon le prix, la niche et la source de trafic. Utilisez LRS pour identifier ce qui plombe votre CVR.*
-""")
-
-    # ── COPYWRITING ───────────────────────────────────────────
-    with tab_copy:
-        st.markdown("#### Frameworks de copywriting")
-        col1, col2 = st.columns(2)
-        with col1:
-            _card("PAS — Problem · Agitate · Solve", [
-                "P : Nommez le problème EXACTEMENT comme le client le ressent",
-                "A : Agitez — 'Et ça coûte X€ par mois / détruit votre...'",
-                "S : Présentez votre solution comme l'évidence",
-                "⚡ Idéal pour : primary text, email, VSL intro",
-            ], color="var(--accent)", icon="🔥")
-            _card("AIDA — Attention · Interest · Desire · Action", [
-                "A : Attention — hook fort (stat, question, choc)",
-                "I : Interest — pourquoi c'est pertinent POUR EUX",
-                "D : Desire — bénéfices concrets + preuves",
-                "A : Action — CTA clair + urgence",
-                "⚡ Idéal pour : landing page, email séquence",
-            ], color="var(--success)", icon="📈")
-            _card("BAB — Before · After · Bridge", [
-                "Before : 'Avant, tu passais 2h à optimiser tes pubs...'",
-                "After : 'Imagine avoir le score exact avant de dépenser 1€'",
-                "Bridge : 'C'est exactement ce que fait LRS™ en 15s'",
-                "⚡ Idéal pour : témoignages, ads UGC, email welcome",
-            ], color="var(--warning)", icon="🌉")
-        with col2:
-            _card("Les 4U — Urgent · Unique · Utile · Ultra-spécifique", [
-                "Urgent : pourquoi agir maintenant? (prix, stock, délai)",
-                "Unique : qu'est-ce que VOUS avez que personne d'autre n'a?",
-                "Utile : quel résultat concret et mesurable?",
-                "Ultra-spécifique : '23% de CVR en 7 jours' > 'plus de ventes'",
-                "⚡ Checklist pour chaque headline que vous écrivez",
-            ], color="#06b6d4", icon="✅")
-            _card("Formules d'hooks éprouvées", [
-                "'[Chiffre] [persona] ont [résultat] en [durée]'",
-                "'La vraie raison pourquoi [problème persiste]'",
-                "'Stop [action commune] — voici ce qui marche vraiment'",
-                "'Comment [résultat désiré] sans [douleur habituelle]'",
-                "'Ce que [autorité] ne veut pas que vous sachiez sur [sujet]'",
-            ], color="var(--danger)", icon="💡")
-
-        st.markdown("---")
-        st.markdown("#### Templates prêts à l'emploi")
-
-        with st.expander("📝 Templates primary text Meta Ads (copy-paste)"):
-            st.markdown("""
-**Template PAS (30-60 mots) :**
-```
-Tu dépenses 500€/mois en pubs Meta et tu te demandes pourquoi ton ROAS plafonne à 1.2?
-
-La vraie raison : ta landing page ne convertit pas le trafic que tu envoies dessus.
-
-[Nom produit] analyse ta LP en 15 secondes et te dit exactement ce qui bloque les conversions.
-
-👉 Teste gratuitement → [Lien]
-```
-
-**Template Social Proof (40-70 mots) :**
-```
-"J'ai passé 3 mois à tester des pubs sans comprendre pourquoi ça ne scalait pas.
-
-LRS m'a dit en 15 secondes que mon hook était à 2/5. J'ai changé la headline.
-
-La semaine suivante : ROAS 3.8 au lieu de 1.4."
-
-— [Prénom], e-commerçant (niche X)
-
-→ Découvrez votre score LRS : [Lien]
-```
-
-**Template Direct Response (20-40 mots) :**
-```
-Votre landing page est prête pour le paid traffic?
-
-Score /20 · Plan d'action · Rewrites générés en 15 secondes.
-
-Utilisé par [X] media buyers en France.
-
-Testez maintenant → [Lien]
-```
-""")
-
-        with st.expander("🎯 Comment écrire une headline qui convertit"):
-            st.markdown("""
-**Les 3 composantes d'une headline parfaite :**
-
-1. **Bénéfice spécifique** (pas une feature) + **timeframe** + **sans douleur**
-   - ❌ "Améliorez vos pubs avec notre outil IA"
-   - ✅ "Doublez votre ROAS en 7 jours sans changer votre budget pub"
-
-2. **Intégrez un chiffre** — les chiffres spécifiques sont +28% plus mémorisables
-   - ❌ "Économisez du temps sur vos audits"
-   - ✅ "Auditez votre landing page en 15 secondes chrono"
-
-3. **Adressez le sceptique** — anticipez l'objection #1
-   - ❌ "L'outil qui révolutionne le paid traffic"
-   - ✅ "Le premier outil d'audit paid traffic qui vous dit exactement QUOI corriger"
-
-**Test rapide :** Si votre headline peut s'appliquer à n'importe quel concurrent, elle est trop générique. Retravaillez-la.
-""")
-
-        with st.expander("⚡ Rédiger un CTA qui convertit"):
-            st.markdown("""
-**Règle : le CTA doit être une continuation logique de la promesse**
-
-| ❌ CTA générique | ✅ CTA spécifique |
-|---|---|
-| "Acheter maintenant" | "Obtenir mon score /20 →" |
-| "En savoir plus" | "Voir comment doubler mon ROAS" |
-| "S'inscrire" | "Démarrer mon audit gratuit" |
-| "Cliquer ici" | "Analyser ma landing page maintenant" |
-
-**Ajouter de l'urgence crédible :**
-- Temps limité : "Offre valable jusqu'au [date proche]"
-- Stock limité : "Accès limité à 50 utilisateurs ce mois"
-- Bonus expirant : "Bonus offert si vous rejoignez avant minuit"
-
-⚠️ L'urgence inventée détruit la confiance. N'utilisez que ce qui est réel et vérifiable.
-""")
+    for tab, (plat_key, plat) in zip(platform_tabs, resources_content.ADS_LIBRARY.items()):
+        with tab:
+            st.markdown("#### " + plat["cards_heading"])
+            _render_lib_card_row(plat["cards"], 3 if plat_key == "funnel" else 2)
+
+            has_cards2 = "cards2" in plat
+            if has_cards2:
+                st.markdown("---")
+                st.markdown("#### " + plat["guides_heading"])
+                _render_lib_card_row(plat["cards2"], 2)
+
+            if plat.get("guides"):
+                if not has_cards2:
+                    st.markdown("---")
+                    st.markdown("#### " + plat["guides_heading"])
+                for guide in plat["guides"]:
+                    with st.expander(guide["title"]):
+                        st.markdown(guide["body"])
 
 
 # ── CHANGELOG ────────────────────────────────────────────────
@@ -7091,63 +6077,7 @@ def render_changelog():
     st.subheader("📋 Changelog LRS™")
     st.caption("Historique de toutes les améliorations apportées à l'outil.")
 
-    versions = [
-        ("V2.6 — Aujourd'hui", [
-            "🆕 Bulk Audit : auditez jusqu'à 20 URLs en 1 clic + import CSV + export résultats CSV",
-            "🆕 Monitoring : alertes score (drop/progression ≥2 pts), score trend par page",
-            "🆕 Audits planifiés automatiques : surveillance toutes les 7/14/30 jours, exécution au démarrage",
-            "🆕 Onboarding interactif : guide de démarrage pour les nouveaux utilisateurs",
-            "🆕 Onglet Monitoring avec podium, tableau comparatif et badge d'alerte",
-        ]),
-        ("V2.5", [
-            "🆕 Profils d'audit sauvegardés (charger / sauvegarder vos paramètres habituels)",
-            "🆕 Delta de score : progression globale depuis le premier audit visible dans l'Historique",
-            "🆕 Tracker d'implémentation des recommandations (checkboxes + barre de progression)",
-            "🆕 Bouton Re-audit : URL pré-remplie automatiquement depuis l'Historique",
-            "🆕 Projets multi-pages : groupez un funnel complet et auditez tout en 1 clic",
-            "🆕 Rapport Client PDF : export branding client avec nom du destinataire",
-        ]),
-        ("V2.4", [
-            "🆕 Export rapport PDF professionnel (branding LRS, fond sombre, 4 pages)",
-            "🆕 Mode Comparaison : auditer 2 URLs côte à côte",
-            "🆕 Mode Avant/Après : comparer un audit avec un précédent",
-            "🆕 Changelog intégré dans l'app",
-            "🆕 Benchmark Report 2025 (PDF téléchargeable — valeur €27-47)",
-        ]),
-        ("V2.3", [
-            "🆕 Historique persistant (JSON) — survit au refresh de page",
-            "🆕 Warning pages JavaScript / contenu insuffisant",
-            "🆕 Jauge visuelle du score (bandeau coloré rouge/orange/vert)",
-            "🆕 Few-shot examples dans le prompt — scoring plus cohérent",
-            "🆕 Retry automatique OpenAI (3 tentatives avec backoff)",
-            "🆕 Détection langue de la page (FR / EN / Mixte)",
-        ]),
-        ("V2.2", [
-            "🔧 Fix détection page produit (/products/ classé en Catalogue → corrigé)",
-            "🆕 Scoring adaptatif par type de page (fiche produit ≠ landing page)",
-            "🆕 Aperçu du contenu scrapé (debug)",
-            "🆕 Priorité above-the-fold dans le scraping",
-            "🆕 Graphique d'évolution des scores dans Historique",
-            "🔧 User-Agent amélioré pour meilleure compatibilité",
-        ]),
-        ("V2.1", [
-            "🔧 Bug 1 : Scoring trop sévère pour marques établies → sélecteur Marque établie / Nouveau lancement",
-            "🔧 Bug 2 : Auto-détection du type de page (Sales, Catalogue, SaaS, Blog, Lead Gen)",
-            "🔧 Bug 3 : Recommandations granulaires — Quick Wins, Long Terme, Action Prioritaire #1 avec how_exactly",
-            "🆕 max_tokens augmenté à 4500",
-        ]),
-        ("V2.0 — Version initiale", [
-            "✅ Audit Funnel Only / Ads Only / Full Risk",
-            "✅ Scoring Hook/Offer/Trust/Friction sur 20",
-            "✅ Contexte marché personnalisé",
-            "✅ Plan d'action, Rewrite, Ad Creative",
-            "✅ Export .txt",
-            "✅ Checklist pré-lancement",
-            "✅ Historique de session",
-            "✅ Gate accès par mot de passe",
-            "✅ Deploy Streamlit Cloud",
-        ]),
-    ]
+    versions = [(v["version"], v["items"]) for v in resources_content.CHANGELOG_VERSIONS]
 
     for v_title, items in versions:
         with st.expander(v_title, expanded=(v_title.startswith("V2.6"))):
