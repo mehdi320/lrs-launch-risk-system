@@ -2410,7 +2410,7 @@ function renderAdsLibrary(data) {
     const p = data[key];
     const cardsHtml = (cards) => `<div class="lib-cards-grid">${cards.map(c => `
       <div class="lib-card" style="border-left-color:${LIB_COLOR_MAP[c.color] || 'var(--accent)'}">
-        <div class="lib-card-title" style="color:${LIB_COLOR_MAP[c.color] || 'var(--accent)'}">${escapeHtml(c.title)}</div>
+        <div class="lib-card-title" style="color:${LIB_COLOR_MAP[c.color] || 'var(--accent)'}">${c.icon ? escapeHtml(c.icon) + ' ' : ''}${escapeHtml(c.title)}</div>
         ${c.items.map(item => `<div class="lib-card-item">${escapeHtml(item)}</div>`).join('')}
       </div>
     `).join('')}</div>`;
