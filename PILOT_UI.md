@@ -11,9 +11,18 @@ Suivi, Ressources et Creative Studio ont chacun une sous-navigation
 ## Fichiers
 
 - `audit_engine.py` — logique d'audit extraite de `app.py` (extraction de
-  page, appel OpenAI, scoring, génération d'angles créatifs). Copie
-  autonome pour l'instant : si la migration est confirmée, `app.py`
-  importera d'ici au lieu de dupliquer.
+  page, scoring, génération d'angles créatifs). Copie autonome pour
+  l'instant : si la migration est confirmée, `app.py` importera d'ici au
+  lieu de dupliquer.
+  `run_audit()` — le point d'entrée public, signature inchangée — bascule
+  automatiquement vers **Claude** (`_run_audit_claude`, squelette) dès
+  qu'`ANTHROPIC_API_KEY` est configurée ; sans cette clé, retombe sur
+  **OpenAI** (`_run_audit_openai`, comportement historique inchangé). Les
+  deux partagent le même prompt (`_build_audit_prompt`) et le même parsing
+  de sortie (`_parse_audit_json`), donc le score ne dépend pas du moteur.
+  Non encore testé avec une vraie clé Anthropic (échoue proprement avec un
+  message clair tant que la clé n'est pas ajoutée — même pattern que les
+  autres clés API du projet).
 - `resources_content.py` — contenu statique de Ressources (Ads Library,
   Changelog, Benchmark), extrait de `app.py` pour être servi en JSON.
 - `ads_api.py` — connecteurs Meta Ads / TikTok Ads (`fetch_meta_campaigns`,
@@ -76,6 +85,10 @@ aux redémarrages, sinon générée aléatoirement au démarrage),
 `SMTP_HOST/PORT/USER/PASSWORD` (emails), `LRS_ALERT_EMAIL` (email d'alerte
 par défaut pour les audits planifiés sans email dédié) et
 `LRS_DIGEST_EMAIL` (digest hebdomadaire des pages surveillées).
+
+Un squelette Docker (`Dockerfile`, `docker-compose.yml`) existe pour faire
+tourner le pilote et l'app Streamlit ensemble — voir `DEPLOYMENT.md` pour
+son statut (non testé) et la checklist avant un vrai déploiement.
 
 ## Ce qui est couvert
 

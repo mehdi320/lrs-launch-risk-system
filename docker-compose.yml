@@ -1,0 +1,38 @@
+# Squelette d'orchestration générique — pas encore lié à une plateforme de
+# déploiement précise (VPS, Fly.io, Render...). Sert à faire tourner les
+# deux surfaces web localement ou sur un serveur simple avant de choisir.
+#
+# Persistance : les deux services montent le dépôt (bind mount `.:/app`)
+# par-dessus le code copié dans l'image, donc l'état (.lrs_*.json,
+# .lrs_creative_studio.db, écrits à côté du code — voir PILOT_UI.md)
+# persiste directement dans le dépôt, comme en local sans Docker. C'est
+# volontairement simple pour un squelette ; une vraie mise en prod sur un
+# PaaS à filesystem éphémère (Fly.io, Render...) nécessitera d'abord un
+# `LRS_DATA_DIR` configurable pour séparer code et données sur un volume
+# persistant dédié — voir DEPLOYMENT.md.
+#
+# Secrets : `.env` est chargé via env_file. Sur une vraie plateforme,
+# remplacer par son secret manager plutôt qu'un fichier commité/monté.
+
+services:
+  pilot:
+    build: .
+    command: ["uvicorn", "pilot_server:app", "--host", "0.0.0.0", "--port", "8600"]
+    ports:
+      - "8600:8600"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+  streamlit:
+    build: .
+    command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    restart: unless-stopped

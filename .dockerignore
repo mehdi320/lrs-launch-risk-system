@@ -1,0 +1,21 @@
+.git
+.gitignore
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Secrets locaux — jamais dans l'image, passés au conteneur via env_file/secrets
+.env
+.env.*
+!.env.example
+
+# État runtime local (voir docker-compose.yml pour la persistance en conteneur)
+.lrs_*.json
+.lrs_*.db
+
+*.log
+.pytest_cache
+.DS_Store
+
+# Outil MCP local (Claude Desktop/Code) — hors périmètre du déploiement web
+mcp_server/__pycache__

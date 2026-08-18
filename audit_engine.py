@@ -23,6 +23,11 @@ except ImportError:
     OpenAI = None
 
 try:
+    import anthropic
+except ImportError:
+    anthropic = None
+
+try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
@@ -30,6 +35,10 @@ except ImportError:
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MAX_PAGE_CHARS = 8000
+
+# Modele Claude par defaut pour l'audit — aligne sur
+# creative_studio/core/llm_client.py::DEFAULT_MODEL.
+DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
 
 
 def load_txt(filename):
@@ -47,6 +56,15 @@ def clamp(text, n=MAX_PAGE_CHARS):
 def get_api_key():
     key = os.getenv("OPENAI_API_KEY", "")
     if key and key.startswith("sk-"):
+        return key
+    return ""
+
+
+def get_anthropic_api_key():
+    """Miroir de get_api_key() pour Claude — meme pattern que
+    creative_studio/core/llm_client.py::get_anthropic_api_key()."""
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    if key and key.startswith("sk-ant-"):
         return key
     return ""
 
@@ -453,17 +471,11 @@ def _parse_audit_json(raw_text, mode, platform, offer_type):
     return result
 
 
-# ── APPEL OPENAI (version synchrone, pour l'API) ────────────────
-def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
-              brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
-    if OpenAI is None:
-        raise ValueError("Librairie openai non installee. Relancez : pip install openai")
-
-    api_key = get_api_key()
-    if not api_key:
-        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans votre fichier .env.")
-
-    client = OpenAI(api_key=api_key)
+# ── CONSTRUCTION DU PROMPT (partagee entre les deux moteurs) ────
+def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, market_context,
+                         brand_type, page_type, page_lang):
+    """Construit (system, user_prompt) — identique quel que soit le LLM appele
+    ensuite, pour que le score/comportement ne depende pas du moteur."""
     methodology_context = build_methodology_context(mode, offer_type)
 
     system = (
@@ -495,7 +507,22 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
         user_parts += ["INSTRUCTIONS : Audit COMPLET. friction_message_match = coherence pub+landing. "
                        "message_match : cite texte EXACT. Pour chaque fix, donne exemple exact."]
     user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS."]
-    user_prompt = "\n".join(user_parts)
+    return system, "\n".join(user_parts)
+
+
+# ── APPEL OPENAI (version synchrone, pour l'API) ────────────────
+def _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    if OpenAI is None:
+        raise ValueError("Librairie openai non installee. Relancez : pip install openai")
+
+    api_key = get_api_key()
+    if not api_key:
+        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans votre fichier .env.")
+
+    client = OpenAI(api_key=api_key)
+    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
+                                               market_context, brand_type, page_type, page_lang)
 
     response = None
     last_err = None
@@ -530,6 +557,74 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
 
     raw = response.choices[0].message.content or ""
     return _parse_audit_json(raw, mode, platform, offer_type)
+
+
+# ── APPEL CLAUDE (squelette — meme contrat que _run_audit_openai) ──
+def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
+                       model=DEFAULT_ANTHROPIC_MODEL,
+                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    if anthropic is None:
+        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
+
+    api_key = get_anthropic_api_key()
+    if not api_key:
+        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
+
+    client = anthropic.Anthropic(api_key=api_key)
+    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
+                                               market_context, brand_type, page_type, page_lang)
+
+    response = None
+    last_err = None
+    for attempt in range(3):
+        try:
+            response = client.messages.create(
+                model=model,
+                max_tokens=4500,
+                temperature=0.15,
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            break
+        except Exception as e:
+            last_err = str(e)
+            low = last_err.lower()
+            if "authentication" in low or "api_key" in low or "x-api-key" in low:
+                raise ValueError("Cle API Claude invalide ou expiree. Verifiez votre ANTHROPIC_API_KEY.")
+            if "credit balance" in low or "billing" in low:
+                raise ValueError("Credit Claude epuise. Verifiez votre solde sur console.anthropic.com.")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+            else:
+                if "rate_limit" in low or "overloaded" in low:
+                    raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
+                raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
+
+    if response is None:
+        raise ValueError("Erreur Claude : pas de reponse apres 3 tentatives.")
+
+    text_block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+    raw = text_block.text if text_block is not None else ""
+    return _parse_audit_json(raw, mode, platform, offer_type)
+
+
+# ── POINT D'ENTREE UNIQUE — bascule de moteur ────────────────────
+def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+              brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    """Point d'entree unique de l'audit, appele par pilot_server.py.
+
+    Prefere Claude des que ANTHROPIC_API_KEY est configuree (moteur cible de
+    la migration). Sans cette cle, retombe automatiquement sur OpenAI —
+    comportement strictement inchange tant que la cle Claude n'est pas
+    ajoutee, pour ne pas casser l'audit en production le temps de la
+    migration. `model` reste le nom de modele OpenAI utilise dans la
+    branche de secours ; la branche Claude utilise DEFAULT_ANTHROPIC_MODEL.
+    """
+    if get_anthropic_api_key():
+        return _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
+                                  brand_type=brand_type, page_type=page_type, page_lang=page_lang)
+    return _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+                              brand_type=brand_type, page_type=page_type, page_lang=page_lang)
 
 
 # ── GÉNÉRATION D'ANGLES CRÉATIFS (à partir d'une offre, sans landing page) ──

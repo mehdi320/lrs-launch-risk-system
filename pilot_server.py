@@ -31,6 +31,14 @@ except Exception:
 
 app = FastAPI(title="LRS Pilot")
 
+
+@app.get("/api/health")
+def health():
+    """Healthcheck pour orchestrateurs/load balancers (Docker HEALTHCHECK,
+    plateforme de déploiement...) — ne dépend d'aucune clé API ni d'état."""
+    return {"status": "ok"}
+
+
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _STATIC_DIR = os.path.join(_BASE_DIR, "pilot_static")
 
@@ -61,7 +69,7 @@ def _get_app_password():
 async def _require_auth(request: Request, call_next):
     pwd_required = _get_app_password()
     path = request.url.path
-    if not pwd_required or not path.startswith("/api/") or path in ("/api/auth/login", "/api/auth/status"):
+    if not pwd_required or not path.startswith("/api/") or path in ("/api/auth/login", "/api/auth/status", "/api/health"):
         return await call_next(request)
     if request.session.get("authenticated"):
         return await call_next(request)
