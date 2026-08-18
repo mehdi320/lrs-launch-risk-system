@@ -168,7 +168,7 @@
     box-shadow: 0 1px 4px rgba(0,0,0,0.4);
   }
 
-  button.cta {
+  button.cta, a.cta {
     width: 100%;
     margin-top: 28px;
     background: var(--accent);
@@ -180,10 +180,12 @@
     font-weight: 600;
     font-family: inherit;
     cursor: pointer;
+    text-decoration: none;
+    text-align: center;
     transition: transform 0.15s var(--ease), background 0.2s var(--ease), opacity 0.2s var(--ease);
   }
-  button.cta:hover { background: #2b95ff; }
-  button.cta:active { transform: scale(0.98); }
+  button.cta:hover, a.cta:hover { background: #2b95ff; }
+  button.cta:active, a.cta:active { transform: scale(0.98); }
   button.cta:disabled { opacity: 0.5; cursor: default; transform: none; }
 
   .error-box {
@@ -580,6 +582,109 @@
     color: var(--accent); background: var(--accent-soft); padding: 3px 8px; border-radius: 100px;
     height: fit-content;
   }
+
+  /* ── Sub-nav (deuxième niveau d'onglets, dans une vue) ── */
+  .sub-tabs {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 4px; margin-bottom: 20px;
+  }
+  .sub-tab {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 10px;
+    cursor: pointer; font-family: inherit; transition: background 0.2s var(--ease), color 0.2s var(--ease);
+  }
+  .sub-tab.active { background: var(--surface-2); color: var(--text); }
+  .sub-tab:hover:not(.active) { color: var(--text-secondary); }
+
+  /* ── Cartes VS (Comparaison / Concurrents / A-B Test) ── */
+  .vs-row { display: flex; gap: 12px; align-items: stretch; margin: 20px 0; }
+  .vs-card {
+    flex: 1; background: var(--surface); border: 2px solid var(--border);
+    border-radius: 16px; padding: 22px; text-align: center;
+  }
+  .vs-card.winner { border-color: var(--accent); }
+  .vs-card .vs-tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .vs-card .vs-score { font-size: 40px; font-weight: 800; line-height: 1; }
+  .vs-card .vs-den { font-size: 14px; color: var(--text-muted); }
+  .vs-card .vs-decision { margin-top: 8px; font-size: 13px; font-weight: 600; }
+  .vs-card .vs-crown { margin-top: 10px; font-size: 11px; color: var(--accent); font-weight: 700; }
+  .vs-mid { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 64px; color: var(--text-muted); }
+  .vs-mid .vs-mid-label { font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
+  .vs-mid .vs-mid-val { font-size: 20px; font-weight: 800; }
+
+  .compare-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .compare-table th, .compare-table td {
+    padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .compare-table th { color: var(--text-muted); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em; }
+  .compare-table td:first-child, .compare-table th:first-child { text-align: left; }
+
+  /* ── Projets / Campagnes ── */
+  .entity-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 20px; margin-bottom: 12px;
+  }
+  .entity-card .entity-head {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px;
+  }
+  .entity-card .entity-title { font-size: 15px; font-weight: 700; }
+  .entity-card .entity-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .entity-card .icon-btn {
+    background: var(--surface-2); border: 1px solid var(--border-strong); color: var(--text-muted);
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .entity-card .icon-btn:hover { color: var(--danger); border-color: var(--danger); }
+  .url-progress-row {
+    display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px;
+  }
+  .url-progress-row .up-url { flex: 1; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .url-progress-row .up-score { font-weight: 700; min-width: 44px; text-align: right; }
+
+  .diag-row {
+    background: var(--surface-2); border-left: 3px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 6px; font-size: 13px;
+  }
+  .diag-row .diag-crit { font-weight: 700; font-size: 11px; text-transform: uppercase; }
+  .diag-row .diag-msg { color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+
+  .cta-secondary {
+    background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong);
+    border-radius: 12px; padding: 12px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: background 0.2s var(--ease);
+  }
+  .cta-secondary:hover { background: var(--surface); }
+  .cta-secondary:disabled { opacity: 0.5; cursor: default; }
+
+  /* ── Ads Library / contenu markdown-lite ── */
+  .lib-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .lib-card { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 12px; padding: 16px; }
+  .lib-card .lib-card-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+  .lib-card .lib-card-item { font-size: 12.5px; color: var(--text-secondary); padding: 4px 0; border-top: 1px solid var(--border); line-height: 1.5; }
+  .lib-card .lib-card-item:first-child { border-top: none; }
+
+  .md-body { font-size: 14px; line-height: 1.7; color: var(--text-secondary); }
+  .md-body h4 { color: var(--text); font-size: 14px; margin: 14px 0 6px; }
+  .md-body strong { color: var(--text); }
+  .md-body ul, .md-body ol { margin: 6px 0; padding-left: 20px; }
+  .md-body li { margin-bottom: 4px; }
+  .md-body pre {
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; overflow-x: auto; font-size: 12.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: var(--text-secondary); margin: 8px 0;
+  }
+  .md-body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 13px; }
+  .md-body th, .md-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .md-body th { color: var(--text); background: var(--surface-2); }
+
+  /* ── Plans & Tarifs ── */
+  .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+  .plan-card .plan-label { font-size: 15px; font-weight: 800; }
+  .plan-card .plan-price { font-size: 22px; font-weight: 800; color: var(--accent); margin: 8px 0 12px; }
+  .plan-card ul { list-style: none; margin: 0; padding: 0; }
+  .plan-card li { font-size: 12.5px; color: var(--text-secondary); padding: 4px 0; }
+  .plan-card li:before { content: "✓ "; color: var(--success); }
 </style>
 </head>
 <body>
@@ -594,6 +699,7 @@
       <button class="nav-tab" data-view="historique">Historique</button>
       <button class="nav-tab" data-view="ressources">Ressources</button>
       <button class="nav-tab" data-view="creative">Creative Studio</button>
+      <button class="nav-tab" data-view="plans">Plans</button>
     </div>
 
     <div id="dashboardView"></div>
@@ -602,6 +708,7 @@
     <div id="historiqueView" style="display:none"></div>
     <div id="ressourcesView" style="display:none"></div>
     <div id="creativeView" style="display:none"></div>
+    <div id="plansView" style="display:none"></div>
 
     <div id="auditView" style="display:none">
     <div id="heroText">
@@ -695,6 +802,7 @@ const VIEW_IDS = {
   historique: 'historiqueView',
   ressources: 'ressourcesView',
   creative: 'creativeView',
+  plans: 'plansView',
 };
 
 function setupNavTabs() {
@@ -714,6 +822,7 @@ function setupNavTabs() {
     if (view === 'historique') loadHistorique();
     if (view === 'ressources') renderRessources();
     if (view === 'creative') renderCreative();
+    if (view === 'plans') loadPlans();
   });
 }
 setupNavTabs();
@@ -855,10 +964,43 @@ async function loadDashboard() {
 }
 
 // ══════════════════════════════════════════════════════════
-// ── Multi-Audit (Bulk) ──────────────────────────────────────
+// ── Multi-Audit : Bulk / Comparaison / Concurrents / A-B Test ──
 // ══════════════════════════════════════════════════════════
+const MULTI_SUBVIEWS = {
+  bulk: { label: 'Bulk', render: renderMultiBulkShell },
+  compare: { label: 'Comparaison', render: () => renderCompareShell('multiSubContent', {
+    title: 'Mode Comparaison — 2 URLs côte à côte',
+    caption: "Auditez 2 pages en simultané pour comparer vos scores : votre page vs concurrent, avant vs après refonte, etc.",
+    labelA: 'Ma page', labelB: 'Concurrent', tagA: 'PAGE A', tagB: 'PAGE B', btnLabel: '⚔️ Lancer la comparaison',
+  }) },
+  competitor: { label: 'Concurrents', render: () => renderCompareShell('multiSubContent', {
+    title: '🥊 Audit Concurrents — Comparaison directe',
+    caption: "Comparez votre page avec celle d'un concurrent. LRS score les deux et identifie précisément où vous perdez face à lui.",
+    labelA: 'Votre page', labelB: 'Concurrent', tagA: '🔵 VOTRE PAGE', tagB: '🟡 CONCURRENT', btnLabel: '🥊 Lancer la comparaison',
+  }) },
+  abtest: { label: 'A/B Test', render: renderABTestShell },
+};
+
 function renderMulti() {
+  const subNav = Object.entries(MULTI_SUBVIEWS).map(([key, v], i) =>
+    `<button class="sub-tab ${i === 0 ? 'active' : ''}" data-sub="${key}">${v.label}</button>`
+  ).join('');
   $('#multiView').innerHTML = `
+    <div class="sub-tabs" id="multiSubNav">${subNav}</div>
+    <div id="multiSubContent"></div>
+  `;
+  $('#multiSubNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#multiSubNav')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    MULTI_SUBVIEWS[btn.dataset.sub].render();
+  });
+  MULTI_SUBVIEWS.bulk.render();
+}
+
+function renderMultiBulkShell() {
+  $('#multiSubContent').innerHTML = `
     <div class="card">
       <div class="field">
         <label class="field-label" for="bulkUrls">URLs à auditer (une par ligne, 20 max)</label>
@@ -1002,23 +1144,360 @@ function renderBulkResults(results) {
   `;
 }
 
-// ══════════════════════════════════════════════════════════
-// ── Suivi — Alertes de score ────────────────────────────────
-// ══════════════════════════════════════════════════════════
-async function loadSuivi() {
-  $('#suiviView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+// ── Comparaison / Concurrents (vue partagée, /api/compare) ──
+function renderCompareShell(containerId, cfg) {
+  const c = $('#' + containerId);
+  c.innerHTML = `
+    <div class="card">
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">${escapeHtml(cfg.title)}</h2>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">${escapeHtml(cfg.caption)}</p>
+      <div class="row">
+        <div class="field">
+          <label class="field-label" style="color:var(--accent)">${escapeHtml(cfg.tagA)}</label>
+          <input type="url" id="cmpUrlA" placeholder="https://..." autocomplete="off" style="margin-bottom:10px" />
+          <input type="text" id="cmpLabelA" value="${escapeHtml(cfg.labelA)}" placeholder="Label" />
+        </div>
+        <div class="field">
+          <label class="field-label" style="color:var(--warning)">${escapeHtml(cfg.tagB)}</label>
+          <input type="url" id="cmpUrlB" placeholder="https://..." autocomplete="off" style="margin-bottom:10px" />
+          <input type="text" id="cmpLabelB" value="${escapeHtml(cfg.labelB)}" placeholder="Label" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Mode</label>
+          <div class="segmented" id="cmpModeSeg">
+            <button class="active" data-val="Funnel Only">Funnel Only</button>
+            <button data-val="Full Risk">Full Risk</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="cmpPlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="cmpRunBtn">${escapeHtml(cfg.btnLabel)}</button>
+      <div class="error-box" id="cmpErrorBox"></div>
+    </div>
+    <div class="loading" id="cmpLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Audit des deux pages en cours…</div>
+    </div>
+    <div id="cmpResults"></div>
+  `;
+  ['cmpModeSeg', 'cmpPlatformSeg'].forEach(setupSegmented);
+  $('#cmpRunBtn').addEventListener('click', runCompare);
+}
+
+async function runCompare() {
+  const urlA = $('#cmpUrlA').value.trim();
+  const urlB = $('#cmpUrlB').value.trim();
+  const errBox = $('#cmpErrorBox');
+  errBox.style.display = 'none';
+  if (!urlA || !urlB) {
+    errBox.textContent = 'Les deux URLs sont requises.';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#cmpRunBtn').disabled = true;
+  $('#cmpLoadingBox').style.display = 'flex';
+  $('#cmpResults').innerHTML = '';
+
   try {
-    const res = await fetch('/api/alerts');
+    const res = await fetch('/api/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url_a: urlA, label_a: $('#cmpLabelA').value.trim() || 'Page A',
+        url_b: urlB, label_b: $('#cmpLabelB').value.trim() || 'Page B',
+        mode: getSegVal('cmpModeSeg'), platform: getSegVal('cmpPlatformSeg'),
+      }),
+    });
     const data = await res.json();
-    renderSuivi(data.alerts || []);
+    $('#cmpLoadingBox').style.display = 'none';
+    $('#cmpRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderCompareResults(data);
   } catch (err) {
-    $('#suiviView').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les alertes : ${escapeHtml(err.message)}</div>`;
+    $('#cmpLoadingBox').style.display = 'none';
+    $('#cmpRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
   }
 }
 
-function renderSuivi(alerts) {
+function renderCompareResults(data) {
+  const ca = data.a.result._c || {};
+  const cb = data.b.result._c || {};
+  const sa = ca.score || 0, sb = cb.score || 0;
+  const winnerIsA = sa >= sb;
+
+  const rows = [
+    ['Hook', 'hook', 5], ['Offer', 'offer', 5], ['Trust', 'trust', 5], ['Friction', 'friction', 5], ['Total', 'score', 20],
+  ].map(([label, key, mx]) => {
+    const va = ca[key] || 0, vb = cb[key] || 0;
+    const wa = va > vb ? '✅ ' : va === vb ? '🤝 ' : '';
+    const wb = vb > va ? '✅ ' : va === vb ? '🤝 ' : '';
+    return `<tr><td>${label}</td><td>${wa}<strong>${va}/${mx}</strong></td><td>${wb}<strong>${vb}/${mx}</strong></td></tr>`;
+  }).join('');
+
+  $('#cmpResults').innerHTML = `
+    <div class="vs-row fade-up">
+      <div class="vs-card ${winnerIsA ? 'winner' : ''}">
+        <div class="vs-tag" style="color:var(--accent)">${escapeHtml(data.a.label)}</div>
+        <div class="vs-score" style="color:${scoreColor(sa)}">${sa}<span class="vs-den">/20</span></div>
+        <div class="vs-decision" style="color:${scoreColor(sa)}">${escapeHtml(ca.decision || '')}</div>
+        ${winnerIsA ? '<div class="vs-crown">👑 MEILLEUR SCORE</div>' : ''}
+      </div>
+      <div class="vs-mid">
+        <div class="vs-mid-label">VS</div>
+      </div>
+      <div class="vs-card ${!winnerIsA ? 'winner' : ''}">
+        <div class="vs-tag" style="color:var(--warning)">${escapeHtml(data.b.label)}</div>
+        <div class="vs-score" style="color:${scoreColor(sb)}">${sb}<span class="vs-den">/20</span></div>
+        <div class="vs-decision" style="color:${scoreColor(sb)}">${escapeHtml(cb.decision || '')}</div>
+        ${!winnerIsA ? '<div class="vs-crown">👑 MEILLEUR SCORE</div>' : ''}
+      </div>
+    </div>
+    <div class="section fade-up">
+      <h2>Breakdown comparatif</h2>
+      <table class="compare-table">
+        <thead><tr><th>Critère</th><th>${escapeHtml(data.a.label)}</th><th>${escapeHtml(data.b.label)}</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── A/B Test Tracker ──────────────────────────────────────
+async function renderABTestShell() {
+  $('#multiSubContent').innerHTML = `
+    <div class="card">
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">🧪 A/B Test Tracker</h2>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Scorez deux variantes de votre page. LRS identifie laquelle convertit mieux et sur quels critères.</p>
+      <div class="field">
+        <label class="field-label" for="abName">Nom du test</label>
+        <input type="text" id="abName" placeholder="Ex: Headline V1 vs V2 — Juillet" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label" style="color:var(--accent)">🔵 VARIANTE A (contrôle)</label>
+          <input type="url" id="abUrlA" placeholder="https://page-originale.com" />
+        </div>
+        <div class="field">
+          <label class="field-label" style="color:var(--warning)">🟡 VARIANTE B (challenger)</label>
+          <input type="url" id="abUrlB" placeholder="https://page-variante.com" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="abPlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="abHypo">Hypothèse</label>
+          <input type="text" id="abHypo" placeholder="Ex: la nouvelle headline va augmenter le Hook de 1 pt" />
+        </div>
+      </div>
+      <button class="cta" id="abRunBtn">🧪 Lancer le test A/B</button>
+      <div class="error-box" id="abErrorBox"></div>
+    </div>
+    <div class="loading" id="abLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Audit des deux variantes en cours…</div>
+    </div>
+    <div id="abResults"></div>
+    <div id="abExisting"></div>
+  `;
+  ['abPlatformSeg'].forEach(setupSegmented);
+  $('#abRunBtn').addEventListener('click', runABTest);
+  await loadExistingABTests();
+}
+
+async function runABTest() {
+  const name = $('#abName').value.trim();
+  const urlA = $('#abUrlA').value.trim();
+  const urlB = $('#abUrlB').value.trim();
+  const errBox = $('#abErrorBox');
+  errBox.style.display = 'none';
+  if (!name || !urlA || !urlB) {
+    errBox.textContent = 'Le nom du test et les deux URLs sont requis.';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#abRunBtn').disabled = true;
+  $('#abLoadingBox').style.display = 'flex';
+  $('#abResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/abtests/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, hypothesis: $('#abHypo').value.trim(), url_a: urlA, url_b: urlB,
+        platform: getSegVal('abPlatformSeg'),
+      }),
+    });
+    const data = await res.json();
+    $('#abLoadingBox').style.display = 'none';
+    $('#abRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderABTestResult(data);
+    renderExistingABTests(data.abtests);
+  } catch (err) {
+    $('#abLoadingBox').style.display = 'none';
+    $('#abRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function renderABTestResult(data) {
+  const winnerA = data.winner === 'A';
+  const winnerB = data.winner === 'B';
+  const delta = data.b.score - data.a.score;
+  const critLabels = { hook: 'Hook', offer: 'Offer', trust: 'Trust', friction: 'Friction' };
+
+  $('#abResults').innerHTML = `
+    <div class="vs-row fade-up">
+      <div class="vs-card ${winnerA ? 'winner' : ''}">
+        <div class="vs-tag" style="color:var(--accent)">🔵 Variante A</div>
+        <div class="vs-score" style="color:${scoreColor(data.a.score)}">${data.a.score}<span class="vs-den">/20</span></div>
+        <div class="vs-decision" style="color:${scoreColor(data.a.score)}">${escapeHtml(data.a.decision)}</div>
+        ${winnerA ? '<div class="vs-crown">🏆 GAGNANTE</div>' : ''}
+      </div>
+      <div class="vs-mid">
+        <div class="vs-mid-label">Δ B vs A</div>
+        <div class="vs-mid-val" style="color:${delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-muted)'}">${delta > 0 ? '+' : ''}${delta}</div>
+      </div>
+      <div class="vs-card ${winnerB ? 'winner' : ''}">
+        <div class="vs-tag" style="color:var(--warning)">🟡 Variante B</div>
+        <div class="vs-score" style="color:${scoreColor(data.b.score)}">${data.b.score}<span class="vs-den">/20</span></div>
+        <div class="vs-decision" style="color:${scoreColor(data.b.score)}">${escapeHtml(data.b.decision)}</div>
+        ${winnerB ? '<div class="vs-crown">🏆 GAGNANTE</div>' : ''}
+      </div>
+    </div>
+    <div class="section fade-up">
+      <h2>Différences par critère</h2>
+      ${Object.entries(critLabels).map(([k, label]) => {
+        const va = data.a.crit[k] || 0, vb = data.b.crit[k] || 0;
+        const diff = vb - va;
+        const dColor = diff > 0 ? 'var(--success)' : diff < 0 ? 'var(--danger)' : 'var(--text-muted)';
+        return `<div class="bar-row"><div class="bar-top"><span class="bar-label">${label}</span><span class="bar-val">A=${va}/5 → B=${vb}/5 <span style="color:${dColor}">(${diff > 0 ? '+' : ''}${diff})</span></span></div></div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+async function loadExistingABTests() {
+  try {
+    const res = await fetch('/api/abtests');
+    const data = await res.json();
+    renderExistingABTests(data.abtests || {});
+  } catch (err) {}
+}
+
+function renderExistingABTests(abtests) {
+  const names = Object.keys(abtests);
+  if (!names.length) { $('#abExisting').innerHTML = ''; return; }
+
+  $('#abExisting').innerHTML = `
+    <div class="dash-section fade-up">
+      <h2>🗂️ Tests en cours (${names.length})</h2>
+      ${names.map(name => {
+        const t = abtests[name];
+        const rounds = t.rounds || [];
+        const winsA = rounds.filter(r => r.winner === 'A').length;
+        const winsB = rounds.filter(r => r.winner === 'B').length;
+        return `
+          <div class="entity-card">
+            <div class="entity-head">
+              <div>
+                <div class="entity-title">🧪 ${escapeHtml(name)}</div>
+                <div class="entity-sub">${rounds.length} round(s) · A:${winsA} vs B:${winsB} ${t.hypothesis ? '· ' + escapeHtml(t.hypothesis) : ''}</div>
+              </div>
+              <button class="icon-btn" data-del-ab="${escapeHtml(name)}">🗑️</button>
+            </div>
+            ${rounds.slice(-5).reverse().map(r => `
+              <div class="url-progress-row">
+                <span class="up-url">${escapeHtml(r.ts)}</span>
+                <span style="color:var(--accent)">A:${r.score_a}</span>
+                <span style="color:var(--text-muted)">vs</span>
+                <span style="color:var(--warning)">B:${r.score_b}</span>
+                <span style="font-weight:700;color:${r.winner === 'A' ? 'var(--accent)' : r.winner === 'B' ? 'var(--warning)' : 'var(--text-muted)'}">→ ${r.winner} gagne</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  $$('#abExisting [data-del-ab]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/abtests/' + encodeURIComponent(btn.dataset.delAb), { method: 'DELETE' });
+      await loadExistingABTests();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Suivi : Alertes / Projets / Campagnes / API Pub ─────────
+// ══════════════════════════════════════════════════════════
+const SUIVI_SUBVIEWS = {
+  alertes: { label: 'Alertes', render: loadSuiviAlertes },
+  projets: { label: 'Projets', render: loadSuiviProjects },
+  campagnes: { label: 'Campagnes', render: loadSuiviCampaigns },
+  api: { label: 'API Pub', render: loadSuiviAdsConnector },
+};
+
+function loadSuivi() {
+  const subNav = Object.entries(SUIVI_SUBVIEWS).map(([key, v], i) =>
+    `<button class="sub-tab ${i === 0 ? 'active' : ''}" data-sub="${key}">${v.label}</button>`
+  ).join('');
+  $('#suiviView').innerHTML = `
+    <div class="sub-tabs" id="suiviSubNav">${subNav}</div>
+    <div id="suiviSubContent"></div>
+  `;
+  $('#suiviSubNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#suiviSubNav')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    SUIVI_SUBVIEWS[btn.dataset.sub].render();
+  });
+  SUIVI_SUBVIEWS.alertes.render();
+}
+
+async function loadSuiviAlertes() {
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/alerts');
+    const data = await res.json();
+    renderSuiviAlertes(data.alerts || []);
+  } catch (err) {
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les alertes : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuiviAlertes(alerts) {
   if (!alerts.length) {
-    $('#suiviView').innerHTML = `
+    $('#suiviSubContent').innerHTML = `
       <div class="empty-dash fade-up">
         <div class="emoji">📡</div>
         <div class="title">Aucune alerte pour l'instant</div>
@@ -1027,7 +1506,7 @@ function renderSuivi(alerts) {
     `;
     return;
   }
-  $('#suiviView').innerHTML = `
+  $('#suiviSubContent').innerHTML = `
     <div class="dash-section fade-up" style="margin-top:0">
       <h2>📡 Variations de score significatives (${alerts.length})</h2>
       ${alerts.map(a => `
@@ -1042,6 +1521,333 @@ function renderSuivi(alerts) {
       `).join('')}
     </div>
   `;
+}
+
+// ── Projets multi-pages ──────────────────────────────────────
+async function loadSuiviProjects() {
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/projects');
+    const data = await res.json();
+    renderSuiviProjects(data.projects || {});
+  } catch (err) {
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuiviProjects(projects) {
+  const names = Object.keys(projects);
+  const formHtml = `
+    <div class="card">
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">➕ Créer un nouveau projet</h2>
+      <div class="field">
+        <label class="field-label" for="projName">Nom du projet</label>
+        <input type="text" id="projName" placeholder="Ex: Funnel Produit X" />
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="projNotes">Notes (optionnel)</label>
+        <input type="text" id="projNotes" placeholder="Contexte, objectifs, budget..." />
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="projUrls">URLs du funnel (une par ligne)</label>
+        <textarea id="projUrls" placeholder="https://ma-pub.com&#10;https://ma-landing.com&#10;https://ma-page-commande.com" style="min-height:100px"></textarea>
+      </div>
+      <button class="cta" id="projCreateBtn">💾 Créer le projet</button>
+      <div class="error-box" id="projErrorBox"></div>
+    </div>
+  `;
+
+  const listHtml = names.map(name => {
+    const p = projects[name];
+    const audits = p.audits || {};
+    const urls = p.urls || [];
+    const nDone = urls.filter(u => audits[u]).length;
+    const scores = urls.filter(u => audits[u]).map(u => audits[u].score);
+    const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10 : null;
+    return `
+      <div class="entity-card">
+        <div class="entity-head">
+          <div>
+            <div class="entity-title">🗂️ ${escapeHtml(name)}</div>
+            <div class="entity-sub">${nDone}/${urls.length} audités ${avg !== null ? '· Moy ' + avg + '/20' : '· Non audité'}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+          </div>
+          <button class="icon-btn" data-del-proj="${escapeHtml(name)}">🗑️</button>
+        </div>
+        ${urls.map(u => {
+          const a = audits[u];
+          const uShort = u.replace('https://', '').replace('http://', '');
+          return `<div class="url-progress-row">
+            <span class="up-url">${escapeHtml(uShort)}</span>
+            ${a ? `<span class="up-score" style="color:${scoreColor(a.score)}">${a.score}/20</span><span style="color:var(--text-muted);font-size:12px">${escapeHtml(a.decision)}</span>`
+                : `<span style="color:var(--text-muted);font-size:12px">— non audité</span>`}
+          </div>`;
+        }).join('')}
+        <button class="cta-secondary" data-audit-proj="${escapeHtml(name)}" style="width:100%;margin-top:12px">
+          ${nDone < urls.length ? `▶️ Auditer les ${urls.length - nDone} pages restantes` : '🔁 Re-auditer toutes les pages'}
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  $('#suiviSubContent').innerHTML = formHtml + (names.length ? `<div class="dash-section">${listHtml}</div>` : `
+    <div class="empty-dash fade-up" style="margin-top:20px">
+      <div class="emoji">🗂️</div>
+      <div class="title">Aucun projet créé</div>
+      <div class="sub">Créez votre premier projet ci-dessus pour grouper un funnel multi-pages.</div>
+    </div>
+  `);
+
+  $('#projCreateBtn').addEventListener('click', async () => {
+    const name = $('#projName').value.trim();
+    const notes = $('#projNotes').value.trim();
+    const urls = $('#projUrls').value.split('\n').map(u => u.trim()).filter(Boolean);
+    const errBox = $('#projErrorBox');
+    errBox.style.display = 'none';
+    if (!name || !urls.length) {
+      errBox.textContent = 'Nom du projet et au moins une URL sont requis.';
+      errBox.style.display = 'block';
+      return;
+    }
+    const res = await fetch('/api/projects', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, notes, urls }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+    renderSuiviProjects(data.projects);
+  });
+
+  $$('#suiviSubContent [data-del-proj]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/projects/' + encodeURIComponent(btn.dataset.delProj), { method: 'DELETE' });
+      loadSuiviProjects();
+    });
+  });
+
+  $$('#suiviSubContent [data-audit-proj]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '⏳ Audit en cours… (peut prendre plusieurs minutes)';
+      const res = await fetch('/api/projects/' + encodeURIComponent(btn.dataset.auditProj) + '/audit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok) renderSuiviProjects(data.projects);
+      else { btn.disabled = false; btn.textContent = 'Erreur — réessayer'; }
+    });
+  });
+}
+
+// ── Campagnes en cours ───────────────────────────────────────
+async function loadSuiviCampaigns() {
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const [campRes, histRes] = await Promise.all([fetch('/api/campaigns'), fetch('/api/history')]);
+    const campData = await campRes.json();
+    const histData = await histRes.json();
+    renderSuiviCampaigns(campData.campaigns || {}, histData.entries || []);
+  } catch (err) {
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuiviCampaigns(campaigns, historyEntries) {
+  const urlOptions = historyEntries.filter(e => e.url).map(e =>
+    `<option value="${escapeHtml(e.url)}">${escapeHtml(e.url.slice(0, 50))} — ${e.score}/20</option>`
+  ).join('');
+
+  const formHtml = `
+    <div class="card">
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">📡 Nouvelle campagne — Diagnostic live</h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 14px">Entrez vos stats pub. LRS croise vos métriques avec le score de votre page pour identifier où votre funnel perd de l'argent.</p>
+      <div class="row">
+        <div class="field">
+          <label class="field-label" for="campName">Nom de la campagne</label>
+          <input type="text" id="campName" placeholder="Ex: Meta — Produit X — Juillet" />
+        </div>
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="campPlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="campLinkedUrl">Page liée (audit LRS, optionnel)</label>
+        <select id="campLinkedUrl" style="width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:12px 14px;color:var(--text);font-size:14px;font-family:inherit">
+          <option value="">— Aucune —</option>
+          ${urlOptions}
+        </select>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field"><label class="field-label" for="campBudget">Budget journalier (€)</label><input type="number" id="campBudget" min="0" step="5" value="0" /></div>
+        <div class="field"><label class="field-label" for="campCtr">CTR (%)</label><input type="number" id="campCtr" min="0" step="0.1" value="0" /></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field"><label class="field-label" for="campCpc">CPC (€)</label><input type="number" id="campCpc" min="0" step="0.01" value="0" /></div>
+        <div class="field"><label class="field-label" for="campRoas">ROAS (x)</label><input type="number" id="campRoas" min="0" step="0.1" value="0" /></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field"><label class="field-label" for="campCpa">CPA (€)</label><input type="number" id="campCpa" min="0" step="1" value="0" /></div>
+        <div class="field"><label class="field-label" for="campNotes">Notes</label><input type="text" id="campNotes" placeholder="Audience, créa testée..." /></div>
+      </div>
+      <button class="cta" id="campSaveBtn">💾 Sauvegarder & Analyser</button>
+      <div class="error-box" id="campErrorBox"></div>
+    </div>
+  `;
+
+  const levelColor = { danger: 'var(--danger)', warning: 'var(--warning)', ok: 'var(--success)' };
+  const levelIcon = { danger: '🔴', warning: '🟡', ok: '🟢' };
+  const names = Object.keys(campaigns);
+  const listHtml = names.map(name => {
+    const c = campaigns[name];
+    const diags = c.diagnostics || [];
+    const nDanger = diags.filter(d => d.level === 'danger').length;
+    const badge = nDanger > 0 ? '🔴' : diags.some(d => d.level === 'warning') ? '🟡' : '🟢';
+    return `
+      <div class="entity-card">
+        <div class="entity-head">
+          <div>
+            <div class="entity-title">${badge} ${escapeHtml(name)}</div>
+            <div class="entity-sub">${escapeHtml(c.platform)} · ${c.budget_daily}€/j · màj ${escapeHtml(c.updated)}</div>
+          </div>
+          <button class="icon-btn" data-del-camp="${escapeHtml(name)}">🗑️</button>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:12px">
+          <div class="kpi-card"><div class="kpi-label">CTR</div><div class="kpi-val" style="font-size:18px">${c.ctr || '—'}%</div></div>
+          <div class="kpi-card"><div class="kpi-label">CPC</div><div class="kpi-val" style="font-size:18px">${c.cpc || '—'}€</div></div>
+          <div class="kpi-card"><div class="kpi-label">ROAS</div><div class="kpi-val" style="font-size:18px">${c.roas || '—'}x</div></div>
+          <div class="kpi-card"><div class="kpi-label">CPA</div><div class="kpi-val" style="font-size:18px">${c.cpa || '—'}€</div></div>
+        </div>
+        ${c.lrs_score !== null && c.lrs_score !== undefined ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">Score LRS page liée : <strong style="color:var(--text)">${c.lrs_score}/20</strong></p>` : `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">⚠️ Non reliée à un audit LRS.</p>`}
+        ${diags.length ? diags.map(d => `
+          <div class="diag-row" style="border-left-color:${levelColor[d.level] || '#888'}">
+            <span class="diag-crit" style="color:${levelColor[d.level] || '#888'}">${levelIcon[d.level] || '⚪'} ${escapeHtml(d.crit)}</span>
+            <div class="diag-msg">${escapeHtml(d.msg)}</div>
+          </div>
+        `).join('') : '<p style="font-size:13px;color:var(--success)">✅ Aucun problème détecté — campagne saine.</p>'}
+      </div>
+    `;
+  }).join('');
+
+  $('#suiviSubContent').innerHTML = formHtml + (names.length ? `<div class="dash-section"><h2>🔍 Diagnostics actifs</h2>${listHtml}</div>` : '');
+  setupSegmented('campPlatformSeg');
+
+  $('#campSaveBtn').addEventListener('click', async () => {
+    const name = $('#campName').value.trim();
+    const errBox = $('#campErrorBox');
+    errBox.style.display = 'none';
+    if (!name) { errBox.textContent = 'Nom de la campagne requis.'; errBox.style.display = 'block'; return; }
+    const res = await fetch('/api/campaigns', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name, platform: getSegVal('campPlatformSeg'),
+        budget_daily: parseFloat($('#campBudget').value) || 0,
+        ctr: parseFloat($('#campCtr').value) || 0,
+        cpc: parseFloat($('#campCpc').value) || 0,
+        roas: parseFloat($('#campRoas').value) || 0,
+        cpa: parseFloat($('#campCpa').value) || 0,
+        notes: $('#campNotes').value.trim(),
+        linked_url: $('#campLinkedUrl').value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+    loadSuiviCampaigns();
+  });
+
+  $$('#suiviSubContent [data-del-camp]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await fetch('/api/campaigns/' + encodeURIComponent(btn.dataset.delCamp), { method: 'DELETE' });
+      loadSuiviCampaigns();
+    });
+  });
+}
+
+// ── Connexion API Pub (Meta / TikTok) ────────────────────────
+async function loadSuiviAdsConnector() {
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/ads-connector/creds');
+    const data = await res.json();
+    renderSuiviAdsConnector(data);
+  } catch (err) {
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderSuiviAdsConnector(creds) {
+  $('#suiviSubContent').innerHTML = `
+    <div class="card">
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 6px">🔗 Connexion API Pub — Import automatique</h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Connectez vos comptes publicitaires pour importer CTR, CPC, ROAS et CPA. Nécessite vos identifiants Meta/TikTok Ads (à configurer par vous-même).</p>
+      <div class="sub-tabs" id="adsConnPlatSeg">
+        <button class="sub-tab active" data-val="meta">🔵 Meta Ads ${creds.meta_configured ? '✓' : ''}</button>
+        <button class="sub-tab" data-val="tiktok">🎵 TikTok Ads ${creds.tt_configured ? '✓' : ''}</button>
+      </div>
+      <div id="adsConnForm"></div>
+    </div>
+  `;
+  const renderForm = (platform) => {
+    const isMeta = platform === 'meta';
+    $('#adsConnForm').innerHTML = `
+      <div class="field">
+        <label class="field-label">${isMeta ? 'Access Token Meta' : 'Access Token TikTok'}</label>
+        <input type="password" id="adsToken" placeholder="${isMeta ? 'EAAxxxxx...' : 'act_xxxxx...'}" />
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label">${isMeta ? 'Ad Account ID' : 'Advertiser ID'}</label>
+        <input type="text" id="adsAccId" placeholder="${isMeta ? 'act_123456789' : '7123456789012345678'}" value="${isMeta ? escapeHtml(creds.meta_acc_id) : escapeHtml(creds.tt_adv_id)}" />
+      </div>
+      <div class="row" style="margin-top:16px">
+        <button class="cta-secondary" id="adsSaveBtn" style="flex:1">💾 Sauvegarder les identifiants</button>
+        <button class="cta-secondary" id="adsImportBtn" style="flex:1;color:var(--accent);border-color:var(--accent)">📥 Importer les campagnes</button>
+      </div>
+      <div class="error-box" id="adsConnErrorBox"></div>
+      <div id="adsImportResults"></div>
+    `;
+    $('#adsSaveBtn').addEventListener('click', async () => {
+      const res = await fetch('/api/ads-connector/creds', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, token: $('#adsToken').value, account_id: $('#adsAccId').value }),
+      });
+      if (res.ok) loadSuiviAdsConnector();
+    });
+    $('#adsImportBtn').addEventListener('click', async () => {
+      const errBox = $('#adsConnErrorBox');
+      errBox.style.display = 'none';
+      $('#adsImportBtn').disabled = true;
+      $('#adsImportBtn').textContent = '⏳ Connexion...';
+      const res = await fetch('/api/ads-connector/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform, period: 'last_7d' }),
+      });
+      const data = await res.json();
+      $('#adsImportBtn').disabled = false;
+      $('#adsImportBtn').textContent = '📥 Importer les campagnes';
+      if (!res.ok) { errBox.textContent = data.detail || 'Erreur import.'; errBox.style.display = 'block'; return; }
+      const camps = data.campaigns || [];
+      $('#adsImportResults').innerHTML = camps.length ? `
+        <div class="dash-section"><h2>${camps.length} campagne(s) importée(s)</h2>
+          ${camps.map(c => `
+            <div class="list-row">
+              <div class="lr-body"><div class="lr-title">${escapeHtml(c.name)}</div>
+              <div class="lr-meta">Spend ${c.spend}€ · CTR ${c.ctr}% · CPC ${c.cpc}€ · ROAS ${c.roas}x · CPA ${c.cpa}€</div></div>
+            </div>
+          `).join('')}
+        </div>` : `<p style="color:var(--text-muted);font-size:13px;margin-top:12px">Aucune campagne trouvée sur cette période.</p>`;
+    });
+  };
+  $('#adsConnPlatSeg').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#adsConnPlatSeg')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderForm(btn.dataset.val);
+  });
+  renderForm('meta');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1133,8 +1939,15 @@ function renderHistorique(data) {
     <div class="sparkline-wrap fade-up" style="margin-bottom:20px">${buildSparkline(data.evolution)}</div>
   ` : '';
 
+  const exportBarHtml = `
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px">
+      <button class="cta-secondary" id="histExportCsv" style="width:auto;padding:8px 14px;font-size:12.5px">⬇️ CSV</button>
+      <button class="cta-secondary" id="histExportJson" style="width:auto;padding:8px 14px;font-size:12.5px">⬇️ JSON</button>
+    </div>
+  `;
+
   const rowsHtml = entries.map((e, i) => `
-    <div class="hist-row fade-up" data-idx="${i}">
+    <div class="hist-row fade-up" data-idx="${i}" data-url="${escapeHtml(e.url)}" data-ts="${escapeHtml(e.timestamp)}">
       <div class="hist-top">
         <span class="hist-score" style="color:${scoreColor(e.score)}">${e.score}/20</span>
         <div class="hist-body">
@@ -1149,12 +1962,246 @@ function renderHistorique(data) {
         <div><div class="hd-label">Risque</div><div class="hd-val">${escapeHtml(e.risk)}</div></div>
         <div><div class="hd-label">vs précédent</div><div class="hd-val">${e.delta !== null ? (e.delta > 0 ? '+' : '') + e.delta + ' pts' : '—'}</div></div>
       </div>
+      <div class="hist-extra" style="display:none;grid-column:1/-1;margin-top:14px"></div>
     </div>
   `).join('');
 
-  $('#histContent').innerHTML = statsHtml + evoHtml + rowsHtml;
+  $('#histContent').innerHTML = exportBarHtml + statsHtml + evoHtml + rowsHtml;
+
+  $('#histExportCsv').addEventListener('click', () => exportHistoryCsv(entries));
+  $('#histExportJson').addEventListener('click', () => exportHistoryJson(entries));
+
   $$('.hist-row', $('#histContent')).forEach(row => {
-    row.addEventListener('click', () => row.classList.toggle('open'));
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.hist-extra')) return; // ne pas re-toggle en cliquant dans le détail
+      row.classList.toggle('open');
+      const extra = row.querySelector('.hist-extra');
+      if (row.classList.contains('open')) {
+        extra.style.display = 'block';
+        if (!extra.dataset.loaded) {
+          extra.dataset.loaded = '1';
+          loadHistoryRowExtra(row.dataset.url, row.dataset.ts, extra);
+        }
+      } else {
+        extra.style.display = 'none';
+      }
+    });
+  });
+}
+
+function downloadBlob(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportHistoryCsv(entries) {
+  const header = ['Timestamp', 'URL', 'Mode', 'Plateforme', 'Score', 'Décision', 'Risque'];
+  const rows = entries.map(e => [e.timestamp, e.url, e.mode, e.platform, e.score, e.decision, e.risk]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  downloadBlob('LRS_historique.csv', csv, 'text/csv;charset=utf-8');
+}
+
+function exportHistoryJson(entries) {
+  downloadBlob('LRS_historique.json', JSON.stringify(entries, null, 2), 'application/json');
+}
+
+// ── Export txt (client-side, miroir de export_txt() côté app.py) ──
+function buildExportTxt(result, meta) {
+  const c = result._c || {};
+  const why = result.why_this_score || {};
+  const mm = result.message_match || {};
+  const fp = result.fix_plan || {};
+  const L = [];
+  L.push('='.repeat(60), 'LRS - LAUNCH RISK SYSTEM', 'Audit du ' + (meta.timestamp || ''), '='.repeat(60), '');
+  L.push('MODE         : ' + (meta.mode || ''));
+  L.push('PLATEFORME   : ' + (meta.platform || ''));
+  L.push("TYPE D'OFFRE : " + (meta.offer_type || ''));
+  L.push('URL          : ' + (meta.url || 'N/A'));
+  L.push('', '-'.repeat(40), 'SCORE', '-'.repeat(40));
+  L.push('Total   : ' + (c.score || 0) + ' / 20');
+  L.push('Risk    : ' + (c.risk || ''));
+  L.push('Decision: ' + (c.decision || ''));
+  L.push('');
+  L.push('  Hook     : ' + (c.hook || 0) + '/5');
+  L.push('  Offer    : ' + (c.offer || 0) + '/5');
+  L.push('  Trust    : ' + (c.trust || 0) + '/5');
+  L.push('  Friction : ' + (c.friction || 0) + '/5');
+  L.push('', '-'.repeat(40), 'ANALYSE', '-'.repeat(40));
+  L.push('Hook     : ' + (why.hook_detail || ''), '');
+  L.push('Offer    : ' + (why.offer_detail || ''), '');
+  L.push('Trust    : ' + (why.trust_detail || ''), '');
+  L.push('Friction : ' + (why.friction_detail || ''), '');
+  L.push('Top 3 raisons :');
+  (why.top_3_reasons || []).forEach((r, i) => L.push('  ' + (i + 1) + '. ' + r));
+  if (mm.status && mm.status !== 'N/A') {
+    L.push('', '-'.repeat(40), 'MESSAGE MATCH', '-'.repeat(40));
+    L.push('Statut : ' + mm.status);
+  }
+  L.push('', '-'.repeat(40), "PLAN D'ACTION", '-'.repeat(40));
+  const top = fp.top_priority_action || {};
+  if (top.what) {
+    L.push('>>> ACTION PRIORITAIRE #1 <<<');
+    L.push('  Quoi          : ' + top.what);
+    L.push('  Comment exact : ' + (top.how_exactly || ''));
+    L.push('  Temps estimé  : ' + (top.time_estimate || ''), '');
+  }
+  const qws = fp.quick_wins || [];
+  if (qws.length) {
+    L.push('Quick wins :');
+    qws.forEach(qw => L.push('  - ' + (qw.what || '') + ' — ' + (qw.how_exactly || '')));
+  }
+  L.push('', 'Généré par LRS™ — Launch Risk System');
+  return L.join('\n');
+}
+
+function buildShareText(result, meta) {
+  const c = result._c || {};
+  const why = result.why_this_score || {};
+  const fp = result.fix_plan || {};
+  const lines = [
+    '═══ 🚦 LRS™ — RÉSULTAT D\'AUDIT ═══',
+    `📅 ${meta.timestamp || ''}  |  ${meta.mode || ''}`,
+    `🔗 ${meta.url || meta.offer_type || ''}`,
+    '',
+    `${c.score >= 15 ? '🟢' : c.score >= 10 ? '🟡' : '🔴'} Score : ${c.score || 0}/20 — ${c.decision || ''}`,
+    `   Hook ${c.hook || 0}/5  ·  Offer ${c.offer || 0}/5  ·  Trust ${c.trust || 0}/5  ·  Friction ${c.friction || 0}/5`,
+    '',
+  ];
+  const top3 = (why.top_3_reasons || []).slice(0, 3);
+  if (top3.length) { lines.push('📋 Raisons du score :'); top3.forEach(r => lines.push('   • ' + r)); lines.push(''); }
+  const top = fp.top_priority_action || {};
+  if (top.what) { lines.push('🎯 Action #1 : ' + top.what, ''); }
+  const qws = (fp.quick_wins || []).slice(0, 3);
+  if (qws.length) { lines.push('⚡ Quick Wins :'); qws.forEach(qw => lines.push('   • ' + (qw.what || ''))); lines.push(''); }
+  lines.push('Généré par LRS™ — Launch Risk System');
+  return lines.join('\n');
+}
+
+async function loadHistoryRowExtra(url, ts, container) {
+  container.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">Chargement…</div>`;
+  try {
+    const res = await fetch('/api/history/entry?' + new URLSearchParams({ url, timestamp: ts }));
+    if (!res.ok) throw new Error('introuvable');
+    const data = await res.json();
+    renderHistoryRowExtra(data, container);
+  } catch (err) {
+    container.innerHTML = `<div style="color:var(--danger);font-size:12.5px">Impossible de charger le détail : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderHistoryRowExtra(data, container) {
+  const { result, meta } = data;
+  const fp = result.fix_plan || {};
+  const trackerKey = 'lrs_pilot_tracker_' + meta.url + '_' + meta.timestamp;
+  const recs = [];
+  const top = fp.top_priority_action || {};
+  if (top.what) recs.push(['🎯 ' + top.what, 'top']);
+  (fp.quick_wins || []).slice(0, 4).forEach((qw, j) => recs.push(['⚡ ' + (qw.what || ''), 'qw' + j]));
+
+  let trackerState = {};
+  try { trackerState = JSON.parse(localStorage.getItem(trackerKey) || '{}'); } catch (e) {}
+
+  const trackerHtml = recs.length ? `
+    <div style="margin-bottom:16px">
+      <div class="field-label" style="margin-bottom:8px">📋 Suivi des recommandations</div>
+      ${recs.map(([label, id]) => `
+        <label class="checklist-item" style="padding:6px 0">
+          <input type="checkbox" data-tracker-id="${id}" ${trackerState[id] ? 'checked' : ''} />
+          <span style="font-size:13px">${escapeHtml(label)}</span>
+        </label>
+      `).join('')}
+      <div class="progress-track" style="margin-top:8px"><div class="progress-fill" id="trackerFill" style="background:var(--accent)"></div></div>
+    </div>
+  ` : '';
+
+  container.innerHTML = `
+    ${trackerHtml}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="cta-secondary" data-export-txt style="width:auto;padding:8px 14px;font-size:12.5px">📥 .txt</button>
+      <button class="cta-secondary" data-export-pdf style="width:auto;padding:8px 14px;font-size:12.5px">📄 PDF</button>
+      <button class="cta-secondary" data-copy-share style="width:auto;padding:8px 14px;font-size:12.5px">🔗 Copier le résumé</button>
+      <button class="cta-secondary" data-send-slack style="width:auto;padding:8px 14px;font-size:12.5px">📤 Slack</button>
+    </div>
+    <div class="error-box" data-hist-extra-error style="margin-top:10px"></div>
+  `;
+
+  const updateTrackerFill = () => {
+    if (!recs.length) return;
+    const done = recs.filter(([, id]) => trackerState[id]).length;
+    const pct = Math.round(done / recs.length * 100);
+    const fill = container.querySelector('#trackerFill');
+    if (fill) fill.style.width = pct + '%';
+  };
+  updateTrackerFill();
+
+  $$('[data-tracker-id]', container).forEach(cb => {
+    cb.addEventListener('change', () => {
+      trackerState[cb.dataset.trackerId] = cb.checked;
+      localStorage.setItem(trackerKey, JSON.stringify(trackerState));
+      updateTrackerFill();
+    });
+  });
+
+  const errBox = container.querySelector('[data-hist-extra-error]');
+  const showErr = (msg) => { errBox.textContent = msg; errBox.style.display = 'block'; };
+
+  container.querySelector('[data-export-txt]').addEventListener('click', () => {
+    const txt = buildExportTxt(result, meta);
+    downloadBlob('LRS_' + meta.timestamp.replace(/[/: ]/g, '-') + '.txt', txt, 'text/plain;charset=utf-8');
+  });
+
+  container.querySelector('[data-export-pdf]').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⏳...';
+    try {
+      const res = await fetch('/api/export/pdf', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result, meta }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Erreur PDF'); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'LRS_audit.pdf';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showErr(err.message);
+    } finally {
+      e.target.disabled = false; e.target.textContent = '📄 PDF';
+    }
+  });
+
+  container.querySelector('[data-copy-share]').addEventListener('click', async (e) => {
+    const txt = buildShareText(result, meta);
+    try {
+      await navigator.clipboard.writeText(txt);
+      e.target.textContent = '✓ Copié !';
+      setTimeout(() => { e.target.textContent = '🔗 Copier le résumé'; }, 1800);
+    } catch (err) {
+      showErr('Impossible de copier automatiquement — sélectionnez le texte manuellement.');
+    }
+  });
+
+  container.querySelector('[data-send-slack]').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⏳...';
+    try {
+      const res = await fetch('/api/integrations/slack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result, meta }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Erreur Slack');
+      e.target.textContent = '✓ Envoyé !';
+      setTimeout(() => { e.target.textContent = '📤 Slack'; }, 1800);
+    } catch (err) {
+      showErr(err.message);
+    } finally {
+      e.target.disabled = false;
+    }
   });
 }
 
@@ -1208,7 +2255,36 @@ function saveChecklistState(state) {
   } catch (e) {}
 }
 
+// ══════════════════════════════════════════════════════════
+// ── Ressources : Checklist / Ads Library / Swipe Files / Benchmark / Changelog ──
+// ══════════════════════════════════════════════════════════
+const RESSOURCES_SUBVIEWS = {
+  checklist: { label: 'Checklist', render: renderChecklistShell },
+  adslibrary: { label: 'Ads Library', render: loadAdsLibrary },
+  swipefiles: { label: 'Swipe Files', render: loadSwipeFiles },
+  benchmark: { label: 'Benchmark', render: loadBenchmark },
+  changelog: { label: 'Changelog', render: loadChangelog },
+};
+
 function renderRessources() {
+  const subNav = Object.entries(RESSOURCES_SUBVIEWS).map(([key, v], i) =>
+    `<button class="sub-tab ${i === 0 ? 'active' : ''}" data-sub="${key}">${v.label}</button>`
+  ).join('');
+  $('#ressourcesView').innerHTML = `
+    <div class="sub-tabs" id="ressourcesSubNav">${subNav}</div>
+    <div id="ressourcesSubContent"></div>
+  `;
+  $('#ressourcesSubNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#ressourcesSubNav')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    RESSOURCES_SUBVIEWS[btn.dataset.sub].render();
+  });
+  RESSOURCES_SUBVIEWS.checklist.render();
+}
+
+function renderChecklistShell() {
   const state = loadChecklistState();
 
   const catsHtml = CHECKLIST_DATA.map(([cat, items]) => `
@@ -1226,7 +2302,7 @@ function renderRessources() {
     </div>
   `).join('');
 
-  $('#ressourcesView').innerHTML = `
+  $('#ressourcesSubContent').innerHTML = `
     <div class="checklist-progress-wrap">
       <div class="field-label" style="margin-bottom:0">Checklist pré-lancement</div>
       <div id="checklistProgressBody"></div>
@@ -1235,13 +2311,305 @@ function renderRessources() {
   `;
   updateChecklistProgress();
 
-  $$('#ressourcesView .checklist-item input[type="checkbox"]').forEach(cb => {
+  $$('#ressourcesSubContent .checklist-item input[type="checkbox"]').forEach(cb => {
     cb.addEventListener('change', () => {
       const state = loadChecklistState();
       state[cb.dataset.item] = cb.checked;
       saveChecklistState(state);
       cb.closest('.checklist-item').classList.toggle('checked', cb.checked);
       updateChecklistProgress();
+    });
+  });
+}
+
+// ── Ads Library ──────────────────────────────────────────────
+function mdLite(src) {
+  if (!src) return '';
+  const lines = src.split('\n');
+  let html = '';
+  let inCode = false, codeBuf = [];
+  let inList = null; // 'ul' | 'ol'
+  let tableBuf = [];
+
+  function flushList() {
+    if (inList) { html += `</${inList}>`; inList = null; }
+  }
+  function flushTable() {
+    if (!tableBuf.length) return;
+    const rows = tableBuf.filter(r => !/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$/.test(r));
+    const cells = rows.map(r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim()));
+    if (cells.length) {
+      html += '<table><thead><tr>' + cells[0].map(c => `<th>${inlineMd(c)}</th>`).join('') + '</tr></thead><tbody>';
+      cells.slice(1).forEach(row => { html += '<tr>' + row.map(c => `<td>${inlineMd(c)}</td>`).join('') + '</tr>'; });
+      html += '</tbody></table>';
+    }
+    tableBuf = [];
+  }
+  function inlineMd(s) {
+    return escapeHtml(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  }
+
+  for (const raw of lines) {
+    const line = raw;
+    if (line.trim().startsWith('```')) {
+      if (inCode) { html += `<pre>${escapeHtml(codeBuf.join('\n'))}</pre>`; codeBuf = []; inCode = false; }
+      else { flushList(); flushTable(); inCode = true; }
+      continue;
+    }
+    if (inCode) { codeBuf.push(line); continue; }
+
+    if (/^\|.*\|$/.test(line.trim())) { flushList(); tableBuf.push(line.trim()); continue; }
+    flushTable();
+
+    if (/^#{2,4}\s+/.test(line)) { flushList(); html += `<h4>${inlineMd(line.replace(/^#{2,4}\s+/, ''))}</h4>`; continue; }
+    if (/^\s*[-*]\s+/.test(line)) {
+      if (inList !== 'ul') { flushList(); html += '<ul>'; inList = 'ul'; }
+      html += `<li>${inlineMd(line.replace(/^\s*[-*]\s+/, ''))}</li>`;
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      if (inList !== 'ol') { flushList(); html += '<ol>'; inList = 'ol'; }
+      html += `<li>${inlineMd(line.replace(/^\s*\d+\.\s+/, ''))}</li>`;
+      continue;
+    }
+    flushList();
+    if (line.trim()) html += `<p>${inlineMd(line)}</p>`;
+  }
+  flushList();
+  flushTable();
+  if (inCode) html += `<pre>${escapeHtml(codeBuf.join('\n'))}</pre>`;
+  return html;
+}
+
+async function loadAdsLibrary() {
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/resources/ads-library');
+    const data = await res.json();
+    renderAdsLibrary(data);
+  } catch (err) {
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+const LIB_COLOR_MAP = {
+  accent: 'var(--accent)', success: 'var(--success)', warning: 'var(--warning)', danger: 'var(--danger)',
+  cyan: '#06b6d4', tiktok: '#ff0050', google_blue: '#4285F4', google_green: '#34A853', google_yellow: '#FBBC05',
+};
+
+function renderAdsLibrary(data) {
+  const platforms = Object.keys(data);
+  const subNav = platforms.map((k, i) =>
+    `<button class="sub-tab ${i === 0 ? 'active' : ''}" data-plat="${k}">${escapeHtml(data[k].label)}</button>`
+  ).join('');
+  $('#ressourcesSubContent').innerHTML = `
+    <div class="sub-tabs" id="libPlatNav">${subNav}</div>
+    <div id="libPlatContent"></div>
+  `;
+  const renderPlatform = (key) => {
+    const p = data[key];
+    const cardsHtml = (cards) => `<div class="lib-cards-grid">${cards.map(c => `
+      <div class="lib-card" style="border-left-color:${LIB_COLOR_MAP[c.color] || 'var(--accent)'}">
+        <div class="lib-card-title" style="color:${LIB_COLOR_MAP[c.color] || 'var(--accent)'}">${escapeHtml(c.title)}</div>
+        ${c.items.map(item => `<div class="lib-card-item">${escapeHtml(item)}</div>`).join('')}
+      </div>
+    `).join('')}</div>`;
+
+    $('#libPlatContent').innerHTML = `
+      <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:0 0 14px">Frameworks rapides</h2>
+      ${cardsHtml(p.cards || [])}
+      ${p.cards2 ? cardsHtml(p.cards2) : ''}
+      ${(p.guides || []).length ? `
+        <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:24px 0 14px">Guide complet</h2>
+        ${p.guides.map(g => `
+          <div class="section" style="margin-top:10px">
+            <h2 style="text-transform:none;font-size:15px;color:var(--text);letter-spacing:0">${escapeHtml(g.title)}</h2>
+            <div class="md-body">${mdLite(g.body)}</div>
+          </div>
+        `).join('')}
+      ` : ''}
+    `;
+  };
+  $('#libPlatNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#libPlatNav')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPlatform(btn.dataset.plat);
+  });
+  renderPlatform(platforms[0]);
+}
+
+// ── Swipe Files ───────────────────────────────────────────────
+async function loadSwipeFiles() {
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/swipefiles');
+    const data = await res.json();
+    renderSwipeFiles(data);
+  } catch (err) {
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+const SWIPE_CAT_LABELS = { headlines: '📰 Headlines', hooks: '🪝 Hooks', ctas: '🎯 CTAs', angles: '💡 Angles' };
+
+function renderSwipeFiles(swipes) {
+  const total = Object.values(swipes).reduce((s, v) => s + (v ? v.length : 0), 0);
+  const kpiHtml = Object.entries(SWIPE_CAT_LABELS).map(([cat, label]) => `
+    <div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-val" style="font-size:22px">${(swipes[cat] || []).length}</div></div>
+  `).join('');
+
+  const listHtml = Object.entries(SWIPE_CAT_LABELS).map(([cat, label]) => {
+    const items = swipes[cat] || [];
+    if (!items.length) return '';
+    return `
+      <div class="dash-section">
+        <h2>${label} (${items.length})</h2>
+        ${items.map((it, i) => `
+          <div class="list-row">
+            <div class="lr-body">
+              <div class="lr-title" style="white-space:normal">${escapeHtml(it.text)}</div>
+              <div class="lr-meta">${escapeHtml(it.platform || '')} · ${escapeHtml(it.offer || '')} · ${escapeHtml(it.ts || '')}${it.notes ? ' · ' + escapeHtml(it.notes) : ''}</div>
+            </div>
+            <button class="icon-btn" data-del-swipe="${cat}:${i}">🗑️</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+
+  $('#ressourcesSubContent').innerHTML = `
+    <div class="kpi-grid fade-up">${kpiHtml}</div>
+    <div class="card" style="margin-top:16px">
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">➕ Ajouter un swipe file</h2>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Type</label>
+          <div class="segmented" id="swipeCatSeg">
+            <button class="active" data-val="headlines">Headline</button>
+            <button data-val="hooks">Hook</button>
+            <button data-val="ctas">CTA</button>
+            <button data-val="angles">Angle</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="swipePlatSeg">
+            <button class="active" data-val="Tous">Tous</button>
+            <button data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="swipeText">Texte</label>
+        <textarea id="swipeText" placeholder="Collez votre hook, headline ou CTA ici..." style="min-height:80px"></textarea>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="swipeNotes">Notes (pourquoi ça marche ?)</label>
+        <input type="text" id="swipeNotes" placeholder="Ex: testé sur audience froide, CTR 3.2%" />
+      </div>
+      <button class="cta" id="swipeSaveBtn">💾 Sauvegarder</button>
+      <div class="error-box" id="swipeErrorBox"></div>
+    </div>
+    ${total ? listHtml : `
+      <div class="empty-dash fade-up" style="margin-top:20px">
+        <div class="emoji">🗂️</div>
+        <div class="title">Aucun swipe file pour l'instant</div>
+        <div class="sub">Ils s'ajoutent automatiquement après chaque audit, ou manuellement ci-dessus.</div>
+      </div>
+    `}
+  `;
+  ['swipeCatSeg', 'swipePlatSeg'].forEach(setupSegmented);
+
+  $('#swipeSaveBtn').addEventListener('click', async () => {
+    const text = $('#swipeText').value.trim();
+    const errBox = $('#swipeErrorBox');
+    errBox.style.display = 'none';
+    if (!text) { errBox.textContent = 'Le texte est vide.'; errBox.style.display = 'block'; return; }
+    const res = await fetch('/api/swipefiles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        category: getSegVal('swipeCatSeg'), text,
+        platform: getSegVal('swipePlatSeg'), offer: 'Tous',
+        notes: $('#swipeNotes').value.trim(),
+      }),
+    });
+    if (res.ok) loadSwipeFiles();
+    else { const d = await res.json(); errBox.textContent = d.detail || 'Erreur.'; errBox.style.display = 'block'; }
+  });
+
+  $$('#ressourcesSubContent [data-del-swipe]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const [cat, idx] = btn.dataset.delSwipe.split(':');
+      await fetch(`/api/swipefiles/${cat}/${idx}`, { method: 'DELETE' });
+      loadSwipeFiles();
+    });
+  });
+}
+
+// ── Benchmark ─────────────────────────────────────────────────
+async function loadBenchmark() {
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/resources/benchmark');
+    const data = await res.json();
+    renderBenchmark(data);
+  } catch (err) {
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderBenchmark(data) {
+  $('#ressourcesSubContent').innerHTML = `
+    <div class="card fade-up">
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">📊 Rapport Benchmark — État des Landing Pages 2025</h2>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin:0 0 18px">${escapeHtml(data.intro)}</p>
+      <a href="/api/resources/benchmark/pdf" class="cta" style="display:block">⬇️ Télécharger le rapport PDF</a>
+    </div>
+    <div class="kpi-grid fade-up" style="margin-top:20px">
+      ${data.stats.map(s => `
+        <div class="kpi-card">
+          <div class="kpi-label">${escapeHtml(s.label)}</div>
+          <div class="kpi-val" style="font-size:22px">${escapeHtml(s.value)}</div>
+          <div class="kpi-sub">${escapeHtml(s.sub)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── Changelog ─────────────────────────────────────────────────
+async function loadChangelog() {
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/resources/changelog');
+    const data = await res.json();
+    renderChangelog(data.versions || []);
+  } catch (err) {
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderChangelog(versions) {
+  $('#ressourcesSubContent').innerHTML = versions.map((v, i) => `
+    <div class="hist-row ${i === 0 ? 'open' : ''}" data-changelog-idx="${i}">
+      <div class="hist-top">
+        <div class="hist-body"><div class="hist-title">📋 ${escapeHtml(v.version)}</div></div>
+        <span class="hist-chevron">▶</span>
+      </div>
+      <div class="hist-detail" style="display:${i === 0 ? 'block' : 'none'};grid-template-columns:none">
+        ${v.items.map(it => `<div style="font-size:13px;color:var(--text-secondary);padding:4px 0">${escapeHtml(it)}</div>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  $$('#ressourcesSubContent .hist-row').forEach(row => {
+    row.addEventListener('click', () => {
+      row.classList.toggle('open');
+      const detail = row.querySelector('.hist-detail');
+      detail.style.display = row.classList.contains('open') ? 'block' : 'none';
     });
   });
 }
@@ -1271,9 +2639,33 @@ function updateChecklistProgress() {
 // ══════════════════════════════════════════════════════════
 // ── Creative Studio (génération d'angles) ───────────────────
 // ══════════════════════════════════════════════════════════
+const CREATIVE_SUBVIEWS = {
+  angles: { label: 'Angles rapides', render: renderCreativeAnglesForm },
+  studio: { label: 'Studio avancé (Claude)', render: renderCreativeStudioForm },
+};
+
 function renderCreative() {
+  const subNav = Object.entries(CREATIVE_SUBVIEWS).map(([key, v], i) =>
+    `<button class="sub-tab ${i === 0 ? 'active' : ''}" data-sub="${key}">${v.label}</button>`
+  ).join('');
   $('#creativeView').innerHTML = `
+    <div class="sub-tabs" id="creativeSubNav">${subNav}</div>
+    <div id="creativeSubContent"></div>
+  `;
+  $('#creativeSubNav').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    $$('button', $('#creativeSubNav')).forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    CREATIVE_SUBVIEWS[btn.dataset.sub].render();
+  });
+  CREATIVE_SUBVIEWS.angles.render();
+}
+
+function renderCreativeAnglesForm() {
+  $('#creativeSubContent').innerHTML = `
     <div class="card">
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Génère rapidement 3 angles, 5 hooks, 3 variantes de pub et un script UGC — via OpenAI, sans landing page requise.</p>
       <div class="field">
         <label class="field-label" for="creativeOffer">Décrivez votre offre</label>
         <textarea id="creativeOffer" placeholder="Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…" style="min-height:120px"></textarea>
@@ -1306,6 +2698,168 @@ function renderCreative() {
   `;
   ['creativePlatformSeg', 'creativeOfferSeg'].forEach(setupSegmented);
   $('#creativeRunBtn').addEventListener('click', runCreativeAngles);
+}
+
+// ── Studio avancé : génération complète via Claude (creative_studio/) ──
+function renderCreativeStudioForm() {
+  $('#creativeSubContent').innerHTML = `
+    <div class="card">
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Génère une page complète (headline, hook, corps, CTA) structurée par framework, via le module Creative Studio réel (Claude). Nécessite <code>ANTHROPIC_API_KEY</code> dans <code>.env</code>.</p>
+      <div class="row">
+        <div class="field">
+          <label class="field-label" for="studioName">Nom du produit</label>
+          <input type="text" id="studioName" placeholder="Ex: Formation Bourse Débutant" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="studioPrice">Prix (€)</label>
+          <input type="number" id="studioPrice" min="0" step="1" value="97" />
+        </div>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="studioDescription">Description</label>
+        <textarea id="studioDescription" placeholder="Ce que le produit fait, pour qui, le résultat obtenu…" style="min-height:100px"></textarea>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label class="field-label" for="studioAudience">Audience cible</label>
+        <input type="text" id="studioAudience" placeholder="Ex: débutants 30-50 ans, envie d'investir sans expérience" />
+      </div>
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <label class="field-label">Type de page</label>
+          <div class="segmented" id="studioKindSeg">
+            <button class="active" data-val="advertorial">Advertorial</button>
+            <button data-val="sales_page">Page de vente</button>
+            <button data-val="capture">Capture</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Framework</label>
+          <div class="segmented" id="studioFrameworkSeg">
+            <button class="active" data-val="PAS">PAS</button>
+            <button data-val="AIDA">AIDA</button>
+            <button data-val="hormozi">Hormozi</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="studioRunBtn">Générer avec Claude</button>
+      <div class="error-box" id="studioErrorBox"></div>
+    </div>
+    <div class="loading" id="studioLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Génération en cours (Claude)…</div>
+    </div>
+    <div id="studioResults"></div>
+  `;
+  ['studioKindSeg', 'studioFrameworkSeg'].forEach(setupSegmented);
+  $('#studioRunBtn').addEventListener('click', runCreativeStudio);
+}
+
+async function runCreativeStudio() {
+  const name = $('#studioName').value.trim();
+  const description = $('#studioDescription').value.trim();
+  const errBox = $('#studioErrorBox');
+  errBox.style.display = 'none';
+  if (!name || !description) {
+    errBox.textContent = 'Nom et description du produit sont requis.';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#studioRunBtn').disabled = true;
+  $('#studioLoadingBox').style.display = 'flex';
+  $('#studioResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/creative-studio/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_name: name, description,
+        price: parseFloat($('#studioPrice').value) || 0,
+        audience: $('#studioAudience').value.trim(),
+        kind: getSegVal('studioKindSeg'), framework: getSegVal('studioFrameworkSeg'),
+      }),
+    });
+    const data = await res.json();
+    $('#studioLoadingBox').style.display = 'none';
+    $('#studioRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderCreativeStudioResults(data);
+  } catch (err) {
+    $('#studioLoadingBox').style.display = 'none';
+    $('#studioRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function renderCreativeStudioResults(data) {
+  $('#studioResults').innerHTML = `
+    <div class="section fade-up">
+      <h2>${escapeHtml(data.framework)} · ${escapeHtml(data.kind)}</h2>
+      <div class="rewrite-field"><div class="rw-label">Headline</div><div class="rw-val">${escapeHtml(data.headline)}</div></div>
+      <div class="rewrite-field"><div class="rw-label">Hook</div><div class="rw-val">${escapeHtml(data.hook)}</div></div>
+      ${(data.body_sections || []).map((s, i) => `<div class="rewrite-field"><div class="rw-label">Section ${i + 1}</div><div class="rw-val">${escapeHtml(s)}</div></div>`).join('')}
+      <div class="rewrite-field"><div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(data.cta)}</div></div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Plans & Tarifs ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
+async function loadPlans() {
+  $('#plansView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const [plansRes, integRes] = await Promise.all([fetch('/api/plans'), fetch('/api/integrations/status')]);
+    const plansData = await plansRes.json();
+    const integData = await integRes.json();
+    renderPlans(plansData, integData);
+  } catch (err) {
+    $('#plansView').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderPlans(data, integrations) {
+  const plans = data.plans || {};
+  const cardsHtml = Object.entries(plans).map(([key, p]) => `
+    <div class="plan-card">
+      <div class="plan-label">${escapeHtml(p.label)}</div>
+      <div class="plan-price">${escapeHtml(p.price)}</div>
+      <ul>
+        <li>${p.audits_per_month >= 999 ? 'Audits illimités' : p.audits_per_month + ' audits / mois'}</li>
+        ${p.features.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
+
+  const integStatus = [
+    ['Slack', integrations.slack, 'SLACK_WEBHOOK_URL'],
+    ['Google Sheets', integrations.sheets, 'GOOGLE_SHEETS_CREDS + GOOGLE_SHEETS_ID'],
+    ['Notion', integrations.notion, 'NOTION_TOKEN + NOTION_DATABASE_ID'],
+  ];
+
+  $('#plansView').innerHTML = `
+    <div class="fade-up" style="margin-bottom:8px">
+      <p style="color:var(--text-secondary);font-size:14px">Ce pilote n'a pas de compte/facturation — cette page est informative. Usage ce mois-ci : <strong style="color:var(--text)">${data.usage_this_month}</strong> audit(s).</p>
+    </div>
+    <div class="plans-grid fade-up">${cardsHtml}</div>
+    <div class="dash-section fade-up">
+      <h2>🔗 Intégrations</h2>
+      ${integStatus.map(([label, ok, envVars]) => `
+        <div class="list-row">
+          <span style="font-size:16px">${ok ? '✅' : '⚪'}</span>
+          <div class="lr-body">
+            <div class="lr-title">${escapeHtml(label)}</div>
+            <div class="lr-meta">${ok ? 'Configuré' : 'Non configuré — variables : ' + escapeHtml(envVars)}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 async function runCreativeAngles() {
