@@ -109,8 +109,10 @@ son statut (non testé) et la checklist avant un vrai déploiement.
   - *Bulk* — jusqu'à 20 URLs, podium top 3, tableau trié par score.
   - *Comparaison* / *Concurrents* — 2 URLs auditées côte à côte, breakdown
     comparatif (même endpoint `/api/compare`, cadrage différent).
-  - *A/B Test* — scorer 2 variantes, historique des rounds par test, taux
-    de victoire A vs B.
+  - *A/B Test* — scorer 2 variantes d'une page de vente (URLs, mode Funnel
+    Only) OU d'une publicité (texte, mode Ads Only) — un même test garde un
+    seul type sur toute sa durée (`test_type`, affiché en badge sur chaque
+    test existant). Historique des rounds par test, taux de victoire A vs B.
 - **Suivi** :
   - *Alertes* — variations de score ≥2 pts par URL.
   - *Monitoring* — Score Trend par page (sélecteur d'URL suivie, sparkline,
