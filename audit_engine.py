@@ -409,7 +409,15 @@ def _lang_instruction(page_lang):
     return "LANGUE DE LA PAGE : Français."
 
 
-def _parse_audit_json(raw_text, mode, platform, offer_type):
+class _AuditJSONParseError(Exception):
+    """Levee par _parse_audit_json(strict=True) quand le JSON du LLM est
+    illisible. Sert de signal interne pour retenter l'appel (voir
+    _run_audit_openai/_run_audit_claude) au lieu de retourner silencieusement
+    un score 0/20 fictif des la premiere reponse malformee — c'est ce qui
+    causait de faux "0/20" perçus comme un vrai verdict par l'utilisateur."""
+
+
+def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     clean = raw_text.strip()
     for m2 in ["```json", "```"]:
         clean = clean.replace(m2, "")
@@ -433,6 +441,8 @@ def _parse_audit_json(raw_text, mode, platform, offer_type):
             continue
 
     if result is None:
+        if strict:
+            raise _AuditJSONParseError("JSON illisible")
         result = {
             "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
                     "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
@@ -524,8 +534,7 @@ def _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, mark
     system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
                                                market_context, brand_type, page_type, page_lang)
 
-    response = None
-    last_err = None
+    raw = ""
     for attempt in range(3):
         try:
             response = client.chat.completions.create(
@@ -538,6 +547,15 @@ def _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, mark
                 max_tokens=4500,
                 response_format={"type": "json_object"},
             )
+            raw = response.choices[0].message.content or ""
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            # JSON illisible malgre response_format=json_object : on retente
+            # comme une erreur reseau plutot que de retourner un score 0/20
+            # fictif des la premiere reponse malformee.
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
             break
         except Exception as e:
             last_err = str(e)
@@ -547,16 +565,16 @@ def _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, mark
                 raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
             if attempt < 2:
                 time.sleep(2 ** attempt)
-            else:
-                if "rate_limit" in last_err.lower():
-                    raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
-                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+                continue
+            if "rate_limit" in last_err.lower():
+                raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
+            raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
 
-    if response is None:
-        raise ValueError("Erreur OpenAI : pas de reponse apres 3 tentatives.")
-
-    raw = response.choices[0].message.content or ""
-    return _parse_audit_json(raw, mode, platform, offer_type)
+    # 3 tentatives, JSON toujours illisible : on retombe sur le resultat
+    # "Analyse incomplete" (comportement historique) plutot que de planter
+    # l'appelant — mais l'utilisateur a maintenant eu 3 vraies chances
+    # d'obtenir un score reel avant d'en arriver la.
+    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
 # ── APPEL CLAUDE (squelette — meme contrat que _run_audit_openai) ──
@@ -574,8 +592,7 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
     system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
                                                market_context, brand_type, page_type, page_lang)
 
-    response = None
-    last_err = None
+    raw = ""
     for attempt in range(3):
         try:
             response = client.messages.create(
@@ -585,6 +602,15 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
                 system=system,
                 messages=[{"role": "user", "content": user_prompt}],
             )
+            text_block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+            raw = text_block.text if text_block is not None else ""
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            # Meme logique que _run_audit_openai : JSON illisible -> on
+            # retente plutot que de fabriquer un score 0/20 des le 1er coup.
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
             break
         except Exception as e:
             last_err = str(e)
@@ -595,17 +621,12 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
                 raise ValueError("Credit Claude epuise. Verifiez votre solde sur console.anthropic.com.")
             if attempt < 2:
                 time.sleep(2 ** attempt)
-            else:
-                if "rate_limit" in low or "overloaded" in low:
-                    raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
-                raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
+                continue
+            if "rate_limit" in low or "overloaded" in low:
+                raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
+            raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
 
-    if response is None:
-        raise ValueError("Erreur Claude : pas de reponse apres 3 tentatives.")
-
-    text_block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
-    raw = text_block.text if text_block is not None else ""
-    return _parse_audit_json(raw, mode, platform, offer_type)
+    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
 # ── POINT D'ENTREE UNIQUE — bascule de moteur ────────────────────

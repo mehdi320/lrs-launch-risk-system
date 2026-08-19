@@ -1826,8 +1826,12 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS -- cite le contenu analyse."]
     user_prompt = "\n".join(user_parts)
 
-    # Retry automatique : 3 tentatives avec backoff
-    response = None
+    # Retry automatique : 3 tentatives avec backoff. Le JSON illisible est
+    # retente comme une erreur reseau (via _AuditJSONParseError) plutot que
+    # de retourner silencieusement un score 0/20 fictif des la 1ere reponse
+    # malformee — c'est ce qui pouvait faire passer un vrai audit pour un
+    # "0/20" sans qu'aucune erreur ne soit visible.
+    raw = ""
     last_err = None
     for attempt in range(3):
         try:
@@ -1841,7 +1845,13 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
                 max_tokens=4500,
                 response_format={"type": "json_object"},
             )
-            break  # Succès
+            raw = response.choices[0].message.content or ""
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            break
         except Exception as e:
             last_err = str(e)
             if "api_key" in last_err.lower() or "authentication" in last_err.lower():
@@ -1851,83 +1861,29 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
             if attempt < 2:
                 wait = 2 ** attempt  # 1s, 2s
                 time.sleep(wait)
-            else:
-                # 3ème échec
-                if "rate_limit" in last_err.lower():
-                    raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
-                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+                continue
+            # 3ème échec
+            if "rate_limit" in last_err.lower():
+                raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
+            raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
 
-    if response is None:
-        raise ValueError("Erreur OpenAI : pas de reponse apres 3 tentatives.")
-
-    raw = response.choices[0].message.content or ""
-
-    # Nettoyage JSON robuste (securite supplementaire)
-    clean = raw.strip()
-    for m2 in ["```json", "```"]:
-        clean = clean.replace(m2, "")
-    clean = clean.strip()
-
-    if clean and clean[0] == '"':
-        clean = "{" + clean
-    if clean and not clean.rstrip().endswith("}"):
-        clean = clean.rstrip() + "}"
-
-    s, e2 = clean.find("{"), clean.rfind("}") + 1
-    if s != -1 and e2 > s:
-        clean = clean[s:e2]
-
-    result = None
-    for attempt in [clean, clean + "}", clean + "}}"]:
-        try:
-            result = json.loads(attempt)
-            break
-        except json.JSONDecodeError:
-            continue
-
-    if result is None:
-        result = {
-            "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
-                    "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
-            "message_match": {"status": "N/A", "score_explication": "Analyse incomplete - relance l'audit", "mismatches": [], "fix": []},
-            "why_this_score": {
-                "hook_detail": "Analyse incomplete - relance l'audit",
-                "offer_detail": "Analyse incomplete - relance l'audit",
-                "trust_detail": "Analyse incomplete - relance l'audit",
-                "friction_detail": "Analyse incomplete - relance l'audit",
-                "top_3_reasons": ["Analyse incomplete", "Relance l'audit", "Si erreur persiste, reduis le contenu"],
-                "critical_gaps": ["Analyse incomplete"]
-            },
-            "fix_plan": {"priority_actions": [], "ab_tests": []},
-            "rewrite": {"headline": "", "subheadline": "", "hero_bullets": [], "cta_primary": "",
-                        "cta_secondary": "", "proof_block": "", "offer_stack": [], "guarantee": "", "faq_objections": []},
-            "ads": {"angles": [], "hooks": [], "variants": [], "script_ugc_20s": ""}
-        }
-        st.warning("Le modele n'a pas retourne un JSON valide. Relance l'audit ou reduis le contenu.")
-
-    # Calculs cote code
-    bd       = result.get("lrs", {}).get("score_breakdown_5", {})
-    hook     = max(0, min(5, int(bd.get("hook", 0))))
-    offer    = max(0, min(5, int(bd.get("offer", 0))))
-    trust    = max(0, min(5, int(bd.get("trust", 0))))
-    friction = max(0, min(5, int(bd.get("friction_message_match", 0))))
-    score    = hook + offer + trust + friction
-
-    decision, risk = get_decision(score)
-    tier            = get_tier(score)
-    bench           = CVR_BENCHMARKS.get(offer_type, CVR_BENCHMARKS["Digital product"])
-    cvr_cur, cvr_fix, cvr_up = bench[tier]
-
-    result["_c"] = {
-        "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
-        "decision": decision, "risk": risk,
-        "cvr_cur": cvr_cur, "cvr_fix": cvr_fix, "cvr_up": cvr_up,
-    }
-    return result
+    # 3 tentatives, JSON toujours illisible : resultat "Analyse incomplete"
+    # (comportement historique) plutot que de planter l'appelant.
+    st.warning("Le modele n'a pas retourne un JSON valide apres 3 tentatives. Relance l'audit ou reduis le contenu.")
+    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
 # ── HELPERS : parse JSON + compute scores (partagés par run_audit et run_audit_stream) ──
-def _parse_audit_json(raw_text, mode, platform, offer_type):
+class _AuditJSONParseError(Exception):
+    """Levée par _parse_audit_json(strict=True) quand le JSON du LLM est
+    illisible. Signal interne pour retenter l'appel (voir run_audit et
+    run_audit_stream) au lieu de retourner silencieusement un score 0/20
+    fictif dès la première réponse malformée — c'est ce qui pouvait faire
+    apparaître un vrai audit (ex: une pub) comme "0/20" sans qu'aucune
+    erreur ne soit signalée à l'utilisateur."""
+
+
+def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     """Parse le JSON brut retourné par le LLM et compute les scores."""
     clean = raw_text.strip()
     for m2 in ["```json", "```"]:
@@ -1950,6 +1906,8 @@ def _parse_audit_json(raw_text, mode, platform, offer_type):
             continue
 
     if result is None:
+        if strict:
+            raise _AuditJSONParseError("JSON illisible")
         result = {
             "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
                     "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
@@ -2128,7 +2086,20 @@ def run_audit_stream(mode, platform, offer_type, landing_content, ad_text, marke
                 # Update token counter every ~200 chars
                 if status_tokens and n % 200 < len(delta) + 1:
                     status_tokens.caption(f"⏳ {n} caractères reçus...")
-            break  # success
+
+            if status_tokens:
+                status_tokens.caption(f"✅ {len(full_text)} caractères — parsing JSON...")
+            # JSON illisible malgre response_format=json_object : retente
+            # comme une erreur reseau plutot que de retourner un score 0/20
+            # fictif des la 1ere reponse malformee.
+            return _parse_audit_json(full_text, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            if attempt < 2:
+                if status_tokens:
+                    status_tokens.caption("⚠️ Réponse invalide, nouvelle tentative...")
+                time.sleep(2 ** attempt)
+                continue
+            break
         except Exception as e:
             last_err = str(e)
             if "api_key" in last_err.lower() or "authentication" in last_err.lower():
@@ -2137,15 +2108,15 @@ def run_audit_stream(mode, platform, offer_type, landing_content, ad_text, marke
                 raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
             if attempt < 2:
                 time.sleep(2 ** attempt)
-            else:
-                if "rate_limit" in last_err.lower():
-                    raise ValueError("Rate limit OpenAI apres 3 tentatives. Attendez et relancez.")
-                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+                continue
+            if "rate_limit" in last_err.lower():
+                raise ValueError("Rate limit OpenAI apres 3 tentatives. Attendez et relancez.")
+            raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
 
-    if status_tokens:
-        status_tokens.caption(f"✅ {len(full_text)} caractères — parsing JSON...")
-
-    return _parse_audit_json(full_text, mode, platform, offer_type)
+    # 3 tentatives, JSON toujours illisible : resultat "Analyse incomplete"
+    # (comportement historique) plutot que de planter l'appelant.
+    st.warning("Le modele n'a pas retourne un JSON valide apres 3 tentatives. Relance l'audit ou reduis le contenu.")
+    return _parse_audit_json(full_text, mode, platform, offer_type, strict=False)
 
 
 # ── EXPORT TXT ───────────────────────────────────────────────
