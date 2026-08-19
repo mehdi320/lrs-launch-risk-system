@@ -1414,19 +1414,20 @@ async function renderABTestShell() {
   $('#multiSubContent').innerHTML = `
     <div class="card">
       <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">🧪 A/B Test Tracker</h2>
-      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Scorez deux variantes — d'une page de vente ou d'une publicité. LRS identifie laquelle convertit mieux et sur quels critères.</p>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Scorez deux variantes — d'une page de vente ou d'un advertorial. LRS identifie laquelle convertit mieux et sur quels critères.</p>
       <div class="field" style="margin-bottom:20px">
         <label class="field-label">Type de test</label>
         <div class="segmented" id="abTypeSeg">
           <button class="active" data-val="page">📄 Page de vente</button>
-          <button data-val="advert">📢 Publicité</button>
+          <button data-val="advertorial">📰 Advertorial</button>
         </div>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:6px">Advertorial = article/récit avant redirection vers la vraie page de vente. Le scoring s'adapte : pas de pénalité pour l'absence de stack d'offre/prix/garantie, qui sont sur la page suivante.</div>
       </div>
       <div class="field">
         <label class="field-label" for="abName">Nom du test</label>
         <input type="text" id="abName" placeholder="Ex: Headline V1 vs V2 — Juillet" />
       </div>
-      <div class="row" id="abPageFields">
+      <div class="row">
         <div class="field">
           <label class="field-label" style="color:var(--accent)">🔵 VARIANTE A (contrôle)</label>
           <input type="url" id="abUrlA" placeholder="https://page-originale.com" />
@@ -1434,16 +1435,6 @@ async function renderABTestShell() {
         <div class="field">
           <label class="field-label" style="color:var(--warning)">🟡 VARIANTE B (challenger)</label>
           <input type="url" id="abUrlB" placeholder="https://page-variante.com" />
-        </div>
-      </div>
-      <div class="row" id="abAdvertFields" style="display:none">
-        <div class="field">
-          <label class="field-label" style="color:var(--accent)">🔵 VARIANTE A (contrôle)</label>
-          <textarea id="abTextA" placeholder="Primary text, headline, script UGC..."></textarea>
-        </div>
-        <div class="field">
-          <label class="field-label" style="color:var(--warning)">🟡 VARIANTE B (challenger)</label>
-          <textarea id="abTextB" placeholder="Primary text, headline, script UGC..."></textarea>
         </div>
       </div>
       <div class="row">
@@ -1471,13 +1462,6 @@ async function renderABTestShell() {
     <div id="abExisting"></div>
   `;
   ['abPlatformSeg', 'abTypeSeg'].forEach(setupSegmented);
-  $('#abTypeSeg').addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const isAdvert = btn.dataset.val === 'advert';
-    $('#abPageFields').style.display = isAdvert ? 'none' : 'flex';
-    $('#abAdvertFields').style.display = isAdvert ? 'flex' : 'none';
-  });
   $('#abRunBtn').addEventListener('click', runABTest);
   await loadExistingABTests();
 }
@@ -1485,15 +1469,12 @@ async function renderABTestShell() {
 async function runABTest() {
   const name = $('#abName').value.trim();
   const testType = getSegVal('abTypeSeg');
-  const isAdvert = testType === 'advert';
-  const valA = (isAdvert ? $('#abTextA').value : $('#abUrlA').value).trim();
-  const valB = (isAdvert ? $('#abTextB').value : $('#abUrlB').value).trim();
+  const urlA = $('#abUrlA').value.trim();
+  const urlB = $('#abUrlB').value.trim();
   const errBox = $('#abErrorBox');
   errBox.style.display = 'none';
-  if (!name || !valA || !valB) {
-    errBox.textContent = isAdvert
-      ? 'Le nom du test et les deux textes de pub sont requis.'
-      : 'Le nom du test et les deux URLs sont requis.';
+  if (!name || !urlA || !urlB) {
+    errBox.textContent = 'Le nom du test et les deux URLs sont requis.';
     errBox.style.display = 'block';
     return;
   }
@@ -1504,10 +1485,9 @@ async function runABTest() {
   try {
     const payload = {
       name, hypothesis: $('#abHypo').value.trim(), test_type: testType,
+      url_a: urlA, url_b: urlB,
       platform: getSegVal('abPlatformSeg'),
     };
-    if (isAdvert) { payload.ad_text_a = valA; payload.ad_text_b = valB; }
-    else { payload.url_a = valA; payload.url_b = valB; }
     const res = await fetch('/api/abtests/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1590,7 +1570,9 @@ function renderExistingABTests(abtests) {
         const winsB = rounds.filter(r => r.winner === 'B').length;
         // test_type absent = tests crees avant cette distinction, tous
         // etaient des pages de vente (seul mode disponible a l'epoque).
-        const typeBadge = t.test_type === 'advert' ? '📢 Publicité' : '📄 Page de vente';
+        // "advert" = valeur d'une version anterieure (texte de pub), corrigee
+        // en "advertorial" (page de contenu avant redirection).
+        const typeBadge = (t.test_type === 'advertorial' || t.test_type === 'advert') ? '📰 Advertorial' : '📄 Page de vente';
         return `
           <div class="entity-card">
             <div class="entity-head">

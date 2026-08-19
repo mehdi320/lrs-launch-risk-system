@@ -395,6 +395,17 @@ def _page_type_instructions(page_type):
     if "lead gen" in pt:
         return ("ADAPTATION SCORING LEAD GEN : OFFER = valeur perçue lead magnet, "
                 "FRICTION = formulaire simple (1 champ = 5/5).")
+    if "advertorial" in pt:
+        return ("ADAPTATION SCORING ADVERTORIAL : cette page est un article/récit au format "
+                "éditorial qui prépare le lecteur AVANT de le rediriger vers la vraie page de "
+                "vente — ce n'est PAS une page de vente directe. HOOK = force du hook narratif "
+                "et de la curiosité (pas une promesse de résultat chiffré). OFFER = réinterprété "
+                "comme la force de l'incitation à cliquer vers la suite — NE PAS pénaliser "
+                "l'absence de stack d'offre, de prix ou de garantie, normaux ici puisqu'ils sont "
+                "sur la page suivante. TRUST = crédibilité du récit (témoignage, expertise "
+                "perçue, ton authentique). FRICTION = clarté et fluidité de la transition/CTA "
+                "vers la page suivante, pas le parcours d'achat. Ne recommande JAMAIS d'ajouter "
+                "un stack d'offre ou une garantie sur l'advertorial lui-même.")
     if "blog" in pt or "article" in pt:
         return ("ADAPTATION SCORING BLOG : interprete scores dans contexte éditorial. "
                 "Propose amélioration CTAs article.")

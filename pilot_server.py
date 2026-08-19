@@ -564,11 +564,9 @@ def list_abtests():
 class ABTestRunRequest(BaseModel):
     name: str = ""
     hypothesis: str = ""
-    test_type: str = "page"  # "page" (landing page, Funnel Only) | "advert" (texte pub, Ads Only)
+    test_type: str = "page"  # "page" (page de vente) | "advertorial" (article avant redirection)
     url_a: str = ""
     url_b: str = ""
-    ad_text_a: str = ""
-    ad_text_b: str = ""
     platform: str = "Meta"
     offer_type: str = "Digital product"
     model: str = "gpt-4o-mini"
@@ -577,32 +575,26 @@ class ABTestRunRequest(BaseModel):
 @app.post("/api/abtests/run")
 def run_abtest(req: ABTestRunRequest):
     name = req.name.strip()
-    is_advert = req.test_type == "advert"
-    if is_advert:
-        val_a, val_b = req.ad_text_a.strip(), req.ad_text_b.strip()
-    else:
-        val_a, val_b = req.url_a.strip(), req.url_b.strip()
-    if not name or not val_a or not val_b:
-        raise HTTPException(status_code=400, detail="Nom du test et les deux variantes sont requis.")
-
-    mode_ab = "Ads Only" if is_advert else "Funnel Only"
+    is_advertorial = req.test_type == "advertorial"
+    url_a, url_b = req.url_a.strip(), req.url_b.strip()
+    if not name or not url_a or not url_b:
+        raise HTTPException(status_code=400, detail="Nom du test et les deux URLs sont requis.")
 
     variant_results = {}
-    for variant, val in [("A", val_a), ("B", val_b)]:
-        if is_advert:
-            content, ad_text = "", val
-            page_type, page_lang = "Non applicable (mode Ads Only)", "fr"
-        else:
-            content, status, is_js = audit_engine.extract_page(val)
-            if not content:
-                raise HTTPException(status_code=422, detail=f"Variante {variant} : impossible d'extraire le contenu ({status}).")
-            ad_text = ""
-            page_type = audit_engine.detect_page_type(content, val)
-            page_lang = audit_engine.detect_language(content)
+    for variant, url in [("A", url_a), ("B", url_b)]:
+        content, status, is_js = audit_engine.extract_page(url)
+        if not content:
+            raise HTTPException(status_code=422, detail=f"Variante {variant} : impossible d'extraire le contenu ({status}).")
+        page_lang = audit_engine.detect_language(content)
+        # Advertorial : force explicitement le page_type plutot que de se fier a
+        # detect_page_type(), qui ne connait pas cette categorie et classerait la
+        # page comme "Sales Page" — la penalisant a tort sur OFFER/FRICTION pour
+        # des elements normalement absents (l'offre est sur la page suivante).
+        page_type = "Advertorial" if is_advertorial else audit_engine.detect_page_type(content, url)
         try:
             result = audit_engine.run_audit(
-                mode=mode_ab, platform=req.platform, offer_type=req.offer_type,
-                landing_content=content, ad_text=ad_text, market_context="",
+                mode="Funnel Only", platform=req.platform, offer_type=req.offer_type,
+                landing_content=content, ad_text="", market_context="",
                 model=req.model, page_type=page_type, page_lang=page_lang,
             )
         except ValueError as e:

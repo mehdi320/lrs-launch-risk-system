@@ -1751,6 +1751,23 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
             "- FRICTION : formulaire simple (1 seul champ email = 5/5, formulaire long = 1/5).\n"
             "- TRUST : témoignages de personnes ayant bénéficié du contenu gratuit."
         )
+    elif "advertorial" in page_type_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING ADVERTORIAL :\n"
+            "Cette page est un article/récit au format éditorial qui prépare le lecteur AVANT "
+            "de le rediriger vers la vraie page de vente — ce n'est PAS une page de vente directe.\n"
+            "- HOOK : évalue la force du hook narratif et de la curiosité, pas une promesse de "
+            "résultat chiffré.\n"
+            "- OFFER : réinterprété comme la force de l'incitation à cliquer vers la suite — "
+            "NE PAS pénaliser l'absence de stack d'offre, de prix ou de garantie, normaux ici "
+            "puisqu'ils sont sur la page suivante.\n"
+            "- TRUST : évalue la crédibilité du récit (témoignage, expertise perçue, ton "
+            "authentique).\n"
+            "- FRICTION : évalue la clarté et la fluidité de la transition/CTA vers la page "
+            "suivante, pas le parcours d'achat.\n"
+            "- Ne recommande JAMAIS d'ajouter un stack d'offre ou une garantie sur l'advertorial "
+            "lui-même."
+        )
     elif "blog" in page_type_lower or "article" in page_type_lower:
         page_type_instructions = (
             "ADAPTATION SCORING BLOG/ARTICLE :\n"
@@ -1998,6 +2015,16 @@ def run_audit_stream(mode, platform, offer_type, landing_content, ad_text, marke
     elif "lead gen" in pt_lower:
         page_type_instructions = ("ADAPTATION SCORING LEAD GEN : OFFER = valeur perçue lead magnet, "
                                    "FRICTION = formulaire simple (1 champ = 5/5).")
+    elif "advertorial" in pt_lower:
+        page_type_instructions = (
+            "ADAPTATION SCORING ADVERTORIAL : article/récit éditorial qui prépare le lecteur AVANT "
+            "de le rediriger vers la vraie page de vente, pas une page de vente directe. "
+            "HOOK = force du hook narratif/curiosité (pas une promesse chiffrée). "
+            "OFFER = force de l'incitation à cliquer vers la suite — NE PAS pénaliser l'absence de "
+            "stack d'offre/prix/garantie, normaux ici car sur la page suivante. "
+            "TRUST = crédibilité du récit. FRICTION = clarté de la transition/CTA vers la suite, "
+            "pas le parcours d'achat. Ne recommande jamais d'ajouter un stack d'offre ici."
+        )
     elif "blog" in pt_lower or "article" in pt_lower:
         page_type_instructions = ("ADAPTATION SCORING BLOG : interprete scores dans contexte éditorial. "
                                    "Propose amélioration CTAs article.")
@@ -4168,30 +4195,27 @@ def render_ab_tracker(api_key):
     abtests  = load_abtests()
 
     st.markdown(f"<h4 style='color:{txt}'>🧪 A/B Test Tracker</h4>", unsafe_allow_html=True)
-    st.caption("Scorez deux variantes — d'une page de vente ou d'une publicité. LRS identifie laquelle convertit mieux et sur quels critères.")
+    st.caption("Scorez deux variantes — d'une page de vente ou d'un advertorial. LRS identifie laquelle convertit mieux et sur quels critères.")
 
     ab_test_type = st.radio(
         "Type de test",
-        ["📄 Page de vente (landing page)", "📢 Publicité (texte d'annonce)"],
+        ["📄 Page de vente (landing page)", "📰 Advertorial"],
         key="ab_test_type", horizontal=True,
+        help="Advertorial = article/récit avant redirection vers la vraie page de vente. Le scoring "
+             "s'adapte : pas de pénalité pour l'absence de stack d'offre/prix/garantie, qui sont sur "
+             "la page suivante.",
     )
-    is_advert_ab = ab_test_type.startswith("📢")
+    is_advertorial_ab = ab_test_type.startswith("📰")
 
     with st.form("ab_form"):
         ab_name = st.text_input("Nom du test", placeholder="Ex: Headline V1 vs V2 — Juillet", key="ab_name")
         c1, c2  = st.columns(2)
         with c1:
             st.markdown("<div style='color:var(--accent);font-weight:700;font-size:0.85rem'>🔵 Variante A (contrôle)</div>", unsafe_allow_html=True)
-            if is_advert_ab:
-                input_a = st.text_area("Texte pub — Variante A", placeholder="Primary text, headline, script UGC...", key="ab_text_a", height=110)
-            else:
-                input_a = st.text_input("URL variante A", placeholder="https://page-originale.com", key="ab_url_a")
+            url_a = st.text_input("URL variante A", placeholder="https://page-originale.com", key="ab_url_a")
         with c2:
             st.markdown("<div style='color:var(--warning);font-weight:700;font-size:0.85rem'>🟡 Variante B (challenger)</div>", unsafe_allow_html=True)
-            if is_advert_ab:
-                input_b = st.text_area("Texte pub — Variante B", placeholder="Primary text, headline, script UGC...", key="ab_text_b", height=110)
-            else:
-                input_b = st.text_input("URL variante B", placeholder="https://page-variante.com", key="ab_url_b")
+            url_b = st.text_input("URL variante B", placeholder="https://page-variante.com", key="ab_url_b")
 
         ab1, ab2 = st.columns(2)
         with ab1:
@@ -4203,31 +4227,30 @@ def render_ab_tracker(api_key):
 
         run_ab = st.form_submit_button("🧪 Lancer le test A/B", type="primary", use_container_width=True)
 
-    if run_ab and ab_name.strip() and input_a.strip() and input_b.strip():
-        mode_ab  = "Ads Only" if is_advert_ab else "Funnel Only"
+    if run_ab and ab_name.strip() and url_a.strip() and url_b.strip():
         _plan_ab = _get_plan()
-        if mode_ab not in PLAN_LIMITS[_plan_ab]["modes"]:
+        if "Funnel Only" not in PLAN_LIMITS[_plan_ab]["modes"]:
             st.error(t("mode_locked"))
         else:
             results_ab = {}
-            for variant, val_v in [("A", input_a.strip()), ("B", input_b.strip())]:
+            for variant, url_v in [("A", url_a.strip()), ("B", url_b.strip())]:
                 label = f"Variante {variant}"
                 with st.status(f"🧠 Analyse {label}...", expanded=True) as _st_ab:
                     _sp_ab = st.empty()
                     try:
-                        if is_advert_ab:
-                            content_ab, ad_text_ab = "", val_v
-                            pt_ab, pl_ab = "Non applicable (mode Ads Only)", "fr"
-                        else:
-                            content_ab, _, _ = extract_page(val_v)
-                            if not content_ab:
-                                st.error(f"{label} : impossible d'extraire le contenu.")
-                                continue
-                            ad_text_ab = ""
-                            pt_ab = detect_page_type(content_ab, val_v)
-                            pl_ab = detect_language(content_ab)
-                        r_ab  = run_audit_stream(mode_ab, ab_plat, ab_offer,
-                                                  content_ab, ad_text_ab, "", ab_model,
+                        content_ab, _, _ = extract_page(url_v)
+                        if not content_ab:
+                            st.error(f"{label} : impossible d'extraire le contenu.")
+                            continue
+                        pl_ab = detect_language(content_ab)
+                        # Advertorial : force explicitement le page_type plutot que de se fier
+                        # a detect_page_type(), qui ne connait pas cette categorie et pourrait
+                        # classer la page comme "Sales Page" — la penalisant a tort sur
+                        # OFFER/FRICTION pour des elements qui sont normalement absents
+                        # (l'offre est sur la page suivante, pas sur l'advertorial).
+                        pt_ab = "Advertorial" if is_advertorial_ab else detect_page_type(content_ab, url_v)
+                        r_ab  = run_audit_stream("Funnel Only", ab_plat, ab_offer,
+                                                  content_ab, "", "", ab_model,
                                                   page_type=pt_ab, page_lang=pl_ab,
                                                   status_stage=_sp_ab, status_tokens=st.empty())
                         results_ab[variant] = r_ab
@@ -4250,7 +4273,7 @@ def render_ab_tracker(api_key):
                 if test_key not in abtests:
                     abtests[test_key] = {
                         "name": test_key, "hypothesis": ab_hypo,
-                        "test_type": "advert" if is_advert_ab else "page",
+                        "test_type": "advertorial" if is_advertorial_ab else "page",
                         "rounds": [], "created": ts_ab,
                     }
                 abtests[test_key]["rounds"].append({
@@ -4317,8 +4340,10 @@ def render_ab_tracker(api_key):
             last   = rounds[-1]
             # "test_type" absent = tests crees avant cette distinction, tous
             # etaient des pages de vente (seul mode disponible a l'epoque).
+            # "advert" = valeur d'une version anterieure de cette fonctionnalite
+            # (texte de pub) corrigee en "advertorial" (page de contenu).
             type_ab = tdata.get("test_type", "page")
-            type_badge = "📢 Publicité" if type_ab == "advert" else "📄 Page de vente"
+            type_badge = "📰 Advertorial" if type_ab in ("advertorial", "advert") else "📄 Page de vente"
             with st.expander(f"🧪 {tname} — {type_badge} — {len(rounds)} round(s) · A:{wins_a} vs B:{wins_b}"):
                 st.caption(f"{type_badge} · Hypothèse : {tdata.get('hypothesis','')}")
                 for i, r in enumerate(reversed(rounds[-5:])):
