@@ -2276,8 +2276,6 @@ def export_txt(result, meta):
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders as email_encoders
 
 def _get_smtp_config():
     """Lit la config SMTP depuis les secrets Streamlit ou les variables d'env."""
@@ -5487,7 +5485,6 @@ def render_bulk(api_key):
         uploaded_csv = st.file_uploader("Importer un CSV (colonne 'url')", type=["csv","txt"], key="bulk_csv_upload")
         if uploaded_csv:
             try:
-                import io as _io
                 content_csv = uploaded_csv.read().decode("utf-8", errors="ignore")
                 lines = content_csv.splitlines()
                 # Détecter si CSV avec header ou liste brute
@@ -6407,8 +6404,6 @@ def render_quick_audit_result(qr):
 
 def render_admin_view():
     """Vue admin — métriques d'usage (accès protégé par mot de passe admin)."""
-    import hashlib as _hashlib
-
     admin_pw = ""
     try:
         admin_pw = st.secrets.get("admin_password", "")
