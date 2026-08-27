@@ -1,7 +1,8 @@
-# LRS™ — image unique pour les deux surfaces web (pilote FastAPI +
-# app Streamlit), qui partagent le même code et les mêmes dépendances.
-# Le service à lancer est choisi par la commande (voir docker-compose.yml
-# ou --entrypoint/CMD au run) ; ce Dockerfile installe et copie le code.
+# LRS™ — image unique pour les trois surfaces web (pilote FastAPI, app
+# Streamlit, service de diffusion/webhook Stripe Creative Studio), qui
+# partagent le même code et les mêmes dépendances. Le service à lancer est
+# choisi par la commande (voir docker-compose.yml ou --entrypoint/CMD au
+# run) ; ce Dockerfile installe et copie le code.
 #
 # Squelette non testé en conditions réelles (pas de démon Docker
 # disponible pendant son écriture) — build/run à valider avant tout
@@ -26,8 +27,9 @@ RUN useradd --create-home lrs \
     && chown -R lrs:lrs /app
 USER lrs
 
-EXPOSE 8501 8600
+EXPOSE 8501 8600 8000
 
-# Commande par défaut : le pilote FastAPI. docker-compose.yml définit un
-# second service (même image) qui la surcharge pour lancer Streamlit.
+# Commande par défaut : le pilote FastAPI. docker-compose.yml définit deux
+# autres services (même image) qui la surchargent pour lancer Streamlit et
+# le service de diffusion/webhook Stripe (creative_studio.serving.app).
 CMD ["uvicorn", "pilot_server:app", "--host", "0.0.0.0", "--port", "8600"]

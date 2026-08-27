@@ -262,3 +262,52 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
         return True
     except Exception:
         return False
+
+
+def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
+    """Envoie le lien de connexion à usage unique (15 min) pour accéder à LRS."""
+    host, port, user, password = smtp_config or get_smtp_config()
+    if not host or not user or not to_email:
+        return False
+
+    html_body = f"""
+<!DOCTYPE html>
+<html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
+<div style='max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
+            box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
+  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
+    <div style='color:#fff;font-size:1.2rem;font-weight:800'>🚦 LRS™ — Votre lien de connexion</div>
+  </div>
+  <div style='padding:24px 28px'>
+    <p style='color:#333;font-size:0.95rem;line-height:1.6'>
+      Cliquez sur le bouton ci-dessous pour accéder à LRS™. Ce lien est valable
+      15 minutes et à usage unique.
+    </p>
+    <div style='text-align:center;margin:24px 0'>
+      <a href='{magic_link_url}'
+         style='display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+                padding:12px 28px;border-radius:8px;font-weight:700;font-size:0.95rem'>
+        Accéder à LRS →
+      </a>
+    </div>
+    <p style='color:#999;font-size:0.78rem;line-height:1.5'>
+      Si vous n'avez pas demandé ce lien, ignorez simplement cet email.
+    </p>
+  </div>
+</div>
+</body></html>"""
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "🚦 Votre lien de connexion LRS™"
+        msg["From"] = user
+        msg["To"] = to_email
+        msg.attach(MIMEText(html_body, "html"))
+        with smtplib.SMTP(host, port) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(user, password)
+            server.sendmail(user, to_email, msg.as_string())
+        return True
+    except Exception:
+        return False

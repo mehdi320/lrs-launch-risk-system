@@ -6,12 +6,13 @@ déploiement réel (voir checklist en bas).
 
 ## Fichiers
 
-- `Dockerfile` — image unique pour les deux surfaces web (pilote FastAPI
+- `Dockerfile` — image unique pour les trois surfaces web (pilote FastAPI
   `pilot_server.py` sur le port 8600, app Streamlit `app.py` sur le port
-  8501), qui partagent le même code et les mêmes dépendances
-  (`requirements.txt`). Le service lancé dépend de la commande (CMD par
-  défaut : le pilote).
-- `docker-compose.yml` — orchestration locale/VPS des deux services à
+  8501, service de diffusion/webhook Stripe
+  `creative_studio.serving.app` sur le port 8000), qui partagent le même
+  code et les mêmes dépendances (`requirements.txt`). Le service lancé
+  dépend de la commande (CMD par défaut : le pilote).
+- `docker-compose.yml` — orchestration locale/VPS des trois services à
   partir de la même image. Pas encore lié à une plateforme précise
   (Fly.io, Render, VPS...).
 - `.dockerignore` — exclut secrets locaux (`.env`), état runtime
@@ -22,7 +23,10 @@ déploiement réel (voir checklist en bas).
 `app.py` et `pilot_server.py` écrivent leur état (historique, projets,
 planification, etc. — voir `PILOT_UI.md`) dans des fichiers `.lrs_*.json`
 situés **à côté du code**, pas dans un répertoire de données dédié. Le
-Creative Studio ajoute `.lrs_creative_studio.db` (SQLite) au même endroit.
+Creative Studio ajoute `.lrs_creative_studio.db` (SQLite, funnels/tests
+A/B) et `user_accounts.py` ajoute `.lrs_users.db` (SQLite, comptes/statut
+d'abonnement Stripe — volontairement séparé de `.lrs_creative_studio.db`,
+voir sa docstring) au même endroit.
 
 `docker-compose.yml` contourne ça pour l'instant avec un bind mount
 `.:/app` (le dépôt hôte remplace le code copié dans l'image) : l'état
@@ -67,20 +71,35 @@ fois la plateforme cible choisie.
       seul, sans TLS).
 - [ ] Clés Meta/TikTok Ads si la Connexion API Pub doit fonctionner en
       prod (`ads_api.py`).
-- [ ] SMTP (`SMTP_HOST/PORT/USER/PASSWORD`) si les emails (rapport
-      d'audit, alertes monitoring, digest) doivent être envoyés
-      (`email_alerts.py`).
-- [ ] `STRIPE_WEBHOOK_SECRET` si le service de diffusion Creative Studio
-      doit vérifier des paiements réels.
+- [ ] SMTP (`SMTP_HOST/PORT/USER/PASSWORD`) — nécessaire pour les emails
+      (rapport d'audit, alertes monitoring, digest, `email_alerts.py`) et
+      **obligatoire** pour le lien magique de connexion à l'app (voir
+      `user_accounts.py`) : sans SMTP configuré, un utilisateur activé par
+      Stripe ne peut pas recevoir son lien d'accès.
+- [ ] `STRIPE_WEBHOOK_SECRET` — obligatoire dès que le service de diffusion
+      (`creative_studio.serving.app`, port 8000) doit vérifier des
+      événements réels. Sert désormais à deux choses sur le même endpoint
+      `/webhook/stripe` : confirmation d'achat funnel Creative Studio, et
+      activation/mise à jour de l'abonnement LRS (voir
+      `check_subscription_access()` dans `app.py`). Dans le Dashboard
+      Stripe, l'endpoint doit écouter `checkout.session.completed`,
+      `customer.subscription.updated` et `customer.subscription.deleted`.
+- [ ] `STRIPE_BETA_PRICE_ID`, `LRS_APP_URL`, `LRS_SALES_PAGE_URL` —
+      nécessaires pour que `/checkout/beta` (Session Checkout du plan
+      bêta) et le lien magique envoyé par email fonctionnent. Sans
+      `LRS_SALES_PAGE_URL`, `/checkout/beta` refuse de créer une session
+      (pas de `cancel_url` fiable).
 - [ ] Healthcheck : `GET /api/health` (pilote) répond `{"status":"ok"}`
       sans authentification, même si `APP_PASSWORD` est défini — à
       brancher sur le mécanisme de la plateforme (Docker `HEALTHCHECK`,
       load balancer...).
-- [ ] Reverse proxy / TLS devant les deux ports (8501 Streamlit, 8600
-      pilote) si exposés publiquement — aucun des deux ne sert de TLS
-      lui-même.
+- [ ] Reverse proxy / TLS devant les trois ports (8501 Streamlit, 8600
+      pilote, 8000 service de diffusion/webhook) si exposés publiquement —
+      aucun des trois ne sert de TLS lui-même. Le port 8000 doit être
+      joignable par Stripe pour que le webhook fonctionne.
 - [ ] Sauvegarde du volume de données une fois la persistance résolue
-      (historique d'audits, base Creative Studio).
+      (historique d'audits, base Creative Studio, base comptes/abonnements
+      `.lrs_users.db`).
 
 ## Hors périmètre de ce squelette
 

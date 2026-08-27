@@ -1,10 +1,15 @@
 """Service de diffusion public du module Creative Studio.
 
-Rôle strictement limité à trois choses que Streamlit ne sait pas faire :
+Rôle limité à quatre choses que Streamlit ne sait pas faire :
 - servir la variante assignée à un visiteur (split de trafic stable) ;
 - tracker les événements (vue, clic vers paiement) ;
-- recevoir le webhook Stripe de confirmation d'achat et le relier à la
-  bonne variante via `client_reference_id`.
+- recevoir le webhook Stripe de confirmation d'achat funnel et le relier
+  à la bonne variante via `client_reference_id` ;
+- recevoir le webhook Stripe de l'abonnement bêta LRS (mode="subscription")
+  et gérer la Session Checkout correspondante — même endpoint webhook que
+  les achats funnel (mêmes secret/config Stripe déjà en place), branché
+  sur `session.mode` ; écrit dans user_accounts.py (base séparée du reste
+  de Creative Studio, voir sa docstring).
 
 Lancement : uvicorn creative_studio.serving.app:app --port 8000
 """
@@ -23,6 +28,8 @@ try:
 except ImportError:  # dépendance optionnelle tant que le webhook n'est pas utilisé
     stripe = None
 
+import email_alerts
+import user_accounts
 from creative_studio.core.variants import Event, EventType, FormSubmission, FormSubmissionSource, utcnow_iso
 from creative_studio.storage.db import init_db
 from creative_studio.storage.media import MEDIA_DIR, ensure_media_dir
@@ -45,6 +52,11 @@ from creative_studio.serving.templates import render_variant_page
 VISITOR_COOKIE = "lrs_visitor_id"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 ALLOW_UNVERIFIED_WEBHOOK = os.environ.get("LRS_CS_ALLOW_UNVERIFIED_WEBHOOK", "").lower() == "true"
+
+# ── Abonnement bêta LRS (distinct des Payment Links funnel ci-dessus) ──
+STRIPE_BETA_PRICE_ID = os.environ.get("STRIPE_BETA_PRICE_ID", "")
+LRS_APP_URL = os.environ.get("LRS_APP_URL", "http://localhost:8501")
+LRS_SALES_PAGE_URL = os.environ.get("LRS_SALES_PAGE_URL", "")
 
 app = FastAPI(title="LRS Creative Studio — Serving")
 
@@ -250,6 +262,43 @@ async def submit_form(test_id: str, request: Request):
     return response
 
 
+@app.get("/checkout/beta")
+def checkout_beta():
+    """Redirige vers une Session Checkout Stripe pour l'abonnement bêta LRS
+    (plan unique, pas de sélecteur côté client). Session créée côté backend
+    (pas un Payment Link statique) pour maîtriser cancel_url : un paiement
+    annulé ou abandonné doit ramener vers la page de vente, jamais vers un
+    état bloquant dans l'app."""
+    if stripe is None or not STRIPE_BETA_PRICE_ID:
+        return PlainTextResponse(
+            "Paiement indisponible : STRIPE_BETA_PRICE_ID non configuré.", status_code=503
+        )
+    if not LRS_SALES_PAGE_URL:
+        return PlainTextResponse(
+            "Paiement indisponible : LRS_SALES_PAGE_URL non configuré "
+            "(nécessaire pour le retour en cas d'annulation).",
+            status_code=503,
+        )
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        line_items=[{"price": STRIPE_BETA_PRICE_ID, "quantity": 1}],
+        success_url=f"{LRS_APP_URL}?checkout=success",
+        cancel_url=LRS_SALES_PAGE_URL,
+    )
+    return RedirectResponse(url=session.url, status_code=302)
+
+
+def _map_stripe_subscription_status(stripe_status: str) -> str:
+    return {
+        "active": "active",
+        "trialing": "active",
+        "past_due": "past_due",
+        "unpaid": "past_due",
+        "canceled": "canceled",
+        "incomplete_expired": "canceled",
+    }.get(stripe_status or "", "inactive")
+
+
 @app.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     payload = await request.body()
@@ -275,25 +324,53 @@ async def stripe_webhook(request: Request):
             status_code=503,
         )
 
-    if event_data.get("type") != "checkout.session.completed":
-        return PlainTextResponse("ignoré", status_code=200)
+    event_type = event_data.get("type")
 
-    session = event_data["data"]["object"]
-    client_reference_id = session.get("client_reference_id") or ""
-    parts = client_reference_id.split(":", 2)
-    if len(parts) != 3:
-        return PlainTextResponse("client_reference_id absent ou invalide", status_code=200)
+    # ── Abonnement bêta LRS : checkout.session.completed en mode
+    # "subscription" (les achats funnel ci-dessous sont en mode "payment"),
+    # + le cycle de vie de l'abonnement (mise à jour / résiliation) —
+    # écrit dans user_accounts.py, complètement séparé des Event funnel.
+    if event_type == "checkout.session.completed":
+        session = event_data["data"]["object"]
+        if session.get("mode") == "subscription":
+            email = (session.get("customer_details") or {}).get("email") or session.get("customer_email")
+            customer_id = session.get("customer")
+            subscription_id = session.get("subscription")
+            if email and customer_id and subscription_id:
+                user_accounts.upsert_user_from_checkout(email, customer_id, subscription_id)
+                magic_token = user_accounts.create_magic_link(email)
+                email_alerts.send_magic_link_email(
+                    email, f"{LRS_APP_URL}?token={magic_token}",
+                    smtp_config=email_alerts.get_smtp_config(),
+                )
+            return PlainTextResponse("ok", status_code=200)
 
-    test_id, variant_id, visitor_id = parts
-    amount_total = session.get("amount_total")
+        # sinon : achat funnel classique (mode="payment"), logique existante inchangée
+        client_reference_id = session.get("client_reference_id") or ""
+        parts = client_reference_id.split(":", 2)
+        if len(parts) != 3:
+            return PlainTextResponse("client_reference_id absent ou invalide", status_code=200)
 
-    events.record(
-        Event(
-            test_id=test_id,
-            variant_id=variant_id,
-            visitor_id=visitor_id,
-            event_type=EventType.PURCHASE,
-            amount_cents=amount_total,
+        test_id, variant_id, visitor_id = parts
+        amount_total = session.get("amount_total")
+
+        events.record(
+            Event(
+                test_id=test_id,
+                variant_id=variant_id,
+                visitor_id=visitor_id,
+                event_type=EventType.PURCHASE,
+                amount_cents=amount_total,
+            )
         )
-    )
-    return PlainTextResponse("ok", status_code=200)
+        return PlainTextResponse("ok", status_code=200)
+
+    if event_type in ("customer.subscription.updated", "customer.subscription.deleted"):
+        subscription = event_data["data"]["object"]
+        status = "canceled" if event_type == "customer.subscription.deleted" else (
+            _map_stripe_subscription_status(subscription.get("status"))
+        )
+        user_accounts.update_subscription_status(subscription.get("id"), status)
+        return PlainTextResponse("ok", status_code=200)
+
+    return PlainTextResponse("ignoré", status_code=200)

@@ -20,6 +20,7 @@ import ads_api
 import email_alerts
 import integrations
 import resources_content
+import user_accounts
 from jsonstore import load_json_file, save_json_file
 
 try:
@@ -443,51 +444,13 @@ DRIP_FILE      = os.path.join(os.path.dirname(__file__), ".lrs_drip.json")
 ADS_CREDS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_ads_creds.json")
 
 # ── PLAN / QUOTA SYSTEM ──────────────────────────────────────
+# Bundle bêta unique (abonnement Stripe, voir check_subscription_access())
+# — plus de paliers Free/Starter/Pro/Agency : un compte actif débloque
+# tout. PLAN_LIMITS et _get_plan() sont gardés (même interface) pour ne
+# pas réécrire chaque site qui consulte une limite/feature ci-dessous.
 PLAN_LIMITS = {
-    "free": {
-        "label":             "Free",
-        "audits_per_month":  3,
-        "modes":             ["Funnel Only"],
-        "bulk":              False,
-        "monitoring":        False,
-        "ads_library":       False,
-        "integrations":      False,
-        "white_label":       False,
-        "drip_emails":       False,
-        "ads_api":           False,
-        "price":             "Gratuit",
-        "badge_color":       "#6b7280",
-    },
-    "starter": {
-        "label":             "Starter",
-        "audits_per_month":  20,
-        "modes":             ["Funnel Only"],
-        "bulk":              False,
-        "monitoring":        True,
-        "ads_library":       False,
-        "integrations":      False,
-        "white_label":       False,
-        "drip_emails":       True,
-        "ads_api":           False,
-        "price":             "19€/mois",
-        "badge_color":       "#6b7280",
-    },
-    "pro": {
-        "label":             "Pro",
-        "audits_per_month":  999,
-        "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
-        "bulk":              True,
-        "monitoring":        True,
-        "ads_library":       True,
-        "integrations":      True,
-        "white_label":       False,
-        "drip_emails":       True,
-        "ads_api":           True,
-        "price":             "49€/mois",
-        "badge_color":       "var(--accent)",
-    },
-    "agency": {
-        "label":             "Agency",
+    "beta": {
+        "label":             "Bêta",
         "audits_per_month":  999,
         "modes":             ["Funnel Only", "Ads Only", "Full Risk"],
         "bulk":              True,
@@ -497,21 +460,13 @@ PLAN_LIMITS = {
         "white_label":       True,
         "drip_emails":       True,
         "ads_api":           True,
-        "price":             "99€/mois",
-        "badge_color":       "var(--warning)",
     },
 }
 
 def _get_plan():
-    """Retourne le plan actif ('free'|'starter'|'pro'|'agency')."""
-    try:
-        plan = st.secrets.get("license", {}).get("plan", "")
-        if plan in PLAN_LIMITS:
-            return plan
-    except Exception:
-        pass
-    plan = os.getenv("LRS_PLAN", "free").lower()
-    return plan if plan in PLAN_LIMITS else "free"
+    """Un seul plan actif : le bundle bêta (accès géré par abonnement
+    Stripe, voir check_subscription_access())."""
+    return "beta"
 
 def _load_usage():
     """Charge les données d'usage depuis .lrs_usage.json."""
@@ -948,13 +903,7 @@ def render_ads_connector():
     """
     Interface de connexion aux APIs pub Meta Ads et TikTok Ads.
     Importe automatiquement CTR/CPC/ROAS/CPA dans le Campaign Tracker.
-    Disponible uniquement plan Pro et Agency.
     """
-    plan = _get_plan()
-    if not PLAN_LIMITS[plan].get("ads_api", False):
-        st.info("🔗 **Connexion API pub** disponible sur les plans **Pro** (49€) et **Agency** (99€).")
-        return
-
     bg     = "var(--bg-surface)"
     border = "var(--border)"
     txt    = "var(--text)"
@@ -1067,10 +1016,8 @@ _T = {
     "advanced_opts":    {"fr": "⚙️ Options avancées","en": "⚙️ Advanced options"},
     # ── Quota ──
     "quota_remaining":  {"fr": "audits restants ce mois", "en": "audits left this month"},
-    "quota_exhausted":  {"fr": "❌ Quota épuisé — passez en Pro pour des audits illimités.",
-                         "en": "❌ Quota exhausted — upgrade to Pro for unlimited audits."},
-    "mode_locked":      {"fr": "⚠️ Ce mode est réservé au plan Pro/Agency.",
-                         "en": "⚠️ This mode is available on Pro/Agency plans only."},
+    "quota_exhausted":  {"fr": "❌ Quota d'audits épuisé pour ce mois.",
+                         "en": "❌ Monthly audit quota exhausted."},
     # ── Results ──
     "score_label":      {"fr": "Score LRS",        "en": "LRS Score"},
     "decision_label":   {"fr": "Décision",         "en": "Decision"},
@@ -2411,13 +2358,7 @@ export_to_notion = integrations.export_to_notion
 
 
 def render_integrations_widget(result, meta, key_prefix="integ"):
-    """Widget compact Slack / Sheets / Notion — visible si plan Pro+."""
-    plan       = _get_plan()
-    plan_info  = PLAN_LIMITS[plan]
-    if not plan_info.get("integrations", False):
-        st.info("🔗 Intégrations disponibles sur le plan **Pro** et **Agency**.")
-        return
-
+    """Widget compact Slack / Sheets / Notion."""
     cfg = _get_integration_config()
     lang = st.session_state.get("lang", "fr")
 
@@ -3227,81 +3168,6 @@ def _score_emoji(score):
     if score <= 14: return "🟡"
     return "🟢"
 
-def render_pricing_page():
-    """
-    Page pricing intégrée — comparaison des 4 plans avec features détaillées.
-    Visible depuis le Dashboard → Plans & Tarifs.
-    """
-    bg     = "var(--bg-surface)"
-    bg2    = "var(--bg-surface-2)"
-    border = "var(--border)"
-    txt    = "var(--text)"
-    txt2   = "var(--text-secondary)"
-    cur    = _get_plan()
-
-    st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>💳 Plans & Tarifs</h3>", unsafe_allow_html=True)
-    st.caption("Votre plan actuel est surligné. Pour changer de plan, contactez-nous ou mettez à jour votre licence Lemon Squeezy.")
-    st.markdown("")
-
-    plans_display = [
-        ("free",    "🆓 Free",    "Gratuit",  "#6b7280"),
-        ("starter", "⚡ Starter", "19€/mois", "#6b7280"),
-        ("pro",     "🚀 Pro",     "49€/mois", "var(--accent)"),
-        ("agency",  "👔 Agency",  "99€/mois", "var(--warning)"),
-    ]
-
-    cols = st.columns(4)
-    features_rows = [
-        ("Audits / mois",          ["3",           "20",          "Illimité",     "Illimité"]),
-        ("Modes d'audit",          ["Funnel Only", "Funnel Only", "Tous (3)",     "Tous (3)"]),
-        ("Monitoring auto",        ["❌",          "✅",          "✅",           "✅"]),
-        ("Bulk audit",             ["❌",          "❌",          "✅",           "✅"]),
-        ("Ads Library",            ["❌",          "❌",          "✅",           "✅"]),
-        ("Audit concurrents",      ["❌",          "❌",          "✅",           "✅"]),
-        ("Intégrations (Slack…)",  ["❌",          "❌",          "✅",           "✅"]),
-        ("API pub (Meta/TikTok)",  ["❌",          "❌",          "✅",           "✅"]),
-        ("Emails drip auto",       ["❌",          "✅",          "✅",           "✅"]),
-        ("Rapport Agency PDF",     ["❌",          "❌",          "❌",           "✅"]),
-        ("White-label branding",   ["❌",          "❌",          "❌",           "✅"]),
-        ("Projets illimités",      ["❌",          "❌",          "✅",           "✅"]),
-        ("Swipe files privés",     ["✅",          "✅",          "✅",           "✅"]),
-        ("Intelligence cumulative",["✅",          "✅",          "✅",           "✅"]),
-    ]
-
-    for idx, (plan_key, plan_label, price, badge_col) in enumerate(plans_display):
-        with cols[idx]:
-            is_current = (plan_key == cur)
-            brd_col = badge_col if is_current else border
-            brd_w   = "2px" if is_current else "1px"
-            popular = " 🔥" if plan_key == "pro" else ""
-            cur_badge = "<div style='color:var(--success);font-size:0.72rem;font-weight:700;margin-top:4px'>✅ PLAN ACTUEL</div>" if is_current else ""
-            st.markdown(
-                f"<div style='background:{bg};border:{brd_w} solid {brd_col};border-radius:12px;"
-                f"padding:20px;text-align:center;margin-bottom:12px'>"
-                f"<div style='color:{badge_col};font-weight:800;font-size:0.95rem'>{plan_label}{popular}</div>"
-                f"<div style='color:{txt};font-size:1.8rem;font-weight:900;margin:8px 0 2px'>{price}</div>"
-                f"{cur_badge}"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-    # Tableau features
-    st.markdown("")
-    for feat_label, feat_vals in features_rows:
-        row_cols = st.columns([2, 1, 1, 1, 1])
-        with row_cols[0]:
-            st.markdown(f"<div style='color:{txt2};font-size:0.83rem;padding:6px 0'>{feat_label}</div>", unsafe_allow_html=True)
-        for i, val in enumerate(feat_vals):
-            with row_cols[i+1]:
-                is_cur_col = (plans_display[i][0] == cur)
-                color = "var(--success)" if val == "✅" else "var(--danger)" if val == "❌" else txt
-                weight = "700" if is_cur_col else "400"
-                st.markdown(f"<div style='color:{color};font-size:0.83rem;text-align:center;padding:6px 0;font-weight:{weight}'>{val}</div>", unsafe_allow_html=True)
-
-    st.markdown("")
-    st.info("Pour upgrader votre plan, rendez-vous sur **Lemon Squeezy** ou contactez-nous. Une fois le paiement effectué, ajoutez votre clé de licence dans Streamlit Secrets : `[license] plan = \"pro\"`")
-
-
 def render_dashboard():
     """
     Dashboard portfolio — vue santé de tous les audits/projets.
@@ -3313,10 +3179,9 @@ def render_dashboard():
     border   = "var(--border)"
     txt      = "var(--text)"
     txt2     = "var(--text-secondary)"
-    plan_key = _get_plan()
 
     st.markdown(f"<h3 style='color:{txt};margin-bottom:4px'>📊 Portfolio — Vue d'ensemble</h3>", unsafe_allow_html=True)
-    st.caption(f"Plan actif : **{PLAN_LIMITS[plan_key]['label']}** · {len(history)} audits au total")
+    st.caption(f"{len(history)} audits au total")
     st.markdown("---")
 
     if not history:
@@ -3603,11 +3468,6 @@ def render_competitor_audit(api_key):
         return
 
     # ── Quota check ───────────────────────────────────────────
-    _active_plan_c = _get_plan()
-    _allowed_modes_c = PLAN_LIMITS[_active_plan_c]["modes"]
-    if "Funnel Only" not in _allowed_modes_c:
-        st.error(t("mode_locked"))
-        return
     ok1, used1, lim1 = _check_quota()
     if not ok1:
         st.error(t("quota_exhausted"))
@@ -3762,12 +3622,7 @@ def render_agency_report_widget(result, meta, key_prefix="agency"):
     """
     Widget rapport client white-label Agency.
     Génère un PDF avec branding client personnalisé et langage non-technique.
-    Disponible uniquement plan Agency.
     """
-    plan = _get_plan()
-    if not PLAN_LIMITS[plan].get("white_label", False):
-        return
-
     with st.expander("👔 Rapport Agency — White-label client"):
         st.caption("Rapport PDF professionnel avec votre branding et langage adapté au client (sans jargon technique).")
         ag1, ag2 = st.columns(2)
@@ -4154,7 +4009,7 @@ def render_referral_widget():
     n_conv    = sum(1 for r in referrals if r.get("converted"))
 
     st.markdown(f"<h4 style='color:{txt}'>🎁 Parrainage — Invitez vos collègues</h4>", unsafe_allow_html=True)
-    st.caption("Pour chaque ami qui s'upgrade en Starter ou Pro avec votre code, vous recevez **1 mois offert** sur votre plan.")
+    st.caption("Pour chaque ami qui s'abonne à LRS™ avec votre code, vous recevez **1 mois offert**.")
 
     # Code + stats
     cc1, cc2, cc3 = st.columns(3)
@@ -4189,11 +4044,12 @@ def render_referral_widget():
     st.markdown("")
 
     # Message de partage
+    sales_url = os.getenv("LRS_SALES_PAGE_URL", "")
     share_msg = (
         f"J'utilise LRS™ pour auditer mes landing pages avant de lancer mes campagnes Meta/TikTok.\n"
         f"Ça m'a permis d'identifier exactement pourquoi mes pages ne convertissaient pas.\n\n"
-        f"Essayez avec mon code {code} pour 20% de réduction sur le plan Pro :\n"
-        f"https://lrs.lemonsqueezy.com?ref={code}"
+        f"Essayez avec mon code de parrainage {code} :\n"
+        f"{sales_url or '[votre page de vente]'}?ref={code}"
     )
     st.code(share_msg, language=None)
     st.caption("Copiez ce message et partagez-le à vos collègues marketeurs et media buyers.")
@@ -4279,104 +4135,100 @@ def render_ab_tracker(api_key):
         run_ab = st.form_submit_button("🧪 Lancer le test A/B", type="primary", use_container_width=True)
 
     if run_ab and ab_name.strip() and url_a.strip() and url_b.strip():
-        _plan_ab = _get_plan()
-        if "Funnel Only" not in PLAN_LIMITS[_plan_ab]["modes"]:
-            st.error(t("mode_locked"))
-        else:
-            results_ab = {}
-            for variant, url_v in [("A", url_a.strip()), ("B", url_b.strip())]:
-                label = f"Variante {variant}"
-                with st.status(f"🧠 Analyse {label}...", expanded=True) as _st_ab:
-                    _sp_ab = st.empty()
-                    try:
-                        content_ab, _, _ = extract_page(url_v)
-                        if not content_ab:
-                            st.error(f"{label} : impossible d'extraire le contenu.")
-                            continue
-                        pl_ab = detect_language(content_ab)
-                        # Advertorial : force explicitement le page_type plutot que de se fier
-                        # a detect_page_type(), qui ne connait pas cette categorie et pourrait
-                        # classer la page comme "Sales Page" — la penalisant a tort sur
-                        # OFFER/FRICTION pour des elements qui sont normalement absents
-                        # (l'offre est sur la page suivante, pas sur l'advertorial).
-                        pt_ab = "Advertorial" if is_advertorial_ab else detect_page_type(content_ab, url_v)
-                        r_ab  = run_audit_stream("Funnel Only", ab_plat, ab_offer,
-                                                  content_ab, "", "", ab_model,
-                                                  page_type=pt_ab, page_lang=pl_ab,
-                                                  status_stage=_sp_ab, status_tokens=st.empty())
-                        results_ab[variant] = r_ab
-                        _increment_usage()
-                        _st_ab.update(label=f"✅ {label} analysée", state="complete", expanded=False)
-                    except Exception as e:
-                        st.error(f"{label} : {e}")
-                        _st_ab.update(label=f"❌ Erreur", state="error", expanded=False)
+        results_ab = {}
+        for variant, url_v in [("A", url_a.strip()), ("B", url_b.strip())]:
+            label = f"Variante {variant}"
+            with st.status(f"🧠 Analyse {label}...", expanded=True) as _st_ab:
+                _sp_ab = st.empty()
+                try:
+                    content_ab, _, _ = extract_page(url_v)
+                    if not content_ab:
+                        st.error(f"{label} : impossible d'extraire le contenu.")
+                        continue
+                    pl_ab = detect_language(content_ab)
+                    # Advertorial : force explicitement le page_type plutot que de se fier
+                    # a detect_page_type(), qui ne connait pas cette categorie et pourrait
+                    # classer la page comme "Sales Page" — la penalisant a tort sur
+                    # OFFER/FRICTION pour des elements qui sont normalement absents
+                    # (l'offre est sur la page suivante, pas sur l'advertorial).
+                    pt_ab = "Advertorial" if is_advertorial_ab else detect_page_type(content_ab, url_v)
+                    r_ab  = run_audit_stream("Funnel Only", ab_plat, ab_offer,
+                                              content_ab, "", "", ab_model,
+                                              page_type=pt_ab, page_lang=pl_ab,
+                                              status_stage=_sp_ab, status_tokens=st.empty())
+                    results_ab[variant] = r_ab
+                    _increment_usage()
+                    _st_ab.update(label=f"✅ {label} analysée", state="complete", expanded=False)
+                except Exception as e:
+                    st.error(f"{label} : {e}")
+                    _st_ab.update(label=f"❌ Erreur", state="error", expanded=False)
 
-            if "A" in results_ab and "B" in results_ab:
-                ca = results_ab["A"].get("_c", {})
-                cb = results_ab["B"].get("_c", {})
-                sa = ca.get("score", 0)
-                sb = cb.get("score", 0)
-                winner = "B" if sb > sa else "A" if sa > sb else "="
+        if "A" in results_ab and "B" in results_ab:
+            ca = results_ab["A"].get("_c", {})
+            cb = results_ab["B"].get("_c", {})
+            sa = ca.get("score", 0)
+            sb = cb.get("score", 0)
+            winner = "B" if sb > sa else "A" if sa > sb else "="
 
-                # Sauvegarder
-                ts_ab = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-                test_key = ab_name.strip()
-                if test_key not in abtests:
-                    abtests[test_key] = {
-                        "name": test_key, "hypothesis": ab_hypo,
-                        "test_type": "advertorial" if is_advertorial_ab else "page",
-                        "rounds": [], "created": ts_ab,
-                    }
-                abtests[test_key]["rounds"].append({
-                    "ts": ts_ab, "score_a": sa, "score_b": sb, "winner": winner,
-                    "crit_a": {k: ca.get(k,0) for k in ["hook","offer","trust","friction"]},
-                    "crit_b": {k: cb.get(k,0) for k in ["hook","offer","trust","friction"]},
-                })
-                save_abtests(abtests)
+            # Sauvegarder
+            ts_ab = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            test_key = ab_name.strip()
+            if test_key not in abtests:
+                abtests[test_key] = {
+                    "name": test_key, "hypothesis": ab_hypo,
+                    "test_type": "advertorial" if is_advertorial_ab else "page",
+                    "rounds": [], "created": ts_ab,
+                }
+            abtests[test_key]["rounds"].append({
+                "ts": ts_ab, "score_a": sa, "score_b": sb, "winner": winner,
+                "crit_a": {k: ca.get(k,0) for k in ["hook","offer","trust","friction"]},
+                "crit_b": {k: cb.get(k,0) for k in ["hook","offer","trust","friction"]},
+            })
+            save_abtests(abtests)
 
-                # Afficher résultats
-                st.markdown("### 🏆 Résultats A/B")
-                r1, r2, r3 = st.columns([2,1,2])
-                for col, label, score, crits, color, brd in [
-                    (r1, "🔵 Variante A", sa, ca, "var(--accent)", "var(--accent)" if winner=="A" else border),
-                    (r3, "🟡 Variante B", sb, cb, "var(--warning)", "var(--warning)" if winner=="B" else border),
-                ]:
-                    with col:
-                        win_badge = " 🏆 GAGNANTE" if (winner!="=" and ((label.startswith("🔵") and winner=="A") or (label.startswith("🟡") and winner=="B"))) else ""
-                        st.markdown(
-                            f"<div style='background:{bg};border:2px solid {brd};border-radius:12px;"
-                            f"padding:18px;text-align:center'>"
-                            f"<div style='color:{color};font-weight:700'>{label}{win_badge}</div>"
-                            f"<div style='color:{_score_color(score)};font-size:2.5rem;font-weight:900'>{score}/20</div>"
-                            f"<div style='color:{txt2};font-size:0.8rem'>{crits.get('decision','')}</div>"
-                            f"</div>",
-                            unsafe_allow_html=True,
-                        )
-                with r2:
-                    delta_ab = sb - sa
-                    d_col = "var(--success)" if delta_ab > 0 else "var(--danger)" if delta_ab < 0 else "#888"
-                    d_sym = "▲" if delta_ab > 0 else "▼" if delta_ab < 0 else "="
+            # Afficher résultats
+            st.markdown("### 🏆 Résultats A/B")
+            r1, r2, r3 = st.columns([2,1,2])
+            for col, label, score, crits, color, brd in [
+                (r1, "🔵 Variante A", sa, ca, "var(--accent)", "var(--accent)" if winner=="A" else border),
+                (r3, "🟡 Variante B", sb, cb, "var(--warning)", "var(--warning)" if winner=="B" else border),
+            ]:
+                with col:
+                    win_badge = " 🏆 GAGNANTE" if (winner!="=" and ((label.startswith("🔵") and winner=="A") or (label.startswith("🟡") and winner=="B"))) else ""
                     st.markdown(
-                        f"<div style='text-align:center;padding:20px 0'>"
-                        f"<div style='color:{txt2};font-size:0.72rem'>Δ B vs A</div>"
-                        f"<div style='color:{d_col};font-size:2rem;font-weight:800'>{d_sym}{abs(delta_ab)}</div>"
-                        f"</div>", unsafe_allow_html=True,
+                        f"<div style='background:{bg};border:2px solid {brd};border-radius:12px;"
+                        f"padding:18px;text-align:center'>"
+                        f"<div style='color:{color};font-weight:700'>{label}{win_badge}</div>"
+                        f"<div style='color:{_score_color(score)};font-size:2.5rem;font-weight:900'>{score}/20</div>"
+                        f"<div style='color:{txt2};font-size:0.8rem'>{crits.get('decision','')}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
                     )
-
-                # Analyse critères
-                st.markdown("#### 🔍 Différences par critère")
-                for crit in ["hook","offer","trust","friction"]:
-                    va = ca.get(crit,0); vb = cb.get(crit,0)
-                    diff = vb - va
-                    diff_col = "var(--success)" if diff>0 else "var(--danger)" if diff<0 else "#888"
-                    diff_sym = f"▲+{diff}" if diff>0 else f"▼{diff}" if diff<0 else "="
-                    st.markdown(f"**{crit.capitalize()}** : A={va}/5 → B={vb}/5 &nbsp; <span style='color:{diff_col}'>{diff_sym}</span>", unsafe_allow_html=True)
-
-                push_notification(
-                    "🧪 A/B Test terminé",
-                    f"{ab_name} — Variante {winner} gagne ({max(sa,sb)}/20 vs {min(sa,sb)}/20)",
-                    level="success"
+            with r2:
+                delta_ab = sb - sa
+                d_col = "var(--success)" if delta_ab > 0 else "var(--danger)" if delta_ab < 0 else "#888"
+                d_sym = "▲" if delta_ab > 0 else "▼" if delta_ab < 0 else "="
+                st.markdown(
+                    f"<div style='text-align:center;padding:20px 0'>"
+                    f"<div style='color:{txt2};font-size:0.72rem'>Δ B vs A</div>"
+                    f"<div style='color:{d_col};font-size:2rem;font-weight:800'>{d_sym}{abs(delta_ab)}</div>"
+                    f"</div>", unsafe_allow_html=True,
                 )
+
+            # Analyse critères
+            st.markdown("#### 🔍 Différences par critère")
+            for crit in ["hook","offer","trust","friction"]:
+                va = ca.get(crit,0); vb = cb.get(crit,0)
+                diff = vb - va
+                diff_col = "var(--success)" if diff>0 else "var(--danger)" if diff<0 else "#888"
+                diff_sym = f"▲+{diff}" if diff>0 else f"▼{diff}" if diff<0 else "="
+                st.markdown(f"**{crit.capitalize()}** : A={va}/5 → B={vb}/5 &nbsp; <span style='color:{diff_col}'>{diff_sym}</span>", unsafe_allow_html=True)
+
+            push_notification(
+                "🧪 A/B Test terminé",
+                f"{ab_name} — Variante {winner} gagne ({max(sa,sb)}/20 vs {min(sa,sb)}/20)",
+                level="success"
+            )
 
     # ── Tests existants ───────────────────────────────────────
     if abtests:
@@ -6039,7 +5891,9 @@ def check_access():
 
     st.markdown("# 🚦 LRS™ — Launch Risk System")
     st.markdown("### Enter your access password")
-    st.markdown("Don't have access yet? [Get LRS™ access](#)")  # remplace # par ton lien Lemon Squeezy
+    _sales_url = os.getenv("LRS_SALES_PAGE_URL", "")
+    if _sales_url:
+        st.markdown(f"Don't have access yet? [Get LRS™ access]({_sales_url})")
 
     entered = st.text_input("Password", type="password", placeholder="Enter your password...")
     if st.button("Access LRS →", type="primary"):
@@ -6055,6 +5909,69 @@ def check_access():
                 st.session_state["_login_locked_until"] = now + 60
             st.error("Invalid password. Purchase your access to get your password.")
     return False
+
+
+def check_subscription_access():
+    """
+    Verifie que l'utilisateur a un abonnement LRS actif (Stripe), via un
+    lien de connexion a usage unique envoye par email a l'activation (voir
+    creative_studio/serving/app.py::stripe_webhook, qui ecrit dans
+    user_accounts.py). S'execute apres check_access() (mot de passe partage
+    beta) — les deux filtres cohabitent, celui-ci verifie l'abonnement
+    individuel.
+    """
+    token = st.query_params.get("token")
+    if token and not st.session_state.get("subscriber_email"):
+        email = user_accounts.consume_magic_link(token)
+        if "token" in st.query_params:
+            del st.query_params["token"]
+        if email:
+            st.session_state.subscriber_email = email
+        else:
+            st.session_state["_magic_link_error"] = True
+
+    email = st.session_state.get("subscriber_email")
+    if email:
+        user = user_accounts.get_user(email)
+        if user and user["status"] == "active":
+            return True
+
+    _render_subscription_lock_screen()
+    return False
+
+
+def _render_subscription_lock_screen():
+    st.markdown("# 🚦 LRS™ — Launch Risk System")
+
+    if st.query_params.get("checkout") == "success":
+        st.success(
+            "✅ Paiement reçu ! Vérifiez votre boîte mail (et vos spams) pour "
+            "votre lien de connexion — ça peut prendre quelques secondes."
+        )
+    if st.session_state.pop("_magic_link_error", False):
+        st.error("Ce lien est invalide ou a expiré. Redemandez-en un ci-dessous.")
+
+    sales_url = os.getenv("LRS_SALES_PAGE_URL", "")
+    if sales_url:
+        st.markdown(f"### Accède à LRS ici → [{sales_url}]({sales_url})")
+    else:
+        st.markdown("### Aucun abonnement actif trouvé pour cette session.")
+
+    st.markdown("---")
+    st.markdown("##### Déjà abonné ? Recevez votre lien de connexion")
+    email_input = st.text_input("Email", placeholder="vous@email.com", key="magic_link_email_input")
+    if st.button("Envoyer mon lien de connexion", key="magic_link_send_btn"):
+        email_clean = email_input.strip().lower()
+        if email_clean:
+            user = user_accounts.get_user(email_clean)
+            if user and user["status"] == "active":
+                app_url = os.getenv("LRS_APP_URL", "")
+                magic_token = user_accounts.create_magic_link(email_clean)
+                link = f"{app_url}?token={magic_token}" if app_url else f"?token={magic_token}"
+                email_alerts.send_magic_link_email(email_clean, link, smtp_config=_get_smtp_config())
+            # Meme message que le compte existe ou non / soit actif ou non —
+            # evite de laisser deviner quels emails sont abonnes (enumeration).
+            st.success("Si cet email est associé à un abonnement actif, vous recevrez un lien de connexion sous peu.")
 
 
 # ── ANTI-CHURN : Auto-email post-audit ──────────────────────
@@ -6586,6 +6503,9 @@ def main():
     if not check_access():
         st.stop()
 
+    if not check_subscription_access():
+        st.stop()
+
     # ── Header ───────────────────────────────────────────────
     hdr_l, hdr_r = st.columns([5, 1])
     with hdr_l:
@@ -6873,13 +6793,7 @@ def main():
                 if errors:
                     _ok = False
 
-                # ── Quota & plan enforcement ───────────────────────
-                if _ok:
-                    _active_plan = _get_plan()
-                    _allowed_modes = PLAN_LIMITS[_active_plan]["modes"]
-                    if mode not in _allowed_modes:
-                        st.error(t("mode_locked") + f" (Plan actuel : **{PLAN_LIMITS[_active_plan]['label']}**)")
-                        _ok = False
+                # ── Quota enforcement ───────────────────────────────
                 if _ok:
                     _quota_ok, _used, _qlimit = _check_quota()
                     if not _quota_ok:
@@ -7060,13 +6974,13 @@ def main():
                     # Share widget full-width below exports
                     render_share_widget(result, meta, key_prefix="tab1_share")
 
-                    # Integrations widget (Slack / Sheets / Notion) — Pro/Agency only
+                    # Integrations widget (Slack / Sheets / Notion)
                     render_integrations_widget(result, meta, key_prefix="tab1_integ")
 
                     # Rewrite tracker — suivi des corrections appliquées
                     render_rewrite_tracker(result, meta, key_prefix="tab1_rwt")
 
-                    # Agency branded report — white-label (Agency plan only)
+                    # Agency branded report — white-label
                     render_agency_report_widget(result, meta, key_prefix="tab1_agency")
 
             else:
@@ -7115,10 +7029,7 @@ def main():
     if nav_page == "multi":
         sub1, sub2, sub3, sub_ab = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages", "🥊 Audit Concurrents", "🧪 A/B Test"])
         with sub1:
-            if PLAN_LIMITS[_get_plan()].get("bulk", False):
-                render_bulk(api_key)
-            else:
-                st.info("⚡ **Bulk audit** disponible sur le plan **Pro** (49€/mois) et **Agency** (99€/mois).")
+            render_bulk(api_key)
         with sub2:
             render_comparison(api_key)
         with sub3:
@@ -7135,10 +7046,7 @@ def main():
         with sub3:
             render_projects(api_key)
         with sub4:
-            if PLAN_LIMITS[_get_plan()].get("monitoring", False):
-                render_monitoring(api_key)
-            else:
-                st.info("📡 **Monitoring & Alertes** disponible sur le plan **Starter** (19€/mois) et supérieur.")
+            render_monitoring(api_key)
         with sub5_camp:
             render_campaign_tracker()
         with sub6_api:
@@ -7156,18 +7064,7 @@ def main():
         with sub5:
             render_checklist()
         with sub6:
-            if PLAN_LIMITS[_get_plan()].get("ads_library", False):
-                render_ads_library()
-            else:
-                st.markdown(
-                    "<div style='background:#0f0f1a;border:1px solid #1e1e3a;border-radius:12px;"
-                    "padding:32px;text-align:center'>"
-                    "<div style='font-size:2rem'>🔒</div>"
-                    "<div style='color:var(--accent);font-weight:700;font-size:1.1rem;margin:12px 0 6px'>Ads Library</div>"
-                    "<div style='color:#888;font-size:0.9rem'>Disponible sur le plan <strong>Pro</strong> (49€/mois) et <strong>Agency</strong> (99€/mois).</div>"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
+            render_ads_library()
         with sub_swipe:
             render_swipe_library()
         with sub7:
