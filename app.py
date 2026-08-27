@@ -54,7 +54,7 @@ st.set_page_config(
     page_title="LRS - Launch Risk System",
     page_icon="🚦",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ── CSS GLOBAL ───────────────────────────────────────────────
@@ -353,8 +353,12 @@ hr { border-color: var(--border) !important; margin: var(--space-5) 0 !important
 /* ── Caption ── */
 .stCaption, [data-testid="stCaptionContainer"] { color: var(--text-muted) !important; font-size: 0.78rem !important; }
 
-/* ── Sidebar (cachée par défaut) ── */
-[data-testid="stSidebar"] { display: none; }
+/* ── Sidebar (navigation principale) ── */
+[data-testid="stSidebar"], [data-testid="stSidebar"] > div {
+    background: var(--bg-surface) !important;
+    border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"] .stButton > button { text-align: left !important; justify-content: flex-start !important; }
 
 /* ── Composants réutilisables (badges / alertes / cartes) ──────
    À utiliser dans le HTML injecté via st.markdown(unsafe_allow_html=True)
@@ -6601,24 +6605,6 @@ def main():
             unsafe_allow_html=True,
         )
     with hdr_r:
-        # ── Plan badge : gris neutre (Free/Starter), accent (Pro/Agency) ──
-        _plan_key   = _get_plan()
-        _plan_info  = PLAN_LIMITS[_plan_key]
-        _plabel     = _plan_info["label"]
-        _badge_cls  = "lrs-badge-neutral" if _plan_key in ("free", "starter") else "lrs-badge-accent"
-        _remaining, _limit = get_remaining_audits()
-        if _remaining == -1:
-            _quota_txt = "∞"
-        else:
-            _quota_txt = f"{_remaining}/{_limit}"
-        st.markdown(
-            f"<div style='display:flex;align-items:center;gap:8px;justify-content:flex-end;"
-            f"margin-bottom:4px'>"
-            f"<span class='lrs-badge {_badge_cls}'>{_plabel.upper()}</span>"
-            f"<span style='color:var(--text-muted);font-size:0.72rem'>{_quota_txt} audits</span>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
         # ── Controls row ──────────────────────────────────────
         btn_c1, btn_c2, btn_c3 = st.columns(3)
         with btn_c1:
@@ -6680,25 +6666,6 @@ def main():
     render_onboarding_banner()
     render_email_capture_widget()
 
-    # ── Bannière upgrade Free plan ────────────────────────────
-    _cur_plan = _get_plan()
-    if _cur_plan == "free":
-        _rem_free, _lim_free = get_remaining_audits()
-        _used_free = _lim_free - _rem_free if _rem_free >= 0 else 0
-        if _rem_free == 0:
-            _msg_b   = "🚨 **Vous avez utilisé vos 3 audits gratuits ce mois.** Passez en Starter (19€/mois) pour 20 audits + monitoring + email d'alertes."
-            _tier_b  = "lrs-alert-danger"
-        elif _rem_free <= 1:
-            _msg_b   = f"⚠️ **{_rem_free} audit gratuit restant ce mois.** Passez en Starter (19€/mois) pour continuer sans limite mensuelle."
-            _tier_b  = "lrs-alert-warning"
-        else:
-            _msg_b   = f"✨ Plan Gratuit — {_rem_free} audits restants ce mois. Passez en **Starter (19€)** pour 20 audits + monitoring, ou **Pro (49€)** pour tout débloquer."
-            _tier_b  = ""
-        st.markdown(
-            f"<div class='lrs-alert {_tier_b}' style='margin-bottom:var(--space-4)'>{_msg_b}</div>",
-            unsafe_allow_html=True,
-        )
-
     # ── Rappel re-audit (si inactif >7j) ─────────────────────
     render_reaudit_reminder()
 
@@ -6707,25 +6674,60 @@ def main():
     n_alerts   = len(alerts)
     suivi_label = f"Suivi 🔴" if n_alerts > 0 else "Suivi"
 
-    # ── 6 onglets ────────────────────────────────────────────
+    # ── Sidebar : navigation 2 niveaux (Business Manager / LRS) ──
     _has_history = len(st.session_state.audit_history) > 0
-    tab0, tab1, tab2, tab3, tab4, tab5, tab_cs = st.tabs([
-        "🏠 Dashboard", "Audit", "Multi-Audit", suivi_label, "Historique", "Ressources", "🎨 Creative Studio"
-    ])
+    NAV_LABELS = {
+        "vue_ensemble": "📊 Vue d'ensemble",
+        "intelligence": "🧠 Intelligence Cumulative",
+        "suivi":        "📈 " + suivi_label,
+        "audit":        "🔍 Audit",
+        "multi":        "🧩 Multi-Audit",
+        "creative":     "🎨 Creative Studio",
+        "historique":   "🕓 Historique",
+        "ressources":   "📚 Ressources",
+        "parrainage":   "🎁 Parrainage",
+    }
+    if "nav_page" not in st.session_state:
+        st.session_state.nav_page = "vue_ensemble"
+    nav_page = st.session_state.nav_page
 
-    # ── tab0 : Dashboard ─────────────────────────────────────
-    with tab0:
-        dash_sub1, dash_sub2, dash_sub3, dash_sub4 = st.tabs(["📊 Vue d'ensemble", "🧠 Intelligence Cumulative", "💳 Plans & Tarifs", "🎁 Parrainage"])
-        with dash_sub1:
-            render_dashboard()
-        with dash_sub2:
-            render_cumulative_intel()
-        with dash_sub3:
-            render_pricing_page()
-        with dash_sub4:
-            render_referral_widget()
+    def _nav_btn(page_key):
+        if st.button(NAV_LABELS[page_key], key=f"nav_{page_key}", use_container_width=True,
+                     type="primary" if nav_page == page_key else "secondary"):
+            st.session_state.nav_page = page_key
+            st.rerun()
 
-    with tab1:
+    with st.sidebar:
+        st.markdown(
+            "<div style='font-weight:800;font-size:1.05rem;margin-bottom:14px'>🚦 LRS™</div>",
+            unsafe_allow_html=True,
+        )
+        with st.expander("🏢 Business Manager", expanded=nav_page in ("vue_ensemble", "intelligence", "suivi")):
+            _nav_btn("vue_ensemble")
+            _nav_btn("intelligence")
+            _nav_btn("suivi")
+        with st.expander("🎯 LRS", expanded=nav_page in ("audit", "multi", "creative", "historique")):
+            _nav_btn("audit")
+            _nav_btn("multi")
+            _nav_btn("creative")
+            _nav_btn("historique")
+        st.markdown("---")
+        _nav_btn("ressources")
+        _nav_btn("parrainage")
+
+    # ── vue_ensemble : Dashboard ───────────────────────────────
+    if nav_page == "vue_ensemble":
+        render_dashboard()
+
+    # ── intelligence : Intelligence Cumulative ────────────────
+    if nav_page == "intelligence":
+        render_cumulative_intel()
+
+    # ── parrainage ─────────────────────────────────────────────
+    if nav_page == "parrainage":
+        render_referral_widget()
+
+    if nav_page == "audit":
         col_l, col_r = st.columns([1, 2])
 
         with col_l:
@@ -7109,8 +7111,8 @@ def main():
                                 unsafe_allow_html=True,
                             )
 
-    # ── tab2 : Multi-Audit (Bulk + Comparaison + Concurrents) ─
-    with tab2:
+    # ── multi : Multi-Audit (Bulk + Comparaison + Concurrents) ─
+    if nav_page == "multi":
         sub1, sub2, sub3, sub_ab = st.tabs(["⚡ Bulk — Plusieurs URLs", "⚔️ Comparaison — 2 pages", "🥊 Audit Concurrents", "🧪 A/B Test"])
         with sub1:
             if PLAN_LIMITS[_get_plan()].get("bulk", False):
@@ -7124,8 +7126,8 @@ def main():
         with sub_ab:
             render_ab_tracker(api_key)
 
-    # ── tab3 : Suivi (Projets + Monitoring + Campagnes + API Pub) ─
-    with tab3:
+    # ── suivi : Suivi (Projets + Monitoring + Campagnes + API Pub) ─
+    if nav_page == "suivi":
         sub3, sub4, sub5_camp, sub6_api = st.tabs([
             "🗂️ Projets", "📡 Monitoring & Alertes",
             "📡 Campagnes en cours", "🔗 Connexion API Pub"
@@ -7142,12 +7144,12 @@ def main():
         with sub6_api:
             render_ads_connector()
 
-    # ── tab4 : Historique ────────────────────────────────────
-    with tab4:
+    # ── historique : Historique ────────────────────────────────────
+    if nav_page == "historique":
         render_history()
 
-    # ── tab5 : Ressources (Checklist + Ads Library + Swipe Files + Benchmark + Changelog) ─
-    with tab5:
+    # ── ressources : Ressources (Checklist + Ads Library + Swipe Files + Benchmark + Changelog) ─
+    if nav_page == "ressources":
         sub5, sub6, sub_swipe, sub7, sub8 = st.tabs([
             "✅ Checklist", "📚 Ads Library", "🗂️ Mes Swipe Files", "📊 Benchmark 2025", "📋 Changelog"
         ])
@@ -7173,7 +7175,8 @@ def main():
         with sub8:
             render_changelog()
 
-    with tab_cs:
+    # ── creative : Creative Studio ──────────────────────────────
+    if nav_page == "creative":
         if CREATIVE_STUDIO_AVAILABLE:
             try:
                 render_creative_studio(run_lrs_audit_fn=_creative_studio_lrs_audit)
