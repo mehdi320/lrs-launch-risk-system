@@ -8,6 +8,7 @@ import trafilatura
 import ipaddress
 import json
 import os
+import secrets
 import socket
 import datetime
 import time
@@ -4125,9 +4126,7 @@ def get_or_create_referral_code():
     """Génère ou récupère le code de referral unique de l'utilisateur."""
     data = load_referral()
     if not data.get("code"):
-        import hashlib
-        seed = str(datetime.datetime.now().timestamp()) + str(os.getpid())
-        code = "LRS-" + hashlib.md5(seed.encode()).hexdigest()[:6].upper()
+        code = "LRS-" + secrets.token_hex(3).upper()
         data["code"]     = code
         data["created"]  = datetime.datetime.now().strftime("%d/%m/%Y")
         data["referrals"] = []
@@ -6023,16 +6022,33 @@ def check_access():
     if st.session_state.get("authenticated"):
         return True
 
+    # Anti-brute-force : verrou par session apres plusieurs echecs (meme
+    # protection cote pilote FastAPI, voir pilot_server.py::_login_rate_limited
+    # — ici par st.session_state faute d'IP client facilement accessible
+    # depuis un script Streamlit).
+    now = time.time()
+    locked_until = st.session_state.get("_login_locked_until", 0)
+    if locked_until and now < locked_until:
+        st.markdown("# 🚦 LRS™ — Launch Risk System")
+        st.error(f"Trop de tentatives. Reessayez dans {int(locked_until - now)}s.")
+        return False
+
     st.markdown("# 🚦 LRS™ — Launch Risk System")
     st.markdown("### Enter your access password")
     st.markdown("Don't have access yet? [Get LRS™ access](#)")  # remplace # par ton lien Lemon Squeezy
 
     entered = st.text_input("Password", type="password", placeholder="Enter your password...")
     if st.button("Access LRS →", type="primary"):
-        if entered == pwd_required:
+        if secrets.compare_digest(entered, pwd_required):
             st.session_state.authenticated = True
+            st.session_state.pop("_login_fail_count", None)
+            st.session_state.pop("_login_locked_until", None)
             st.rerun()
         else:
+            fail_count = st.session_state.get("_login_fail_count", 0) + 1
+            st.session_state["_login_fail_count"] = fail_count
+            if fail_count >= 5:
+                st.session_state["_login_locked_until"] = now + 60
             st.error("Invalid password. Purchase your access to get your password.")
     return False
 
@@ -6464,12 +6480,24 @@ def render_admin_view():
         st.warning("Aucun mot de passe admin configuré (LRS_ADMIN_PW ou admin_password dans secrets).")
         return
 
+    now = time.time()
+    locked_until = st.session_state.get("_admin_login_locked_until", 0)
+    if locked_until and now < locked_until:
+        st.error(f"Trop de tentatives. Reessayez dans {int(locked_until - now)}s.")
+        st.stop()
+
     pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
     if not pw_input:
         st.stop()
-    if pw_input != admin_pw:
+    if not secrets.compare_digest(pw_input, admin_pw):
+        fail_count = st.session_state.get("_admin_login_fail_count", 0) + 1
+        st.session_state["_admin_login_fail_count"] = fail_count
+        if fail_count >= 5:
+            st.session_state["_admin_login_locked_until"] = now + 60
         st.error("Mot de passe incorrect.")
         st.stop()
+    st.session_state.pop("_admin_login_fail_count", None)
+    st.session_state.pop("_admin_login_locked_until", None)
 
     st.success("✅ Accès admin autorisé")
     st.markdown("### 📊 Métriques d'usage LRS")

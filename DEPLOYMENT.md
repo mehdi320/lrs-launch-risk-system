@@ -58,7 +58,13 @@ fois la plateforme cible choisie.
       protégé par mot de passe (sinon accès libre sur `/api/*` — voir
       `PILOT_UI.md` ; le pilote affiche un avertissement au démarrage
       (stderr) tant qu'`APP_PASSWORD` n'est pas défini, à surveiller sur les
-      logs de la plateforme).
+      logs de la plateforme). `/api/auth/login` est protégé contre le
+      brute-force (5 essais / 60s puis verrou de 60s, par IP cliente).
+- [ ] `APP_HTTPS_ONLY=true` dès que le pilote tourne derrière un reverse
+      proxy qui termine le TLS — sinon le cookie de session n'a pas le flag
+      `Secure` et peut fuiter sur une requête HTTP en clair accidentelle.
+      Laissé à `false` par défaut pour ne pas casser le dev local (uvicorn
+      seul, sans TLS).
 - [ ] Clés Meta/TikTok Ads si la Connexion API Pub doit fonctionner en
       prod (`ads_api.py`).
 - [ ] SMTP (`SMTP_HOST/PORT/USER/PASSWORD`) si les emails (rapport

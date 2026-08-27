@@ -10,6 +10,7 @@ import datetime
 import os
 import secrets as _secrets
 import sys
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -97,7 +98,15 @@ async def _require_auth(request: Request, call_next):
 # Clé de session : fixe si fournie (recommandé en prod pour survivre aux
 # redémarrages), sinon générée aléatoirement au démarrage (les sessions
 # ouvertes sont invalidées à chaque redémarrage — acceptable pour un pilote).
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32))
+# https_only=False par défaut pour ne pas casser le dev local (uvicorn parle
+# HTTP en clair sans reverse proxy) — mettre APP_HTTPS_ONLY=true dès que le
+# pilote tourne derrière un reverse proxy qui termine le TLS (voir
+# DEPLOYMENT.md), sinon le cookie de session part aussi sur du HTTP simple.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32),
+    https_only=os.getenv("APP_HTTPS_ONLY", "").strip().lower() in ("1", "true", "yes"),
+)
 
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
@@ -1127,12 +1136,59 @@ class LoginRequest(BaseModel):
     password: str = ""
 
 
+# Anti-brute-force sur /api/auth/login — un seul mot de passe partagé
+# protège toute l'API, sans ça il est bruteforçable a un rythme illimité.
+# Compteur en memoire (process unique, pas de Redis pour un pilote) : au
+# bout de _LOGIN_MAX_ATTEMPTS echecs dans _LOGIN_WINDOW_SECONDS, verrouille
+# la source pendant _LOGIN_LOCKOUT_SECONDS. Cle = IP cliente vue par
+# uvicorn — derriere un reverse proxy sans en-tete X-Forwarded-For pris en
+# compte (volontairement, pour ne pas faire confiance a un en-tete
+# falsifiable), toutes les requetes partageront la meme IP proxy : le
+# verrou devient alors global plutot que par visiteur, ce qui reste
+# conservateur (jamais moins protecteur qu'un verrou par IP).
+_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_WINDOW_SECONDS = 60
+_LOGIN_LOCKOUT_SECONDS = 60
+_login_attempts = {}  # ip -> (fail_count, window_start_ts, locked_until_ts)
+
+
+def _login_rate_limited(client_ip):
+    now = time.time()
+    fail_count, window_start, locked_until = _login_attempts.get(client_ip, (0, now, 0))
+    if locked_until and now < locked_until:
+        return int(locked_until - now)
+    if now - window_start > _LOGIN_WINDOW_SECONDS:
+        _login_attempts.pop(client_ip, None)
+    return 0
+
+
+def _login_record_failure(client_ip):
+    now = time.time()
+    fail_count, window_start, _ = _login_attempts.get(client_ip, (0, now, 0))
+    if now - window_start > _LOGIN_WINDOW_SECONDS:
+        fail_count, window_start = 0, now
+    fail_count += 1
+    locked_until = now + _LOGIN_LOCKOUT_SECONDS if fail_count >= _LOGIN_MAX_ATTEMPTS else 0
+    _login_attempts[client_ip] = (fail_count, window_start, locked_until)
+
+
 @app.post("/api/auth/login")
 def login(req: LoginRequest, request: Request):
     pwd_required = _get_app_password()
-    if not pwd_required or req.password == pwd_required:
+    if not pwd_required:
         request.session["authenticated"] = True
         return {"ok": True}
+
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = _login_rate_limited(client_ip)
+    if retry_after:
+        raise HTTPException(status_code=429, detail=f"Trop de tentatives. Reessayez dans {retry_after}s.")
+
+    if _secrets.compare_digest(req.password, pwd_required):
+        _login_attempts.pop(client_ip, None)
+        request.session["authenticated"] = True
+        return {"ok": True}
+    _login_record_failure(client_ip)
     raise HTTPException(status_code=401, detail="Mot de passe invalide.")
 
 
