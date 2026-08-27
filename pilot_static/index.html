@@ -833,17 +833,22 @@ async function attemptLogin() {
   const pwd = $('#loginPwd').value;
   const errBox = $('#loginError');
   errBox.style.display = 'none';
-  const res = await fetch('/api/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: pwd }),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    errBox.textContent = data.detail || 'Mot de passe invalide.';
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Mot de passe invalide.';
+      errBox.style.display = 'block';
+      return;
+    }
+    showApp();
+  } catch (err) {
+    errBox.textContent = 'Erreur réseau : ' + err.message;
     errBox.style.display = 'block';
-    return;
   }
-  showApp();
 }
 
 function showApp() {
@@ -1598,8 +1603,12 @@ function renderExistingABTests(abtests) {
   `;
   $$('#abExisting [data-del-ab]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await fetch('/api/abtests/' + encodeURIComponent(btn.dataset.delAb), { method: 'DELETE' });
-      await loadExistingABTests();
+      try {
+        await fetch('/api/abtests/' + encodeURIComponent(btn.dataset.delAb), { method: 'DELETE' });
+        await loadExistingABTests();
+      } catch (err) {
+        console.error('Erreur suppression test A/B :', err);
+      }
     });
   });
 }
@@ -1862,33 +1871,46 @@ function renderSuiviMonitoring(selectedUrl) {
       return;
     }
     const brandBtn = $('#schBrandSeg button.active');
-    const res = await fetch('/api/monitoring/schedule', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        url,
-        freq_days: parseInt($('#schFreq').value, 10),
-        mode: $('#schMode').value,
-        platform: $('#schPlat').value,
-        offer_type: $('#schOffer').value,
-        brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
-        alert_email: $('#schAlertEmail').value.trim(),
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
-    loadSuiviMonitoring(selectedUrl);
+    try {
+      const res = await fetch('/api/monitoring/schedule', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          freq_days: parseInt($('#schFreq').value, 10),
+          mode: $('#schMode').value,
+          platform: $('#schPlat').value,
+          offer_type: $('#schOffer').value,
+          brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
+          alert_email: $('#schAlertEmail').value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      loadSuiviMonitoring(selectedUrl);
+    } catch (err) {
+      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.style.display = 'block';
+    }
   });
 
   $$('#suiviSubContent [data-del-sched]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.delSched), { method: 'DELETE' });
-      loadSuiviMonitoring(selectedUrl);
+      try {
+        await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.delSched), { method: 'DELETE' });
+        loadSuiviMonitoring(selectedUrl);
+      } catch (err) {
+        console.error('Erreur suppression audit planifié :', err);
+      }
     });
   });
   $$('#suiviSubContent [data-tog-sched]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.togSched) + '/toggle', { method: 'POST' });
-      loadSuiviMonitoring(selectedUrl);
+      try {
+        await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.togSched) + '/toggle', { method: 'POST' });
+        loadSuiviMonitoring(selectedUrl);
+      } catch (err) {
+        console.error('Erreur bascule audit planifié :', err);
+      }
     });
   });
   $$('#suiviSubContent [data-run-sched]').forEach(btn => {
@@ -1991,19 +2013,28 @@ function renderSuiviProjects(projects) {
       errBox.style.display = 'block';
       return;
     }
-    const res = await fetch('/api/projects', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, notes, urls }),
-    });
-    const data = await res.json();
-    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
-    renderSuiviProjects(data.projects);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, notes, urls }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      renderSuiviProjects(data.projects);
+    } catch (err) {
+      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.style.display = 'block';
+    }
   });
 
   $$('#suiviSubContent [data-del-proj]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await fetch('/api/projects/' + encodeURIComponent(btn.dataset.delProj), { method: 'DELETE' });
-      loadSuiviProjects();
+      try {
+        await fetch('/api/projects/' + encodeURIComponent(btn.dataset.delProj), { method: 'DELETE' });
+        loadSuiviProjects();
+      } catch (err) {
+        console.error('Erreur suppression projet :', err);
+      }
     });
   });
 
@@ -2011,12 +2042,17 @@ function renderSuiviProjects(projects) {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = '⏳ Audit en cours… (peut prendre plusieurs minutes)';
-      const res = await fetch('/api/projects/' + encodeURIComponent(btn.dataset.auditProj) + '/audit', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (res.ok) renderSuiviProjects(data.projects);
-      else { btn.disabled = false; btn.textContent = 'Erreur — réessayer'; }
+      try {
+        const res = await fetch('/api/projects/' + encodeURIComponent(btn.dataset.auditProj) + '/audit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (res.ok) renderSuiviProjects(data.projects);
+        else { btn.disabled = false; btn.textContent = 'Erreur — réessayer'; }
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Erreur réseau — réessayer';
+      }
     });
   });
 }
@@ -2123,28 +2159,37 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
     const errBox = $('#campErrorBox');
     errBox.style.display = 'none';
     if (!name) { errBox.textContent = 'Nom de la campagne requis.'; errBox.style.display = 'block'; return; }
-    const res = await fetch('/api/campaigns', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name, platform: getSegVal('campPlatformSeg'),
-        budget_daily: parseFloat($('#campBudget').value) || 0,
-        ctr: parseFloat($('#campCtr').value) || 0,
-        cpc: parseFloat($('#campCpc').value) || 0,
-        roas: parseFloat($('#campRoas').value) || 0,
-        cpa: parseFloat($('#campCpa').value) || 0,
-        notes: $('#campNotes').value.trim(),
-        linked_url: $('#campLinkedUrl').value,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
-    loadSuiviCampaigns();
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, platform: getSegVal('campPlatformSeg'),
+          budget_daily: parseFloat($('#campBudget').value) || 0,
+          ctr: parseFloat($('#campCtr').value) || 0,
+          cpc: parseFloat($('#campCpc').value) || 0,
+          roas: parseFloat($('#campRoas').value) || 0,
+          cpa: parseFloat($('#campCpa').value) || 0,
+          notes: $('#campNotes').value.trim(),
+          linked_url: $('#campLinkedUrl').value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      loadSuiviCampaigns();
+    } catch (err) {
+      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.style.display = 'block';
+    }
   });
 
   $$('#suiviSubContent [data-del-camp]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await fetch('/api/campaigns/' + encodeURIComponent(btn.dataset.delCamp), { method: 'DELETE' });
-      loadSuiviCampaigns();
+      try {
+        await fetch('/api/campaigns/' + encodeURIComponent(btn.dataset.delCamp), { method: 'DELETE' });
+        loadSuiviCampaigns();
+      } catch (err) {
+        console.error('Erreur suppression campagne :', err);
+      }
     });
   });
 }
@@ -2192,35 +2237,46 @@ function renderSuiviAdsConnector(creds) {
       <div id="adsImportResults"></div>
     `;
     $('#adsSaveBtn').addEventListener('click', async () => {
-      const res = await fetch('/api/ads-connector/creds', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, token: $('#adsToken').value, account_id: $('#adsAccId').value }),
-      });
-      if (res.ok) loadSuiviAdsConnector();
+      try {
+        const res = await fetch('/api/ads-connector/creds', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, token: $('#adsToken').value, account_id: $('#adsAccId').value }),
+        });
+        if (res.ok) loadSuiviAdsConnector();
+      } catch (err) {
+        console.error('Erreur sauvegarde identifiants API Pub :', err);
+      }
     });
     $('#adsImportBtn').addEventListener('click', async () => {
       const errBox = $('#adsConnErrorBox');
       errBox.style.display = 'none';
       $('#adsImportBtn').disabled = true;
       $('#adsImportBtn').textContent = '⏳ Connexion...';
-      const res = await fetch('/api/ads-connector/import', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, period: 'last_7d' }),
-      });
-      const data = await res.json();
-      $('#adsImportBtn').disabled = false;
-      $('#adsImportBtn').textContent = '📥 Importer les campagnes';
-      if (!res.ok) { errBox.textContent = data.detail || 'Erreur import.'; errBox.style.display = 'block'; return; }
-      const camps = data.campaigns || [];
-      $('#adsImportResults').innerHTML = camps.length ? `
-        <div class="dash-section"><h2>${camps.length} campagne(s) importée(s)</h2>
-          ${camps.map(c => `
-            <div class="list-row">
-              <div class="lr-body"><div class="lr-title">${escapeHtml(c.name)}</div>
-              <div class="lr-meta">Spend ${c.spend}€ · CTR ${c.ctr}% · CPC ${c.cpc}€ · ROAS ${c.roas}x · CPA ${c.cpa}€</div></div>
-            </div>
-          `).join('')}
-        </div>` : `<p style="color:var(--text-muted);font-size:13px;margin-top:12px">Aucune campagne trouvée sur cette période.</p>`;
+      try {
+        const res = await fetch('/api/ads-connector/import', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform, period: 'last_7d' }),
+        });
+        const data = await res.json();
+        $('#adsImportBtn').disabled = false;
+        $('#adsImportBtn').textContent = '📥 Importer les campagnes';
+        if (!res.ok) { errBox.textContent = data.detail || 'Erreur import.'; errBox.style.display = 'block'; return; }
+        const camps = data.campaigns || [];
+        $('#adsImportResults').innerHTML = camps.length ? `
+          <div class="dash-section"><h2>${camps.length} campagne(s) importée(s)</h2>
+            ${camps.map(c => `
+              <div class="list-row">
+                <div class="lr-body"><div class="lr-title">${escapeHtml(c.name)}</div>
+                <div class="lr-meta">Spend ${c.spend}€ · CTR ${c.ctr}% · CPC ${c.cpc}€ · ROAS ${c.roas}x · CPA ${c.cpa}€</div></div>
+              </div>
+            `).join('')}
+          </div>` : `<p style="color:var(--text-muted);font-size:13px;margin-top:12px">Aucune campagne trouvée sur cette période.</p>`;
+      } catch (err) {
+        $('#adsImportBtn').disabled = false;
+        $('#adsImportBtn').textContent = '📥 Importer les campagnes';
+        errBox.textContent = 'Erreur réseau : ' + err.message;
+        errBox.style.display = 'block';
+      }
     });
   };
   $('#adsConnPlatSeg').addEventListener('click', (e) => {
@@ -2912,23 +2968,32 @@ function renderSwipeFiles(swipes) {
     const errBox = $('#swipeErrorBox');
     errBox.style.display = 'none';
     if (!text) { errBox.textContent = 'Le texte est vide.'; errBox.style.display = 'block'; return; }
-    const res = await fetch('/api/swipefiles', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        category: getSegVal('swipeCatSeg'), text,
-        platform: getSegVal('swipePlatSeg'), offer: 'Tous',
-        notes: $('#swipeNotes').value.trim(),
-      }),
-    });
-    if (res.ok) loadSwipeFiles();
-    else { const d = await res.json(); errBox.textContent = d.detail || 'Erreur.'; errBox.style.display = 'block'; }
+    try {
+      const res = await fetch('/api/swipefiles', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: getSegVal('swipeCatSeg'), text,
+          platform: getSegVal('swipePlatSeg'), offer: 'Tous',
+          notes: $('#swipeNotes').value.trim(),
+        }),
+      });
+      if (res.ok) loadSwipeFiles();
+      else { const d = await res.json(); errBox.textContent = d.detail || 'Erreur.'; errBox.style.display = 'block'; }
+    } catch (err) {
+      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.style.display = 'block';
+    }
   });
 
   $$('#ressourcesSubContent [data-del-swipe]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const [cat, idx] = btn.dataset.delSwipe.split(':');
-      await fetch(`/api/swipefiles/${cat}/${idx}`, { method: 'DELETE' });
-      loadSwipeFiles();
+      try {
+        const [cat, idx] = btn.dataset.delSwipe.split(':');
+        await fetch(`/api/swipefiles/${cat}/${idx}`, { method: 'DELETE' });
+        loadSwipeFiles();
+      } catch (err) {
+        console.error('Erreur suppression swipe file :', err);
+      }
     });
   });
 }
