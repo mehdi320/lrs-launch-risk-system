@@ -55,7 +55,10 @@ fois la plateforme cible choisie.
       configurée — voir `audit_engine.py::run_audit()` — sinon retombe sur
       OpenAI).
 - [ ] `APP_PASSWORD` + `APP_SECRET_KEY` définis si le pilote doit être
-      protégé par mot de passe (sinon accès libre — voir `PILOT_UI.md`).
+      protégé par mot de passe (sinon accès libre sur `/api/*` — voir
+      `PILOT_UI.md` ; le pilote affiche un avertissement au démarrage
+      (stderr) tant qu'`APP_PASSWORD` n'est pas défini, à surveiller sur les
+      logs de la plateforme).
 - [ ] Clés Meta/TikTok Ads si la Connexion API Pub doit fonctionner en
       prod (`ads_api.py`).
 - [ ] SMTP (`SMTP_HOST/PORT/USER/PASSWORD`) si les emails (rapport

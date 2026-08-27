@@ -15,7 +15,10 @@ qui l'importe, pas l'inverse, pour éviter tout cycle d'import.
 from __future__ import annotations
 
 import io
+import ipaddress
+import socket
 from dataclasses import dataclass
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -140,6 +143,36 @@ def _looks_like_pdf_url(url: str) -> bool:
     return url.lower().split("?")[0].endswith(".pdf")
 
 
+# ── PROTECTION SSRF ──────────────────────────────────────────────
+# fetch_reference_text() recoit une URL fournie par l'utilisateur (le champ
+# "URL de référence" du mode Optimiser un existant) et la fetch côté serveur
+# — mêmes risques que audit_engine.py::extract_page() / app.py::extract_page()
+# (adresses internes/loopback, endpoint de métadonnées cloud). Copie
+# volontairement autonome de la même validation plutôt qu'un import
+# cross-module, pour garder ce package "core" indépendant du reste du repo
+# (voir docstring de module).
+def _is_safe_fetch_target(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
 def fetch_reference_text(raw_text_or_url: str) -> str:
     """Si l'entrée ressemble à une URL, en extrait le contenu texte — via
     pypdf si le lien pointe vers un PDF (ex : export "variante gagnante" du
@@ -149,12 +182,30 @@ def fetch_reference_text(raw_text_or_url: str) -> str:
     """
     candidate = raw_text_or_url.strip()
     if candidate.startswith("http://") or candidate.startswith("https://"):
+        if not _is_safe_fetch_target(candidate):
+            raise ValueError("URL invalide ou pointant vers une adresse non autorisée.")
         if _looks_like_pdf_url(candidate):
-            response = requests.get(candidate, timeout=20)
+            current_url = candidate
+            response = None
+            for _ in range(5):  # suit les redirections manuellement pour revalider chaque saut
+                response = requests.get(current_url, timeout=20, allow_redirects=False)
+                if response.is_redirect or response.is_permanent_redirect:
+                    location = response.headers.get("Location", "")
+                    if not location:
+                        break
+                    next_url = urljoin(current_url, location)
+                    if not _is_safe_fetch_target(next_url):
+                        raise ValueError("Redirection vers une adresse non autorisée.")
+                    current_url = next_url
+                    continue
+                break
             response.raise_for_status()
             return extract_pdf_text(response.content)
         if trafilatura is None:
             raise RuntimeError("Le package 'trafilatura' n'est pas installé (pip install trafilatura).")
+        # Limite connue : trafilatura.fetch_url() gère ses propres redirections
+        # en interne, sans hook pour les revalider saut par saut — seule l'URL
+        # de départ est garantie validée ici.
         downloaded = trafilatura.fetch_url(candidate)
         if not downloaded:
             raise RuntimeError(f"Impossible de récupérer le contenu de {candidate}.")

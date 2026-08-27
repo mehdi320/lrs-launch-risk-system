@@ -5,12 +5,15 @@
 import streamlit as st
 import requests
 import trafilatura
+import ipaddress
 import json
 import os
+import socket
 import datetime
 import time
 import traceback
 from html.parser import HTMLParser
+from urllib.parse import urljoin, urlparse
 
 import ads_api
 import email_alerts
@@ -1387,7 +1390,41 @@ def check_js_heavy(html: str, extracted: str) -> bool:
     html_low = html[:10000].lower()
     return sum(1 for s in js_signals if s in html_low) >= 2
 
+# ── PROTECTION SSRF ──────────────────────────────────────────────
+# extract_page() recoit une URL fournie par l'utilisateur (formulaire d'audit,
+# audit planifie, projet multi-pages, A/B test...) et la fetch cote serveur.
+# Sans validation, un attaquant peut cibler des adresses internes/loopback ou
+# le endpoint de metadonnees cloud (169.254.169.254) et recuperer le contenu
+# de la reponse via le resultat d'audit. On valide le schema et l'IP resolue
+# (avant le fetch ET a chaque saut de redirection, suivie manuellement)
+# plutot que de bloquer uniquement sur la chaine d'URL brute (qui peut etre
+# obfusquee — IP en decimal, etc. — mais pas l'IP resolue).
+def _is_safe_fetch_target(url):
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
 def extract_page(url):
+    if not _is_safe_fetch_target(url):
+        return "", "URL invalide ou pointant vers une adresse non autorisee.", False
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1395,7 +1432,20 @@ def extract_page(url):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
+        current_url = url
+        r = None
+        for _ in range(5):  # suit les redirections manuellement pour revalider chaque saut
+            r = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
+            if r.is_redirect or r.is_permanent_redirect:
+                location = r.headers.get("Location", "")
+                if not location:
+                    break
+                next_url = urljoin(current_url, location)
+                if not _is_safe_fetch_target(next_url):
+                    return "", "Redirection vers une adresse non autorisee.", False
+                current_url = next_url
+                continue
+            break
         r.raise_for_status()
         html = r.text
     except requests.exceptions.ConnectionError:

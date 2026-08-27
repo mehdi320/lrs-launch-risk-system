@@ -20,8 +20,11 @@ formulaire multi-étapes (FunnelStepForm) n'a lui aucun équivalent PDF.
 from __future__ import annotations
 
 import io
+import ipaddress
 import re
+import socket
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from xml.sax.saxutils import escape as _xml_escape
 
 import requests
@@ -174,14 +177,45 @@ def _score_section_flowables(score: CopyScore, styles: dict[str, ParagraphStyle]
     ]
 
 
+def _is_safe_fetch_target(url: str) -> bool:
+    """Bloque les cibles SSRF classiques (adresses internes/loopback,
+    métadonnées cloud) avant tout fetch réseau — media.location vient d'une
+    URL externe saisie librement par l'utilisateur (voir ui/streamlit_tab.py,
+    MediaSourceType.URL). Copie autonome de la même validation que
+    core/reference_extraction.py::_is_safe_fetch_target — package "core"
+    volontairement indépendant du reste du repo (voir docstring de module)."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
 def _image_bytes(media: FunnelStepMedia) -> bytes | None:
     """Récupère les bytes d'une image (upload local ou téléchargement URL) —
     None si indisponible plutôt que de faire échouer tout le PDF pour un
-    média cassé (lien mort, fichier supprimé sur disque)."""
+    média cassé (lien mort, fichier supprimé sur disque, ou URL bloquée par
+    _is_safe_fetch_target)."""
     try:
         if media.source_type == MediaSourceType.UPLOAD:
             with open(media_path(media.location), "rb") as f:
                 return f.read()
+        if not _is_safe_fetch_target(media.location):
+            return None
         response = requests.get(media.location, timeout=15)
         response.raise_for_status()
         return response.content

@@ -9,6 +9,8 @@
 import datetime
 import os
 import secrets as _secrets
+import sys
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -29,7 +31,25 @@ try:
 except Exception:
     PDF_AVAILABLE = False
 
-app = FastAPI(title="LRS Pilot")
+
+def _get_app_password():
+    return os.getenv("APP_PASSWORD", "")
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    if not _get_app_password():
+        print(
+            "\n⚠️  APP_PASSWORD non défini — le pilote démarre en accès libre "
+            "(aucune authentification sur /api/*). Acceptable en dev local ; à "
+            "ne jamais laisser ainsi sur un déploiement exposé au réseau — voir "
+            "DEPLOYMENT.md.\n",
+            file=sys.stderr,
+        )
+    yield
+
+
+app = FastAPI(title="LRS Pilot", lifespan=_lifespan)
 
 
 @app.get("/api/health")
@@ -59,11 +79,9 @@ ONBOARDING_FILE = os.path.join(_BASE_DIR, ".lrs_onboarded.json")
 # Un seul mot de passe partagé (pas de comptes multi-utilisateurs — l'app
 # Streamlit de référence n'en a pas non plus : l'accès payant se fait via
 # un lien d'achat externe qui donne ce mot de passe).
+# _get_app_password() est définie plus haut (avant `app = FastAPI(...)`),
+# nécessaire dès le lifespan de démarrage.
 # ══════════════════════════════════════════════════════════════
-
-def _get_app_password():
-    return os.getenv("APP_PASSWORD", "")
-
 
 @app.middleware("http")
 async def _require_auth(request: Request, call_next):
