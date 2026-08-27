@@ -6,23 +6,30 @@
 <title>LRS — Pilote Audit</title>
 <style>
   :root {
-    --bg: #000000;
-    --surface: #111114;
-    --surface-2: #1c1c20;
-    --border: rgba(255,255,255,0.09);
-    --border-strong: rgba(255,255,255,0.16);
-    --text: #f5f5f7;
-    --text-secondary: #98989d;
-    --text-muted: #6e6e73;
-    --accent: #0a84ff;
-    --accent-soft: rgba(10,132,255,0.14);
-    --success: #30d158;
-    --success-soft: rgba(48,209,88,0.14);
-    --warning: #ff9f0a;
-    --warning-soft: rgba(255,159,10,0.14);
-    --danger: #ff453a;
-    --danger-soft: rgba(255,69,58,0.14);
+    --bg: #f5f5f7;
+    --bg-gradient:
+      radial-gradient(1200px circle at 12% -10%, rgba(0,122,255,0.16), transparent 55%),
+      radial-gradient(1000px circle at 92% 6%, rgba(175,82,222,0.12), transparent 50%),
+      radial-gradient(900px circle at 50% 108%, rgba(52,199,89,0.10), transparent 55%),
+      #f5f5f7;
+    --surface: rgba(255,255,255,0.70);
+    --surface-2: rgba(118,118,128,0.12);
+    --border: rgba(60,60,67,0.10);
+    --border-strong: rgba(60,60,67,0.18);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-muted: #86868b;
+    --accent: #007aff;
+    --accent-soft: rgba(0,122,255,0.12);
+    --success: #34c759;
+    --success-soft: rgba(52,199,89,0.14);
+    --warning: #ff9500;
+    --warning-soft: rgba(255,149,0,0.14);
+    --danger: #ff3b30;
+    --danger-soft: rgba(255,59,48,0.12);
+    --glass-blur: blur(24px) saturate(180%);
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --sidebar-w: 264px;
   }
 
   * { box-sizing: border-box; }
@@ -30,22 +37,25 @@
   html, body {
     margin: 0;
     padding: 0;
-    background: var(--bg);
+    background: var(--bg-gradient);
+    background-attachment: fixed;
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
                  "Helvetica Neue", Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 
-  body {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 96px 24px 120px;
-  }
+  body { min-height: 100vh; }
 
   .wrap { width: 100%; max-width: 720px; }
+
+  /* Glass panels — frosted-glass blur on every "surface" component */
+  .card, .section, .kpi-card, .streak-card, .list-row, .alert-row, .hist-row,
+  .empty-dash, .sparkline-wrap, .podium-card, .entity-card, .lib-card, .vs-card,
+  .diag-row, .sub-tabs, .stats-banner, .angle-card, .sidebar, .topbar {
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+  }
 
   /* ── Header ── */
   .brand {
@@ -55,10 +65,11 @@
     gap: 10px;
     margin-bottom: 8px;
   }
-  .brand .dot {
+  .dot {
     width: 10px; height: 10px; border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 14px var(--accent);
+    flex-shrink: 0;
   }
   .brand span {
     font-size: 15px;
@@ -163,9 +174,9 @@
     font-family: inherit;
   }
   .segmented button.active {
-    background: var(--surface);
+    background: #ffffff;
     color: var(--text);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10);
   }
 
   button.cta, a.cta {
@@ -184,7 +195,7 @@
     text-align: center;
     transition: transform 0.15s var(--ease), background 0.2s var(--ease), opacity 0.2s var(--ease);
   }
-  button.cta:hover, a.cta:hover { background: #2b95ff; }
+  button.cta:hover, a.cta:hover { background: #1f8fff; }
   button.cta:active, a.cta:active { transform: scale(0.98); }
   button.cta:disabled { opacity: 0.5; cursor: default; transform: none; }
 
@@ -192,10 +203,10 @@
     margin-top: 18px;
     padding: 14px 16px;
     background: var(--danger-soft);
-    border: 1px solid rgba(255,69,58,0.3);
+    border: 1px solid rgba(255,59,48,0.3);
     border-radius: 12px;
     font-size: 14px;
-    color: #ffb4ae;
+    color: #c4281e;
     display: none;
   }
 
@@ -316,7 +327,7 @@
 
   .priority-card {
     background: var(--accent-soft);
-    border: 1px solid rgba(10,132,255,0.3);
+    border: 1px solid rgba(0,122,255,0.3);
     border-radius: 16px;
     padding: 20px;
   }
@@ -365,28 +376,94 @@
   }
   .demo-link:hover { color: var(--text-secondary); }
 
-  /* ── Nav tabs ── */
+  /* ── Sidebar nav (menu déroulant à gauche) ── */
+  .topbar {
+    display: none;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .menu-toggle {
+    width: 38px; height: 38px; flex-shrink: 0;
+    border-radius: 11px;
+    border: 1px solid var(--border-strong);
+    background: rgba(255,255,255,0.6);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sidebar-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.24);
+    z-index: 39;
+  }
+  .sidebar-overlay.show { display: block; }
+
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    padding: 28px 16px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    z-index: 40;
+    transition: transform 0.32s var(--ease);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 10px;
+  }
+  .sidebar-brand span:last-child {
+    font-size: 14px; font-weight: 700; letter-spacing: 0.01em; color: var(--text);
+  }
+
   .nav-tabs {
     display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 40px;
+    flex-direction: column;
+    gap: 3px;
   }
   .nav-tab {
+    display: flex;
+    align-items: center;
+    text-align: left;
     background: none;
     border: none;
-    color: var(--text-muted);
-    font-size: 14px;
+    color: var(--text-secondary);
+    font-size: 14.5px;
     font-weight: 600;
-    padding: 8px 18px;
-    border-radius: 100px;
+    padding: 11px 14px;
+    border-radius: 12px;
     cursor: pointer;
     font-family: inherit;
-    transition: background 0.2s var(--ease), color 0.2s var(--ease);
+    transition: background 0.18s var(--ease), color 0.18s var(--ease);
   }
-  .nav-tab.active { background: var(--surface-2); color: var(--text); }
-  .nav-tab:hover:not(.active) { color: var(--text-secondary); }
+  .nav-tab.active { background: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(0,122,255,0.35); }
+  .nav-tab:hover:not(.active) { background: rgba(0,0,0,0.04); color: var(--text); }
+
+  .main-content { margin-left: var(--sidebar-w); padding: 56px 32px 120px; min-height: 100vh; }
+  .main-content > .wrap { max-width: 760px; margin: 0 auto; }
+
+  @media (max-width: 900px) {
+    .topbar { display: flex; }
+    .sidebar {
+      transform: translateX(-100%);
+      box-shadow: 0 0 40px rgba(0,0,0,0.22);
+      padding-top: 20px;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .main-content { margin-left: 0; padding: 28px 18px 100px; }
+  }
 
   /* ── Dashboard ── */
   .kpi-grid {
@@ -471,7 +548,7 @@
 
   .stats-banner {
     display: flex; gap: 32px; flex-wrap: wrap;
-    background: linear-gradient(135deg, #17171c, #101014);
+    background: linear-gradient(135deg, rgba(0,122,255,0.10), rgba(175,82,222,0.08));
     border: 1px solid var(--border);
     border-radius: 20px; padding: 22px 26px; margin-bottom: 20px;
   }
@@ -677,31 +754,20 @@
   .md-body th, .md-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
   .md-body th { color: var(--text); background: var(--surface-2); }
 
-  /* ── Plans & Tarifs ── */
-  .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
-  .plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
-  .plan-card .plan-label { font-size: 15px; font-weight: 800; }
-  .plan-card .plan-price { font-size: 22px; font-weight: 800; color: var(--accent); margin: 8px 0 12px; }
-  .plan-card ul { list-style: none; margin: 0; padding: 0; }
-  .plan-card li { font-size: 12.5px; color: var(--text-secondary); padding: 4px 0; }
-  .plan-card li:before { content: "✓ "; color: var(--success); }
-
   /* ── Login gate (mot de passe partagé) ── */
-  #loginGate { display: none; max-width: 420px; padding-top: 12vh; }
+  #loginGate {
+    display: none;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    max-width: none;
+  }
+  #loginGate .card { width: 100%; max-width: 420px; }
   #mainWrap { display: none; }
   .login-title { font-size: 24px; font-weight: 800; text-align: center; margin: 0 0 6px; }
   .login-sub { text-align: center; color: var(--text-secondary); font-size: 14px; margin: 0 0 24px; }
-
-  /* ── Onboarding banner ── */
-  .onboarding-banner {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border: 2px solid var(--accent); border-radius: 14px;
-    padding: 24px 28px; margin-bottom: 24px;
-  }
-  .onboarding-banner .ob-title { color: var(--accent); font-size: 16px; font-weight: 700; margin-bottom: 10px; }
-  .onboarding-banner .ob-body { color: #ccc; font-size: 13.5px; line-height: 1.8; }
-  .onboarding-banner .ob-body b { color: #fff; }
-  .onboarding-banner .ob-step { color: var(--accent); }
 
   /* ── Monitoring (Suivi) ── */
   .trend-metrics { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
@@ -732,21 +798,29 @@
     </div>
   </div>
 
-  <div class="wrap" id="mainWrap">
-    <div class="brand"><span class="dot"></span><span>LRS — Pilote</span></div>
-
-    <div id="onboardingBanner" style="display:none"></div>
-
-    <div class="nav-tabs" id="navTabs">
-      <button class="nav-tab active" data-view="dashboard">Dashboard</button>
-      <button class="nav-tab" data-view="audit">Audit</button>
-      <button class="nav-tab" data-view="multi">Multi-Audit</button>
-      <button class="nav-tab" data-view="suivi">Suivi</button>
-      <button class="nav-tab" data-view="historique">Historique</button>
-      <button class="nav-tab" data-view="ressources">Ressources</button>
-      <button class="nav-tab" data-view="creative">Creative Studio</button>
-      <button class="nav-tab" data-view="plans">Plans</button>
+  <div id="mainWrap">
+    <div class="topbar">
+      <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">☰</button>
+      <div class="sidebar-brand" style="margin:0"><span class="dot"></span><span>LRS — Pilote</span></div>
     </div>
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand"><span class="dot"></span><span>LRS™ — Pilote</span></div>
+      <div class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-view="dashboard">📊 Dashboard</button>
+        <button class="nav-tab" data-view="audit">🔍 Audit</button>
+        <button class="nav-tab" data-view="multi">🧩 Multi-Audit</button>
+        <button class="nav-tab" data-view="suivi">📈 Suivi</button>
+        <button class="nav-tab" data-view="historique">🕓 Historique</button>
+        <button class="nav-tab" data-view="ressources">📚 Ressources</button>
+        <button class="nav-tab" data-view="creative">🎨 Creative Studio</button>
+        <button class="nav-tab" data-view="integrations">🔗 Intégrations</button>
+      </div>
+    </nav>
+
+    <main class="main-content"><div class="wrap">
 
     <div id="dashboardView"></div>
     <div id="multiView" style="display:none"></div>
@@ -754,7 +828,7 @@
     <div id="historiqueView" style="display:none"></div>
     <div id="ressourcesView" style="display:none"></div>
     <div id="creativeView" style="display:none"></div>
-    <div id="plansView" style="display:none"></div>
+    <div id="integrationsView" style="display:none"></div>
 
     <div id="auditView" style="display:none">
     <div id="heroText">
@@ -822,6 +896,8 @@
 
     <div class="results" id="results"></div>
     </div>
+
+    </div></main>
   </div>
 
 <script>
@@ -868,7 +944,7 @@ async function bootstrapAuth() {
     const res = await fetch('/api/auth/status');
     const data = await res.json();
     if (data.password_required && !data.authenticated) {
-      $('#loginGate').style.display = 'block';
+      $('#loginGate').style.display = 'flex';
       $('#loginPwd').focus();
     } else {
       showApp();
@@ -879,32 +955,18 @@ async function bootstrapAuth() {
   }
 }
 
-// ── Onboarding interactif ─────────────────────────────────
-async function setupOnboarding() {
-  try {
-    const res = await fetch('/api/onboarding/status');
-    const data = await res.json();
-    if (data.onboarded) return;
-  } catch (err) { return; }
-
-  $('#onboardingBanner').innerHTML = `
-    <div class="onboarding-banner fade-up">
-      <div class="ob-title">👋 Bienvenue sur LRS™ — Launch Risk System</div>
-      <div class="ob-body">
-        <b>3 étapes pour votre premier audit :</b><br/>
-        <span class="ob-step">①</span>&nbsp;Collez l'URL de votre landing page dans l'onglet <b>Audit</b><br/>
-        <span class="ob-step">②</span>&nbsp;Choisissez votre plateforme publicitaire et le type d'offre<br/>
-        <span class="ob-step">③</span>&nbsp;Cliquez <b>Lancer l'audit</b> — résultats en 15 secondes<br/><br/>
-        <b>Fonctionnalités disponibles :</b>
-        Audit · Comparaison · Projets multi-pages · Bulk audit · Monitoring planifié · Export PDF client
-      </div>
-      <button class="cta-secondary" id="onboardingOkBtn" style="margin-top:16px">✅ Compris, démarrer</button>
-    </div>
-  `;
-  $('#onboardingBanner').style.display = 'block';
-  $('#onboardingOkBtn').addEventListener('click', async () => {
-    $('#onboardingBanner').style.display = 'none';
-    try { await fetch('/api/onboarding/complete', { method: 'POST' }); } catch (err) {}
+// ── Sidebar (menu déroulant à gauche) ─────────────────────
+function setupSidebar() {
+  const sidebar = $('#sidebar');
+  const overlay = $('#sidebarOverlay');
+  const openSidebar = () => { sidebar.classList.add('open'); overlay.classList.add('show'); };
+  const closeSidebar = () => { sidebar.classList.remove('open'); overlay.classList.remove('show'); };
+  $('#menuToggle').addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+  sidebar.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-tab') && window.matchMedia('(max-width: 900px)').matches) closeSidebar();
   });
 }
 
@@ -914,7 +976,7 @@ function checkDueMonitoring() {
 }
 
 function initApp() {
-  setupOnboarding();
+  setupSidebar();
   checkDueMonitoring();
   loadDashboard();
 }
@@ -939,7 +1001,7 @@ const VIEW_IDS = {
   historique: 'historiqueView',
   ressources: 'ressourcesView',
   creative: 'creativeView',
-  plans: 'plansView',
+  integrations: 'integrationsView',
 };
 
 function setupNavTabs() {
@@ -959,7 +1021,7 @@ function setupNavTabs() {
     if (view === 'historique') loadHistorique();
     if (view === 'ressources') renderRessources();
     if (view === 'creative') renderCreative();
-    if (view === 'plans') loadPlans();
+    if (view === 'integrations') loadIntegrations();
   });
 }
 setupNavTabs();
@@ -971,9 +1033,9 @@ function scoreEmoji(score) {
   return '🟢';
 }
 function scoreHex(score) {
-  if (score <= 9) return '#ff453a';
-  if (score <= 14) return '#ff9f0a';
-  return '#30d158';
+  if (score <= 9) return '#ff3b30';
+  if (score <= 14) return '#ff9500';
+  return '#34c759';
 }
 
 function buildSparkline(points) {
@@ -989,7 +1051,7 @@ function buildSparkline(points) {
     `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${scoreHex(points[i].score)}" />`
   ).join('');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">
-    <path d="${path}" fill="none" stroke="#0a84ff" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+    <path d="${path}" fill="none" stroke="#007aff" stroke-width="2.5" vector-effect="non-scaling-stroke" />
     ${dots}
   </svg>`;
 }
@@ -3257,44 +3319,31 @@ function renderCreativeStudioResults(data) {
 }
 
 // ══════════════════════════════════════════════════════════
-// ── Plans & Tarifs ─────────────────────────────────────────
+// ── Intégrations ───────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
-async function loadPlans() {
-  $('#plansView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+async function loadIntegrations() {
+  $('#integrationsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
   try {
     const [plansRes, integRes] = await Promise.all([fetch('/api/plans'), fetch('/api/integrations/status')]);
     const plansData = await plansRes.json();
     const integData = await integRes.json();
-    renderPlans(plansData, integData);
+    renderIntegrations(plansData, integData);
   } catch (err) {
-    $('#plansView').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#integrationsView').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
   }
 }
 
-function renderPlans(data, integrations) {
-  const plans = data.plans || {};
-  const cardsHtml = Object.entries(plans).map(([key, p]) => `
-    <div class="plan-card">
-      <div class="plan-label">${escapeHtml(p.label)}</div>
-      <div class="plan-price">${escapeHtml(p.price)}</div>
-      <ul>
-        <li>${p.audits_per_month >= 999 ? 'Audits illimités' : p.audits_per_month + ' audits / mois'}</li>
-        ${p.features.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
-      </ul>
-    </div>
-  `).join('');
-
+function renderIntegrations(data, integrations) {
   const integStatus = [
     ['Slack', integrations.slack, 'SLACK_WEBHOOK_URL'],
     ['Google Sheets', integrations.sheets, 'GOOGLE_SHEETS_CREDS + GOOGLE_SHEETS_ID'],
     ['Notion', integrations.notion, 'NOTION_TOKEN + NOTION_DATABASE_ID'],
   ];
 
-  $('#plansView').innerHTML = `
+  $('#integrationsView').innerHTML = `
     <div class="fade-up" style="margin-bottom:8px">
-      <p style="color:var(--text-secondary);font-size:14px">Ce pilote n'a pas de compte/facturation — cette page est informative. Usage ce mois-ci : <strong style="color:var(--text)">${data.usage_this_month}</strong> audit(s).</p>
+      <p style="color:var(--text-secondary);font-size:14px">Usage ce mois-ci : <strong style="color:var(--text)">${data.usage_this_month}</strong> audit(s).</p>
     </div>
-    <div class="plans-grid fade-up">${cardsHtml}</div>
     <div class="dash-section fade-up">
       <h2>🔗 Intégrations</h2>
       ${integStatus.map(([label, ok, envVars]) => `
