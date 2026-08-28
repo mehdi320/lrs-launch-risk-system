@@ -17,7 +17,14 @@ Lancement : uvicorn creative_studio.serving.app:app --port 8000
 from __future__ import annotations
 
 import os
+import sys
 import uuid
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -339,9 +346,27 @@ async def stripe_webhook(request: Request):
             if email and customer_id and subscription_id:
                 user_accounts.upsert_user_from_checkout(email, customer_id, subscription_id)
                 magic_token = user_accounts.create_magic_link(email)
-                email_alerts.send_magic_link_email(
+                sent = email_alerts.send_magic_link_email(
                     email, f"{LRS_APP_URL}?token={magic_token}",
                     smtp_config=email_alerts.get_smtp_config(),
+                )
+                if not sent:
+                    # Le compte est bien activé en base malgré l'échec d'envoi —
+                    # l'utilisateur peut toujours redemander un lien depuis
+                    # l'écran de verrouillage de l'app. Logué pour que
+                    # l'opérateur voie un SMTP mal configuré dans ses logs
+                    # plutôt que de découvrir un abonné payant bloqué.
+                    print(
+                        f"[stripe_webhook] Échec d'envoi du lien magique à {email} "
+                        f"— vérifier la config SMTP (SMTP_HOST/PORT/USER/PASSWORD).",
+                        file=sys.stderr,
+                    )
+            else:
+                print(
+                    f"[stripe_webhook] checkout.session.completed (subscription) "
+                    f"incomplet — email={bool(email)} customer={bool(customer_id)} "
+                    f"subscription={bool(subscription_id)} ; compte non activé.",
+                    file=sys.stderr,
                 )
             return PlainTextResponse("ok", status_code=200)
 

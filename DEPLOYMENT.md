@@ -89,6 +89,9 @@ fois la plateforme cible choisie.
       bêta) et le lien magique envoyé par email fonctionnent. Sans
       `LRS_SALES_PAGE_URL`, `/checkout/beta` refuse de créer une session
       (pas de `cancel_url` fiable).
+      → Voir **`STRIPE_SMTP_SETUP.md`** pour le guide pas-à-pas complet
+      (créer le produit/prix, configurer le webhook, tester avec
+      `test_smtp.py` et `test_stripe_webhook.py` avant la mise en prod).
 - [ ] Healthcheck : `GET /api/health` (pilote) répond `{"status":"ok"}`
       sans authentification, même si `APP_PASSWORD` est défini — à
       brancher sur le mécanisme de la plateforme (Docker `HEALTHCHECK`,
