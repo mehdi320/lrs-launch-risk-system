@@ -3,7 +3,31 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LRS — Pilote Audit</title>
+<title>LRS™ — Launch Risk System | Audit de landing page en 15 secondes</title>
+<meta name="description" content="LRS™ audite votre landing page avant de dépenser en pub Meta, TikTok ou Google : hook, offre, confiance, friction — et un plan d'action concret en 15 secondes." />
+<link rel="canonical" href="/" />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<!-- App privée (mot de passe + abonnement, voir robots.txt) — noindex plutôt
+     qu'une invitation à indexer un écran de connexion. -->
+<meta name="robots" content="noindex, nofollow" />
+
+<!-- Open Graph / Twitter Card — contrôlent l'aperçu quand ce lien est
+     partagé (Slack, DM, etc.), indépendamment de l'indexation. Remplacez
+     og:url par votre domaine réel une fois déployé ; og:image est
+     optionnel (pas d'image de partage dédiée pour l'instant). -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="LRS™ — Launch Risk System" />
+<meta property="og:description" content="Audit de landing page en 15 secondes : hook, offre, confiance, friction — avant de dépenser en pub." />
+<meta property="og:url" content="https://votre-domaine.example/" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="LRS™ — Launch Risk System" />
+<meta name="twitter:description" content="Audit de landing page en 15 secondes, avant de dépenser en pub." />
+
+<!-- Analytics — désactivé par défaut (pas de compte configuré). Pour
+     activer, remplacez data-domain par votre domaine et décommentez.
+     Plausible : cookieless, ne nécessite pas de bandeau de consentement
+     (contrairement à Google Analytics). -->
+<!-- <script defer data-domain="votre-domaine.example" src="https://plausible.io/js/script.js"></script> -->
 <style>
   :root {
     --bg: #f5f5f7;
@@ -796,6 +820,13 @@
       <button class="cta" id="loginBtn">Access LRS →</button>
       <div class="error-box" id="loginError"></div>
     </div>
+    <div style="text-align:center;margin-top:20px;font-size:12px;color:var(--text-muted)">
+      <a href="/privacy.html" style="color:inherit">Confidentialité</a>
+      &nbsp;·&nbsp;
+      <a href="/terms.html" style="color:inherit">Conditions</a>
+      &nbsp;·&nbsp;
+      <a href="/faq.html" style="color:inherit">FAQ</a>
+    </div>
   </div>
 
   <div id="mainWrap">
@@ -1004,6 +1035,17 @@ const VIEW_IDS = {
   integrations: 'integrationsView',
 };
 
+const VIEW_TITLES = {
+  dashboard: 'Dashboard',
+  audit: 'Audit',
+  multi: 'Multi-Audit',
+  suivi: 'Suivi',
+  historique: 'Historique',
+  ressources: 'Ressources',
+  creative: 'Creative Studio',
+  integrations: 'Intégrations',
+};
+
 function setupNavTabs() {
   const nav = $('#navTabs');
   nav.addEventListener('click', (e) => {
@@ -1015,6 +1057,7 @@ function setupNavTabs() {
     Object.entries(VIEW_IDS).forEach(([v, id]) => {
       $('#' + id).style.display = (v === view) ? 'block' : 'none';
     });
+    document.title = (VIEW_TITLES[view] || 'LRS™') + ' — LRS™ Pilote';
     if (view === 'dashboard') loadDashboard();
     if (view === 'multi') renderMulti();
     if (view === 'suivi') loadSuivi();
@@ -1647,7 +1690,7 @@ function renderExistingABTests(abtests) {
                 <div class="entity-title">🧪 ${escapeHtml(name)} — ${typeBadge}</div>
                 <div class="entity-sub">${rounds.length} round(s) · A:${winsA} vs B:${winsB} ${t.hypothesis ? '· ' + escapeHtml(t.hypothesis) : ''}</div>
               </div>
-              <button class="icon-btn" data-del-ab="${escapeHtml(name)}">🗑️</button>
+              <button class="icon-btn" data-del-ab="${escapeHtml(name)}" aria-label="Supprimer ce test A/B">🗑️</button>
             </div>
             ${rounds.slice(-5).reverse().map(r => `
               <div class="url-progress-row">
@@ -1892,7 +1935,7 @@ function renderSuiviMonitoring(selectedUrl) {
                 <div class="entity-title">${statusIcon} ${escapeHtml(urlShort)}</div>
                 <div class="entity-sub">Toutes les ${s.freq_days}j · ${scIcon} ${lastSc != null ? lastSc + '/20' : 'pas encore audité'}</div>
               </div>
-              <button class="icon-btn" data-del-sched="${sid}">🗑️</button>
+              <button class="icon-btn" data-del-sched="${sid}" aria-label="Supprimer cet audit planifié">🗑️</button>
             </div>
             <div class="sched-status-row">
               <span><b>Dernier audit :</b> ${escapeHtml(s.last_run || 'Jamais')}</span>
@@ -2038,7 +2081,7 @@ function renderSuiviProjects(projects) {
             <div class="entity-title">🗂️ ${escapeHtml(name)}</div>
             <div class="entity-sub">${nDone}/${urls.length} audités ${avg !== null ? '· Moy ' + avg + '/20' : '· Non audité'}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
           </div>
-          <button class="icon-btn" data-del-proj="${escapeHtml(name)}">🗑️</button>
+          <button class="icon-btn" data-del-proj="${escapeHtml(name)}" aria-label="Supprimer ce projet">🗑️</button>
         </div>
         ${urls.map(u => {
           const a = audits[u];
@@ -2194,7 +2237,7 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
             <div class="entity-title">${badge} ${escapeHtml(name)}</div>
             <div class="entity-sub">${escapeHtml(c.platform)} · ${c.budget_daily}€/j · màj ${escapeHtml(c.updated)}</div>
           </div>
-          <button class="icon-btn" data-del-camp="${escapeHtml(name)}">🗑️</button>
+          <button class="icon-btn" data-del-camp="${escapeHtml(name)}" aria-label="Supprimer cette campagne">🗑️</button>
         </div>
         <div class="kpi-grid" style="margin-bottom:12px">
           <div class="kpi-card"><div class="kpi-label">CTR</div><div class="kpi-val" style="font-size:18px">${c.ctr || '—'}%</div></div>
@@ -2973,7 +3016,7 @@ function renderSwipeFiles(swipes) {
               <div class="lr-title" style="white-space:normal">${escapeHtml(it.text)}</div>
               <div class="lr-meta">${escapeHtml(it.platform || '')} · ${escapeHtml(it.offer || '')} · ${escapeHtml(it.ts || '')}${it.notes ? ' · ' + escapeHtml(it.notes) : ''}</div>
             </div>
-            <button class="icon-btn" data-del-swipe="${cat}:${i}">🗑️</button>
+            <button class="icon-btn" data-del-swipe="${cat}:${i}" aria-label="Supprimer ce swipe file">🗑️</button>
           </div>
         `).join('')}
       </div>

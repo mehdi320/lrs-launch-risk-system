@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 import ads_api
@@ -107,6 +108,10 @@ app.add_middleware(
     secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32),
     https_only=os.getenv("APP_HTTPS_ONLY", "").strip().lower() in ("1", "true", "yes"),
 )
+# Compresse les réponses (index.html ~140 Ko non minifié, réponses JSON des
+# /api/*) — gain net de bande passante/temps de chargement, aucun coût de
+# config côté client (les navigateurs négocient gzip automatiquement).
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
