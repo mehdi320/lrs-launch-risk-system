@@ -1,89 +1,28 @@
 import type { Metadata } from "next";
+import {
+  SPOTS_TOTAL,
+  SPOTS_REMAINING,
+  BETA_PRICE,
+  REGULAR_PRICE,
+  PrimaryCta,
+  SectionEyebrow,
+  SectionHeading,
+  Prose,
+  CheckList,
+  LangSwitch,
+} from "@/components/vente-shared";
 
 export const metadata: Metadata = {
-  title: "LRS™ — Ne lance jamais une campagne sur une page qui n'est pas prête",
+  title: "LRS™ — Never launch a campaign on a page that isn't ready",
   description:
-    "LRS audite ta landing page et ta pub avant que tu dépenses un euro de trafic payant, et rend un verdict net : lance, teste petit budget, ou reprends tout.",
+    "LRS audits your landing page and your ad before you spend a dollar on paid traffic, and gives you a clear verdict: launch, test small, or start over.",
 };
-
-// ---------------------------------------------------------------------------
-// Champs éditables à la main pour la bêta — volontairement PAS de logique
-// (pas de countdown, pas de décrément automatique). Si une place est prise,
-// modifiez SPOTS_REMAINING vous-même avant de redéployer.
-// ---------------------------------------------------------------------------
-const SPOTS_TOTAL = 17;
-const SPOTS_REMAINING = 17;
-const BETA_PRICE = "50€";
-const REGULAR_PRICE = "100€+";
-
-const STRIPE_LINK =
-  process.env.NEXT_PUBLIC_STRIPE_LINK && process.env.NEXT_PUBLIC_STRIPE_LINK.length > 0
-    ? process.env.NEXT_PUBLIC_STRIPE_LINK
-    : "#";
-
-function PrimaryCta({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <a
-      href={STRIPE_LINK}
-      className={
-        "inline-flex items-center justify-center rounded-full bg-accent px-8 py-4 text-base font-semibold text-white shadow-[0_8px_24px_rgba(0,122,255,0.35)] transition hover:bg-[#0066d6] active:scale-[0.98] " +
-        className
-      }
-    >
-      {children}
-    </a>
-  );
-}
-
-function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-accent">
-      {children}
-    </p>
-  );
-}
-
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="text-3xl font-extrabold tracking-tight text-[#1d1d1f] sm:text-4xl">
-      {children}
-    </h2>
-  );
-}
-
-function Prose({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-6 space-y-4 text-base leading-relaxed text-[#4b4b50] sm:text-lg">
-      {children}
-    </div>
-  );
-}
-
-function CheckList({ items }: { items: React.ReactNode[] }) {
-  return (
-    <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-      {items.map((item, i) => (
-        <li
-          key={i}
-          className="flex items-start gap-2 rounded-2xl bg-white p-4 text-sm leading-relaxed text-[#1d1d1f] shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
-        >
-          <span className="mt-0.5 text-accent">✓</span>
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export default function VentePage() {
   return (
     <main className="min-h-screen bg-[#f5f5f7]">
+      <LangSwitch href="/vente/fr" label="FR" />
+
       {/* ============================== HERO ============================== */}
       <section className="relative overflow-hidden px-6 pb-20 pt-16 sm:pb-28 sm:pt-24">
         <div
@@ -98,153 +37,150 @@ export default function VentePage() {
         <div className="mx-auto max-w-3xl text-center">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-4 py-1.5 text-sm font-medium text-[#1d1d1f] backdrop-blur">
             <span className="h-2 w-2 rounded-full bg-accent" />
-            Bêta limitée — {SPOTS_REMAINING}/{SPOTS_TOTAL} places restantes
+            Beta limited — {SPOTS_REMAINING}/{SPOTS_TOTAL} spots left
           </div>
 
           <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight text-[#1d1d1f] sm:text-6xl">
-            Ne lance jamais une campagne sur une page qui n&apos;est pas
-            prête à convertir
+            Never launch a campaign on a page that isn&apos;t ready to
+            convert
           </h1>
 
           <p className="mx-auto mt-6 max-w-xl text-lg text-[#6e6e73] sm:text-xl">
-            LRS audite ta landing page et ta pub avant que tu dépenses un
-            euro de trafic payant, et rend un verdict net : lance, teste
-            petit budget, ou reprends tout.
+            LRS audits your landing page and your ad before you spend a
+            single dollar on paid traffic, and gives you a clear verdict:
+            launch, test small, or start over.
           </p>
 
           <div className="mt-10 flex flex-col items-center gap-3">
-            <PrimaryCta>Rejoindre la bêta →</PrimaryCta>
+            <PrimaryCta>Join the beta →</PrimaryCta>
             <p className="text-sm text-[#86868b]">
-              {BETA_PRICE}/mois à vie · {SPOTS_REMAINING} places seulement
+              {BETA_PRICE}/mo for life · {SPOTS_REMAINING} spots only
             </p>
           </div>
         </div>
       </section>
 
-      {/* ============================ PROBLÈME ============================ */}
+      {/* ============================ PROBLEM ============================ */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Le problème</SectionEyebrow>
+          <SectionEyebrow>The problem</SectionEyebrow>
           <SectionHeading>
-            Le vrai coût d&apos;un lancement, ce n&apos;est pas la pub.
-            C&apos;est ce qu&apos;on ne voit pas avant de la lancer
+            The real cost of a launch isn&apos;t the ad spend. It&apos;s
+            what you don&apos;t see before you launch
           </SectionHeading>
 
           <Prose>
             <p>
-              Tu connais la séquence. Tu finis une landing page, tu écris
-              une pub, tu es convaincu que ça va marcher (parce que tu y as
-              mis trois jours, parce que le brief est bon, parce que
-              &laquo;&nbsp;ça se sent&nbsp;&raquo;). Tu mets du budget. Et
-              deux jours plus tard tu regardes le CPA en te demandant si le
-              problème vient du ciblage, de la créa, ou de la page elle
-              même.
+              You know the sequence. You finish a landing page, you write
+              an ad, you&apos;re convinced it&apos;s going to work (because
+              you spent three days on it, because the brief is solid,
+              because &laquo;&nbsp;it feels right&nbsp;&raquo;). You turn
+              on the budget. Two days later you&apos;re staring at your CPA
+              wondering if the problem is targeting, creative, or the page
+              itself.
             </p>
             <p>
-              Le problème, la plupart du temps, ce n&apos;est pas le
-              trafic. C&apos;est qu&apos;on a lancé une page ou une pub qui
-              n&apos;était de toute façon pas prête à convertir, et
-              qu&apos;on l&apos;a découvert avec de l&apos;argent déjà
-              dépensé plutôt qu&apos;avant.
+              Most of the time, the problem isn&apos;t traffic. It&apos;s
+              that you launched a page or an ad that wasn&apos;t ready to
+              convert in the first place — and you found out with money
+              already spent instead of before.
             </p>
             <p className="font-semibold text-[#1d1d1f]">
-              LRS existe pour supprimer cette étape de découverte a
-              posteriori.
+              LRS exists to remove that after-the-fact discovery step.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ========================= POSITIONNEMENT ========================= */}
+      {/* ========================= POSITIONING ========================= */}
       <section className="bg-white px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Ce que c&apos;est</SectionEyebrow>
+          <SectionEyebrow>What it is</SectionEyebrow>
           <SectionHeading>
-            Un filtre de risque avant dépense, pas un outil de création de
-            plus
+            A risk filter before you spend, not another creation tool
           </SectionHeading>
 
           <Prose>
             <p>
-              LRS™ (Launch Risk System) est un copilote d&apos;audit pré
-              lancement pour le paid traffic (Meta, TikTok, Google). Avant
-              que tu mettes un euro de budget, il score ta landing page, ta
-              pub, et leur cohérence entre elles, puis rend un verdict de
-              lancement net : ne lance pas, teste petit budget, ou prêt à
-              scaler.
+              LRS™ (Launch Risk System) is a pre-launch audit copilot for
+              paid traffic (Meta, TikTok, Google). Before you commit a
+              single dollar of budget, it scores your landing page, your
+              ad, and how well they match each other — then gives you a
+              clear launch verdict: don&apos;t launch, test with a small
+              budget, or ready to scale.
             </p>
             <p>
-              Ce n&apos;est pas un outil qui te dit &laquo;&nbsp;c&apos;est
-              plutôt bien écrit&nbsp;&raquo;. C&apos;est un système qui te
-              dit si tu dépenses ou si tu corriges d&apos;abord.
+              It&apos;s not a tool that tells you &laquo;&nbsp;this is
+              pretty well written&nbsp;&raquo;. It&apos;s a system that
+              tells you whether to spend or fix it first.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* =========================== MOTEUR D'AUDIT ========================= */}
+      {/* =========================== AUDIT ENGINE ========================= */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Le moteur d&apos;audit</SectionEyebrow>
-          <SectionHeading>Le cœur du produit</SectionHeading>
+          <SectionEyebrow>The audit engine</SectionEyebrow>
+          <SectionHeading>The core of the product</SectionHeading>
 
           <Prose>
-            <p>Tu choisis le mode selon ce que tu as en main.</p>
+            <p>You pick the mode based on what you have.</p>
           </Prose>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <h3 className="font-bold text-[#1d1d1f]">Funnel Only</h3>
               <p className="mt-2 text-sm leading-relaxed text-[#6e6e73]">
-                Pour auditer une landing page seule.
+                To audit a landing page on its own.
               </p>
             </div>
             <div className="rounded-2xl bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <h3 className="font-bold text-[#1d1d1f]">Ads Only</h3>
               <p className="mt-2 text-sm leading-relaxed text-[#6e6e73]">
-                Pour auditer un script ou un texte de pub seul.
+                To audit an ad script or ad copy on its own.
               </p>
             </div>
             <div className="rounded-2xl border border-accent/30 bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
               <h3 className="font-bold text-[#1d1d1f]">Full Risk</h3>
               <p className="mt-2 text-sm leading-relaxed text-[#6e6e73]">
-                Le mode le plus complet : audite la pub et la landing
-                ensemble et détecte les mismatches entre les deux (la
-                promesse de la pub que la page ne tient pas, le ton qui
-                change, l&apos;offre qui ne correspond plus).
+                The most complete mode: audits the ad and the landing page
+                together and catches mismatches between them (a promise
+                the ad makes that the page doesn&apos;t back up, a tone
+                shift, an offer that no longer matches).
               </p>
             </div>
           </div>
 
           <Prose>
             <p>
-              Le scoring est structuré sur quatre axes noté sur 20 (hook,
-              offre, confiance, friction et cohérence du message), avec une
-              méthodologie explicite qui s&apos;adapte au type d&apos;offre
-              (ecommerce ou digital) et au type de page détecté
-              automatiquement (fiche produit, catalogue, homepage, SaaS,
-              lead gen, blog). Ce n&apos;est pas un avis vague sur ta page.
-              C&apos;est un score reproductible.
+              Scoring is structured across four pillars scored out of 20
+              (hook, offer, trust, friction and message consistency), with
+              an explicit methodology that adapts to the type of offer
+              (ecommerce or digital) and the type of page detected
+              automatically (product page, catalog, homepage, SaaS, lead
+              gen, blog). This isn&apos;t a vague opinion about your page.
+              It&apos;s a reproducible score.
             </p>
           </Prose>
 
           <div className="mt-6 rounded-2xl border-l-4 border-accent bg-white p-6 text-base font-medium leading-relaxed text-[#1d1d1f] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            En deux minutes, tu sais si tu dois lancer, tester avec un
-            petit budget, ou tout reprendre, au lieu de le découvrir après
-            avoir brûlé 500€ de pub à essayer de le comprendre.
+            In two minutes, you know whether to launch, test with a small
+            budget, or start over — instead of finding out after burning
+            $500 in ad spend trying to figure it out.
           </div>
 
           <CheckList
             items={[
-              "Un verdict de lancement clair",
-              "Un plan d'action priorisé par effort et par impact",
-              "Une estimation du CVR actuel comparé au CVR post correction",
-              "Un rewrite complet : headline, bullets, CTA, stack d'offre, garantie, FAQ",
-              "Des variantes de pub prêtes à l'emploi : angles, hooks, script UGC 20-30s",
-              "Détection automatique de la langue (français, anglais, mixte)",
-              "Scoring adapté : marque déjà installée ou nouveau lancement",
-              "Analyse en streaming avec progression affichée en temps réel",
-              "Quick Audit pour un premier avis rapide avant d'aller plus loin",
+              "A clear launch verdict",
+              "An action plan prioritized by effort and impact",
+              "An estimate of your current CVR vs. the CVR after fixes",
+              "A complete rewrite: headline, bullets, CTA, offer stack, guarantee, FAQ",
+              "Ready-to-use ad variants: angles, hooks, 20-30s UGC script",
+              "Automatic language detection (English, French, or mixed)",
+              "Scoring adapted to an established brand or a new launch",
+              "Streaming analysis with real-time progress",
+              "Quick Audit for a fast first read before going deeper",
             ]}
           />
         </div>
@@ -255,39 +191,38 @@ export default function VentePage() {
         <div className="mx-auto max-w-3xl">
           <SectionEyebrow>Creative Studio</SectionEyebrow>
           <SectionHeading>
-            Une fois le diagnostic posé, tu corriges dans le même outil
+            Once the diagnosis is made, you fix it in the same tool
           </SectionHeading>
 
           <Prose>
             <p>
-              Un audit qui te dit ce qui cloche, c&apos;est utile. Un audit
-              qui te donne directement le correctif testable, c&apos;est ce
-              qui te fait gagner les jours que tu aurais passés à chercher
-              un copywriter ou à ouvrir un troisième outil.
+              An audit that tells you what&apos;s wrong is useful. An audit
+              that hands you a testable fix directly is what saves you the
+              days you&apos;d otherwise spend hunting for a copywriter or
+              opening a third tool.
             </p>
             <p>
-              Creative Studio génère des variantes de copy, depuis zéro ou
-              à partir d&apos;une référence existante (le swipe d&apos;un
-              concurrent, une page qui a déjà marché pour toi). Il score la
-              copy avant et après sur la clarté de la promesse, la preuve,
-              la clarté de la cible, les éléments de conversion, la
-              lisibilité et la clarté du CTA — un score de structure, pas
-              une prédiction de conversion, parce qu&apos;on ne te vendra
-              jamais un chiffre qu&apos;on ne peut pas tenir.
+              Creative Studio generates copy variants, from scratch or
+              from an existing reference (a competitor&apos;s swipe, a
+              page that already worked for you). It scores the copy before
+              and after on promise clarity, proof, audience clarity,
+              conversion elements, readability and CTA clarity — a
+              structural score, not a conversion prediction, because
+              we&apos;ll never sell you a number we can&apos;t back up.
             </p>
           </Prose>
 
           <CheckList
             items={[
-              "Génération de copy depuis zéro ou à partir d'une référence (swipe concurrent, page qui a déjà marché)",
-              "Score avant/après : promesse, preuve, cible, éléments de conversion, lisibilité, CTA",
-              "A/B testing avec garde-fous : arrêt auto des variantes, protection anti-peeking statistique, anti-gaspillage de budget",
-              "Funnel Builder multi-étapes, popup exit intent compris",
-              "Éléments de conversion intégrés : countdown, réduction limitée dans le temps, compteur de stock",
-              "Analytics de drop-off étape par étape",
-              "Séquences email générées automatiquement",
-              "Export PDF du gagnant d'un test",
-              "Création depuis zéro ou optimisation d'une page/pub existante",
+              "Copy generation from scratch or from a reference (competitor swipe, a page that already worked)",
+              "Before/after scoring: promise, proof, audience, conversion elements, readability, CTA",
+              "A/B testing with guardrails: auto-stop underperforming variants, protection against statistical peeking, protection against wasted test budget",
+              "Multi-step Funnel Builder, exit-intent popup included",
+              "Built-in conversion elements: countdown, limited-time discount, stock counter",
+              "Step-by-step drop-off analytics",
+              "Automatically generated email sequences",
+              "PDF export of the winning variant",
+              "Build from scratch or optimize an existing page/ad",
             ]}
           />
         </div>
@@ -296,274 +231,264 @@ export default function VentePage() {
       {/* ============================ MONITORING ============================ */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Dans la durée</SectionEyebrow>
+          <SectionEyebrow>Over time</SectionEyebrow>
           <SectionHeading>
-            Ce n&apos;est pas fait pour un lancement. C&apos;est fait pour
-            tous tes lancements
+            This isn&apos;t built for one launch. It&apos;s built for all
+            your launches
           </SectionHeading>
 
           <Prose>
             <p>
-              Une page qui score bien aujourd&apos;hui ne le fera pas
-              forcément dans un mois. LRS planifie des audits automatiques
-              (tous les 7, 14 ou 30 jours) et t&apos;alerte dès qu&apos;un
-              score bouge de façon significative, à la hausse comme à la
-              baisse.
+              A page that scores well today won&apos;t necessarily score
+              well in a month. LRS schedules automatic audits (every 7,
+              14, or 30 days) and alerts you the moment a score moves
+              significantly, up or down.
             </p>
           </Prose>
 
           <CheckList
             items={[
-              "Projets multi-pages regroupés et audités en un clic",
-              "Connexion API Meta ou TikTok Ads : score LRS relié au ROAS réel de tes campagnes",
-              "Audit en masse jusqu'à 20 URLs d'un coup (import et export CSV)",
-              "Comparaison de deux pages côte à côte ou avant/après",
-              "Audit de la page d'un concurrent avec la même grille que la tienne",
+              "Multi-page projects grouped and audited in one click",
+              "Meta or TikTok Ads API connection: LRS score linked to your campaigns' real ROAS",
+              "Bulk audit up to 20 URLs at once (CSV import and export)",
+              "Side-by-side or before/after comparison of two pages",
+              "Audit a competitor's page with the same grid as yours",
             ]}
           />
 
           <Prose>
             <p>
-              L&apos;historique garde un graphique d&apos;évolution des
-              scores et le delta de progression depuis ton tout premier
-              audit. LRS ne sert pas qu&apos;au jour du lancement. Il
-              devient le tableau de bord qui te dit qu&apos;une page se
-              dégrade avant que ton ROAS ne te le dise à ta place.
+              History keeps a score evolution chart and your progress
+              delta since your very first audit. LRS isn&apos;t just for
+              launch day. It becomes the dashboard that tells you a page
+              is degrading before your ROAS tells you instead.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ============================ BIBLIOTHÈQUE ============================ */}
+      {/* ============================ LIBRARY ============================ */}
       <section className="bg-white px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Une bibliothèque qui grandit avec toi</SectionEyebrow>
+          <SectionEyebrow>A library that grows with you</SectionEyebrow>
           <SectionHeading>
-            Pas un outil qu&apos;on rouvre à zéro à chaque fois
+            Not a tool you reopen from zero every time
           </SectionHeading>
 
           <CheckList
             items={[
-              "Ads Library organisée par plateforme (Meta, TikTok, Google), par type de funnel et par approche de copywriting",
-              "Swipe Files privés : tes headlines, hooks et CTA qui ont le mieux scoré, réutilisables d'un audit à l'autre",
-              "Détection des patterns qui reviennent dans tes audits réussis",
-              "Benchmark Report 2025 et checklist pré-lancement intégrée",
+              "Ads Library organized by platform (Meta, TikTok, Google), funnel type, and copywriting approach",
+              "Private Swipe Files: your best-scoring headlines, hooks, and CTAs, reusable from one audit to the next",
+              "Detection of recurring patterns across your successful audits",
+              "2025 Benchmark Report and a built-in pre-launch checklist",
             ]}
           />
 
           <Prose>
             <p>
-              Chaque audit enrichit une bibliothèque personnelle que tu
-              réutilises. La valeur s&apos;accumule avec l&apos;usage, elle
-              ne repart pas de zéro à chaque lancement.
+              Every audit enriches a personal library you reuse. Value
+              compounds with usage — it doesn&apos;t reset to zero with
+              every launch.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ============================ AGENCES ============================ */}
+      {/* ============================ AGENCIES ============================ */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Pour les agences</SectionEyebrow>
+          <SectionEyebrow>For agencies</SectionEyebrow>
           <SectionHeading>
-            Si tu audites pour d&apos;autres comptes que le tien
+            If you audit accounts other than your own
           </SectionHeading>
 
           <Prose>
             <p>
-              L&apos;export PDF professionnel (branding LRS, quatre pages),
-              le Rapport Client personnalisable au nom du destinataire, et
-              le Rapport Agency en marque blanche permettent de livrer
-              l&apos;audit directement à un client sous ta propre marque,
-              sans repasser par un template externe.
+              Professional PDF export (LRS branding, four pages), a
+              Client Report customizable with the recipient&apos;s name,
+              and a white-label Agency Report let you deliver the audit
+              directly to a client under your own brand, without
+              switching to an external template.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ============================ INTÉGRATIONS ============================ */}
+      {/* ============================ INTEGRATIONS ============================ */}
       <section className="bg-white px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>Intégrations</SectionEyebrow>
+          <SectionEyebrow>Integrations</SectionEyebrow>
           <SectionHeading>
-            LRS s&apos;ajoute à ton workflow, il ne t&apos;en impose pas un
-            nouveau
+            LRS fits into your workflow, it doesn&apos;t add a new one
           </SectionHeading>
 
           <Prose>
             <p>
-              Notifications Slack, export Google Sheets et Notion, webhook
-              générique, envoi des résultats par email, et connexion API
-              directe à Meta Ads et TikTok Ads. Tu n&apos;as pas besoin
-              d&apos;aller consulter une app en plus, LRS vient
-              s&apos;insérer dans ce que tu utilises déjà.
+              Slack notifications, Google Sheets and Notion export, a
+              generic webhook, results by email, and a direct API
+              connection to Meta Ads and TikTok Ads. You don&apos;t need
+              to open one more app — LRS plugs into what you already use.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ========================== DIFFÉRENCIATION ========================== */}
+      {/* ========================== DIFFERENTIATION ========================== */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-3xl">
-          <SectionEyebrow>La différence</SectionEyebrow>
-          <SectionHeading>Ce qui rend LRS différent</SectionHeading>
+          <SectionEyebrow>What&apos;s different</SectionEyebrow>
+          <SectionHeading>What makes LRS different</SectionHeading>
 
           <Prose>
             <p>
-              La plupart des outils qui existent notent une page. Ils
-              s&apos;arrêtent là. LRS rend un verdict de lancement
-              actionnable (lancer, tester petit, ne pas lancer), avec le
-              correctif déjà généré grâce à Creative Studio, et un suivi
-              dans la durée grâce au monitoring, à l&apos;historique et à
-              la connexion aux campagnes live. Peu d&apos;outils vont
-              jusqu&apos;au verdict, au fix, et au suivi post lancement
-              dans un seul et même endroit.
+              Most existing tools score a page. That&apos;s where they
+              stop. LRS delivers an actionable launch verdict (launch,
+              test small, don&apos;t launch), with the fix already
+              generated through Creative Studio, and ongoing tracking
+              through monitoring, history, and live campaign connections.
+              Few tools go all the way from verdict, to fix, to
+              post-launch tracking, in one place.
             </p>
           </Prose>
         </div>
       </section>
 
-      {/* ============================ POUR QUI ============================ */}
+      {/* ============================ WHO IT'S FOR ============================ */}
       <section className="bg-white px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-4xl">
           <div className="text-center">
-            <SectionEyebrow>Pour qui</SectionEyebrow>
-            <SectionHeading>Fait pour ceux qui lancent souvent</SectionHeading>
+            <SectionEyebrow>Who it&apos;s for</SectionEyebrow>
+            <SectionHeading>Built for people who launch often</SectionHeading>
           </div>
 
           <div className="mt-14 grid gap-6 sm:grid-cols-3">
             <div className="rounded-3xl border border-black/5 bg-[#f5f5f7] p-8">
               <div className="mb-4 text-3xl">📈</div>
               <h3 className="mb-2 text-base font-bold text-[#1d1d1f]">
-                Media buyers &amp; marketeurs paid traffic
+                Media buyers &amp; paid traffic marketers
               </h3>
               <p className="text-sm leading-relaxed text-[#6e6e73]">
-                Meta, TikTok, Google Ads — pour ceux qui lancent des
-                campagnes régulièrement et n&apos;ont pas le temps de
-                découvrir après coup qu&apos;une page n&apos;était pas
-                prête.
+                Meta, TikTok, Google Ads — for people who launch campaigns
+                regularly and don&apos;t have time to find out after the
+                fact that a page wasn&apos;t ready.
               </p>
             </div>
             <div className="rounded-3xl border border-black/5 bg-[#f5f5f7] p-8">
               <div className="mb-4 text-3xl">🛒</div>
               <h3 className="mb-2 text-base font-bold text-[#1d1d1f]">
-                E-commerçants &amp; lanceurs de produits digitaux
+                Ecommerce sellers &amp; digital product launchers
               </h3>
               <p className="text-sm leading-relaxed text-[#6e6e73]">
-                Formations, SaaS — avant de mettre du budget en place.
+                Courses, SaaS — before committing budget.
               </p>
             </div>
             <div className="rounded-3xl border border-black/5 bg-[#f5f5f7] p-8">
               <div className="mb-4 text-3xl">🏢</div>
               <h3 className="mb-2 text-base font-bold text-[#1d1d1f]">
-                Agences paid traffic
+                Paid traffic agencies
               </h3>
               <p className="text-sm leading-relaxed text-[#6e6e73]">
-                Pour celles qui auditent des comptes clients et doivent
-                livrer un rapport professionnel sous leur propre marque.
+                For agencies auditing client accounts who need to deliver
+                a professional report under their own brand.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ============================ OFFRE BÊTA ============================ */}
+      {/* ============================ BETA OFFER ============================ */}
       <section className="px-6 py-20 sm:py-28">
         <div className="mx-auto max-w-2xl">
           <div className="text-center">
-            <SectionEyebrow>Offre de lancement</SectionEyebrow>
-            <SectionHeading>
-              L&apos;accès complet, au tarif de la bêta
-            </SectionHeading>
+            <SectionEyebrow>Launch offer</SectionEyebrow>
+            <SectionHeading>Full access, at beta pricing</SectionHeading>
             <p className="mx-auto mt-4 max-w-xl text-lg text-[#6e6e73]">
-              Un seul plan, tout inclus. Le tarif reste bloqué à vie tant
-              que ton abonnement est actif.
+              One plan, everything included. The price stays locked for
+              life as long as your subscription stays active.
             </p>
           </div>
 
           <div className="mt-12 overflow-hidden rounded-[32px] border border-black/5 bg-white shadow-[0_20px_60px_rgba(0,0,0,0.08)]">
             <div className="bg-[#1d1d1f] px-8 py-4 text-center text-sm font-semibold text-white">
-              {SPOTS_REMAINING} places sur {SPOTS_TOTAL} disponibles
+              {SPOTS_REMAINING} of {SPOTS_TOTAL} spots available
             </div>
 
             <div className="p-8 sm:p-10">
               <div className="text-center">
                 <p className="text-sm font-semibold uppercase tracking-wide text-[#86868b]">
-                  Accès complet — Audit + Creative Studio
+                  Full access — Audit + Creative Studio
                 </p>
                 <div className="mt-3 flex items-end justify-center gap-2">
                   <span className="text-5xl font-extrabold text-[#1d1d1f]">
                     {BETA_PRICE}
                   </span>
-                  <span className="pb-1.5 text-lg text-[#6e6e73]">/mois</span>
+                  <span className="pb-1.5 text-lg text-[#6e6e73]">/mo</span>
                 </div>
                 <p className="mt-2 text-sm text-[#6e6e73]">
-                  Prix bloqué à vie · réservé aux {SPOTS_TOTAL} premiers
-                  inscrits
+                  Price locked for life · limited to the first{" "}
+                  {SPOTS_TOTAL} sign-ups
                   <br />
-                  <span className="line-through">
-                    {REGULAR_PRICE}/mois
-                  </span>{" "}
-                  après la bêta
+                  <span className="line-through">{REGULAR_PRICE}/mo</span>{" "}
+                  after the beta
                 </p>
               </div>
 
               <ul className="mt-8 space-y-3 text-sm text-[#1d1d1f]">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 text-accent">✓</span>
-                  Un seul plan — tout inclus, pas de version limitée
+                  One plan — everything included, no limited tier
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 text-accent">✓</span>
-                  Audits illimités (Funnel, Ads, Full Risk)
+                  Unlimited audits (Funnel, Ads, Full Risk)
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 text-accent">✓</span>
-                  Creative Studio complet (copy, funnel, tests A/B, emails)
+                  Full Creative Studio (copy, funnel, A/B tests, emails)
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 text-accent">✓</span>
-                  Tarif figé à vie tant que l&apos;abonnement reste actif
+                  Price locked for life as long as your subscription stays
+                  active
                 </li>
               </ul>
 
               <PrimaryCta className="mt-8 w-full">
-                Rejoindre la bêta →
+                Join the beta →
               </PrimaryCta>
               <p className="mt-3 text-center text-xs text-[#86868b]">
-                Paiement sécurisé via Stripe · résiliable à tout moment
+                Secure payment via Stripe · cancel anytime
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ============================ PRÉ-CTA ============================ */}
+      {/* ============================ PRE-CTA ============================ */}
       <section className="bg-white px-6 py-16 text-center sm:py-20">
         <div className="mx-auto max-w-2xl">
-          <SectionHeading>Avant de mettre un euro de plus en pub</SectionHeading>
+          <SectionHeading>Before you spend one more dollar on ads</SectionHeading>
           <p className="mx-auto mt-4 max-w-xl text-lg text-[#6e6e73]">
-            La question n&apos;est pas de savoir si ta prochaine page va
-            convertir. C&apos;est de savoir si tu veux le découvrir avant
-            ou après avoir payé pour le trafic.
+            The question isn&apos;t whether your next page will convert.
+            It&apos;s whether you want to find out before or after
+            you&apos;ve paid for the traffic.
           </p>
         </div>
       </section>
 
-      {/* ============================ CTA FINAL ============================ */}
+      {/* ============================ FINAL CTA ============================ */}
       <section className="px-6 pb-24 pt-16 sm:pb-32 sm:pt-20">
         <div className="mx-auto max-w-2xl rounded-[32px] bg-[#1d1d1f] px-8 py-16 text-center sm:px-16">
           <h2 className="text-2xl font-extrabold leading-snug tracking-tight text-white sm:text-3xl">
-            Audite ta prochaine landing page ou ta prochaine pub avec LRS,
-            et sache en deux minutes si tu lances, si tu testes petit, ou
-            si tu reprends tout.
+            Audit your next landing page or ad with LRS, and know in two
+            minutes whether to launch, test small, or start over.
           </h2>
           <div className="mt-8">
-            <PrimaryCta>Rejoindre la bêta →</PrimaryCta>
+            <PrimaryCta>Join the beta →</PrimaryCta>
           </div>
           <p className="mt-4 text-sm text-white/50">
-            {SPOTS_REMAINING} places restantes sur {SPOTS_TOTAL} · {BETA_PRICE}
-            /mois à vie
+            {SPOTS_REMAINING} spots left out of {SPOTS_TOTAL} · {BETA_PRICE}
+            /mo for life
           </p>
         </div>
       </section>
