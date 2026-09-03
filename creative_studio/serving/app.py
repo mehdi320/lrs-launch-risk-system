@@ -332,6 +332,16 @@ async def stripe_webhook(request: Request):
         )
 
     event_type = event_data.get("type")
+    event_id = event_data.get("id")
+
+    # ── Déduplication : Stripe retente un webhook tant qu'il ne reçoit pas
+    # un 2xx rapide, et un event peut aussi être renvoyé manuellement depuis
+    # le dashboard. Sans ça, un même paiement peut réactiver le compte et
+    # surtout renvoyer plusieurs emails de lien de connexion pour le même
+    # achat. Si l'event n'a pas d'id (payload de test fait main), on laisse
+    # passer sans déduplication plutôt que de bloquer un flux de dev/test.
+    if event_id and not user_accounts.claim_stripe_event(event_id):
+        return PlainTextResponse("événement déjà traité", status_code=200)
 
     # ── Abonnement bêta LRS : checkout.session.completed en mode
     # "subscription" (les achats funnel ci-dessous sont en mode "payment"),
@@ -343,9 +353,14 @@ async def stripe_webhook(request: Request):
             email = (session.get("customer_details") or {}).get("email") or session.get("customer_email")
             customer_id = session.get("customer")
             subscription_id = session.get("subscription")
-            if email and customer_id and subscription_id:
+            if email and customer_id and subscription_id and user_accounts.is_valid_email(email):
                 user_accounts.upsert_user_from_checkout(email, customer_id, subscription_id)
-                magic_token = user_accounts.create_magic_link(email)
+                # rate_limit=False : c'est le paiement qui déclenche ce lien,
+                # pas une demande utilisateur répétée — on veut le lui envoyer
+                # à coup sûr même si (cas limite) un lien récent traînait déjà
+                # pour cet email. Le garde-fou contre les VRAIS doublons de
+                # webhook est claim_stripe_event() ci-dessus, pas ce cooldown.
+                magic_token = user_accounts.create_magic_link(email, rate_limit=False)
                 sent = email_alerts.send_magic_link_email(
                     email, f"{LRS_APP_URL}?token={magic_token}",
                     smtp_config=email_alerts.get_smtp_config(),
@@ -364,8 +379,9 @@ async def stripe_webhook(request: Request):
             else:
                 print(
                     f"[stripe_webhook] checkout.session.completed (subscription) "
-                    f"incomplet — email={bool(email)} customer={bool(customer_id)} "
-                    f"subscription={bool(subscription_id)} ; compte non activé.",
+                    f"incomplet ou email invalide — email={email!r} "
+                    f"customer={bool(customer_id)} subscription={bool(subscription_id)} ; "
+                    f"compte non activé.",
                     file=sys.stderr,
                 )
             return PlainTextResponse("ok", status_code=200)

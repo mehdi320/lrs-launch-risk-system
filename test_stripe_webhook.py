@@ -113,6 +113,41 @@ def main():
         sys.exit(1)
     print("✅ Événement ignoré proprement\n")
 
+    print("── 5) rejeu du même event_id (retry Stripe / renvoi manuel) — doit être ignoré ──")
+    replay_email = f"replay-{int(time.time())}@example.com"
+    replay_customer = "cus_replay_" + str(int(time.time()))
+    replay_subscription = "sub_replay_" + str(int(time.time()))
+    replay_event = {
+        "id": "evt_test_replay_" + str(int(time.time())),
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "mode": "subscription",
+            "customer": replay_customer,
+            "subscription": replay_subscription,
+            "customer_details": {"email": replay_email},
+        }},
+    }
+    status, body = post_event(replay_event)
+    print(f"   HTTP {status} — {body} (1er envoi)")
+    if status != 200 or body != "ok":
+        print("❌ Le premier envoi devrait être traité normalement.")
+        sys.exit(1)
+    status, body = post_event(replay_event)
+    print(f"   HTTP {status} — {body} (2e envoi, même event_id)")
+    if status != 200 or body != "événement déjà traité":
+        print("❌ Le rejeu du même event_id aurait dû être détecté et ignoré "
+              "(sinon : double activation possible + double email envoyé).")
+        sys.exit(1)
+    links = [
+        r for r in user_accounts.get_connection().execute(
+            "SELECT token FROM magic_links WHERE email = ?", (replay_email,)
+        ).fetchall()
+    ]
+    if len(links) != 1:
+        print(f"❌ Un seul lien magique attendu malgré le rejeu, {len(links)} trouvé(s).")
+        sys.exit(1)
+    print("✅ Rejeu détecté : aucun doublon d'activation ni de lien magique\n")
+
     print("Tous les tests sont passés. Rappel : signature non vérifiée dans ce mode —")
     print("testez aussi avec `stripe listen` avant la mise en prod (voir STRIPE_SMTP_SETUP.md).")
 

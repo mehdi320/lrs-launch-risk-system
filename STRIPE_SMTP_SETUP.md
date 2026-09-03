@@ -95,6 +95,40 @@ python3 test_stripe_webhook.py
 Ce mode désactive la vérification de signature — **jamais** en
 production, uniquement pour ce test local isolé.
 
+## 3bis. Ce que le serveur fait déjà pour vous côté sécurité
+
+Tout ce qui suit est déjà en place dans le code (rien à configurer),
+mais utile à savoir avant de brancher le vrai webhook Stripe :
+
+- **Signature vérifiée** — `stripe.Webhook.construct_event()` rejette
+  (HTTP 400) toute requête qui n'est pas signée avec votre
+  `STRIPE_WEBHOOK_SECRET`. Sans ce secret configuré, le endpoint refuse
+  tout par défaut (503) sauf opt-in explicite `LRS_CS_ALLOW_UNVERIFIED_WEBHOOK`
+  pour le dev local.
+- **Rejeu de webhook sans effet de bord** — Stripe retente un événement
+  tant qu'il ne reçoit pas un 2xx rapide, et vous pouvez aussi en
+  renvoyer un manuellement depuis le Dashboard. Chaque `event.id` n'est
+  traité qu'une seule fois (table `processed_stripe_events`) : un même
+  paiement ne peut pas réactiver le compte ni renvoyer plusieurs emails
+  de lien de connexion.
+- **Lien magique à usage unique, 15 min** — token de 256 bits
+  (`secrets.token_urlsafe(32)`), marqué "utilisé" dès le premier clic
+  (rejouer l'URL ne fonctionne pas), et expiré après 15 minutes.
+- **Anti-spam sur le renvoi de lien** — le bouton "Recevez votre lien
+  de connexion" de l'écran de verrouillage ne peut pas être utilisé pour
+  bombarder la boîte mail de quelqu'un d'autre : si un lien valide a
+  déjà été émis pour un email il y a moins de 60s, aucun nouveau n'est
+  créé ni envoyé (silencieusement, même message affiché dans tous les
+  cas pour ne pas laisser deviner si l'email existe).
+- **Anti-énumération de comptes** — que l'email existe, soit inactif,
+  invalide, ou rate-limité, l'écran affiche toujours le même message
+  générique ("si cet email est associé à un abonnement actif...").
+- **Emails validés avant tout envoi** — un email mal formé ou contenant
+  un retour chariot/saut de ligne (tentative d'injection d'en-têtes
+  SMTP, ex. pour ajouter un Bcc caché) est rejeté avant même d'atteindre
+  `smtplib`, à la fois côté appelant (`user_accounts.is_valid_email`) et
+  en dernier rempart dans `email_alerts.py`.
+
 ## 4. SMTP — envoi du lien magique de connexion
 
 Sans SMTP configuré, un utilisateur qui paie est bien activé en base

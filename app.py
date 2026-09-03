@@ -5963,14 +5963,22 @@ def _render_subscription_lock_screen():
     if st.button("Envoyer mon lien de connexion", key="magic_link_send_btn"):
         email_clean = email_input.strip().lower()
         if email_clean:
-            user = user_accounts.get_user(email_clean)
-            if user and user["status"] == "active":
-                app_url = os.getenv("LRS_APP_URL", "")
-                magic_token = user_accounts.create_magic_link(email_clean)
-                link = f"{app_url}?token={magic_token}" if app_url else f"?token={magic_token}"
-                email_alerts.send_magic_link_email(email_clean, link, smtp_config=_get_smtp_config())
-            # Meme message que le compte existe ou non / soit actif ou non —
-            # evite de laisser deviner quels emails sont abonnes (enumeration).
+            if user_accounts.is_valid_email(email_clean):
+                user = user_accounts.get_user(email_clean)
+                if user and user["status"] == "active":
+                    # rate_limit=True (défaut) : si un lien valide a été émis
+                    # il y a moins d'une minute pour cet email,
+                    # create_magic_link ne recrée rien et renvoie None —
+                    # empêche de spammer la boîte mail de quelqu'un d'autre
+                    # en cliquant ce bouton en boucle.
+                    magic_token = user_accounts.create_magic_link(email_clean)
+                    if magic_token:
+                        app_url = os.getenv("LRS_APP_URL", "")
+                        link = f"{app_url}?token={magic_token}" if app_url else f"?token={magic_token}"
+                        email_alerts.send_magic_link_email(email_clean, link, smtp_config=_get_smtp_config())
+            # Meme message dans tous les cas (email inconnu, inactif, invalide,
+            # ou rate-limité) — evite de laisser deviner quels emails sont
+            # abonnes (enumeration) ou qu'un cooldown anti-spam existe.
             st.success("Si cet email est associé à un abonnement actif, vous recevrez un lien de connexion sous peu.")
 
 

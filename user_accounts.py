@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import sqlite3
 from contextlib import contextmanager
@@ -28,6 +29,30 @@ DB_PATH = os.environ.get(
 )
 
 MAGIC_LINK_TTL_MINUTES = 15
+
+# Anti-spam : si un lien magique non expiré et non utilisé existe déjà pour
+# un email, on n'en recrée pas un nouveau (et donc on ne renvoie pas d'email)
+# avant ce délai. Protège à la fois le bouton "renvoyer mon lien" (n'importe
+# qui peut le spammer avec l'email de quelqu'un d'autre) et un webhook Stripe
+# retenté/dupliqué (voir claim_stripe_event ci-dessous pour la protection
+# principale contre les doublons de webhook).
+MAGIC_LINK_RESEND_COOLDOWN_SECONDS = 60
+
+# Format volontairement strict (pas de RFC 5322 complet) : le but n'est pas
+# de valider "tous les emails valides possibles" mais de rejeter tout ce qui
+# pourrait servir à une injection d'en-tête SMTP (retour chariot, saut de
+# ligne, espaces) avant que la valeur n'atteigne email_alerts.py.
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+_EMAIL_MAX_LEN = 254  # limite RFC 5321
+
+
+def is_valid_email(email: str) -> bool:
+    if not email or len(email) > _EMAIL_MAX_LEN:
+        return False
+    if any(ch in email for ch in ("\r", "\n", "\t")):
+        return False
+    return bool(_EMAIL_RE.match(email))
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -47,6 +72,15 @@ CREATE TABLE IF NOT EXISTS magic_links (
     email       TEXT NOT NULL,
     expires_at  TEXT NOT NULL,
     used_at     TEXT
+);
+
+-- Déduplication des événements webhook Stripe (Stripe retente un event tant
+-- qu'il ne reçoit pas un 200 rapide, et peut aussi le renvoyer manuellement
+-- depuis le dashboard). Sans ça, un même achat peut réactiver le compte
+-- plusieurs fois et surtout envoyer plusieurs emails de lien de connexion.
+CREATE TABLE IF NOT EXISTS processed_stripe_events (
+    event_id     TEXT PRIMARY KEY,
+    processed_at TEXT NOT NULL
 );
 """
 
@@ -142,17 +176,52 @@ def update_subscription_status(stripe_subscription_id: str, status: str) -> None
         )
 
 
-def create_magic_link(email: str) -> str:
+def _purge_stale_magic_links(conn: sqlite3.Connection) -> None:
+    """Supprime les liens magiques anciens (expirés ou déjà utilisés depuis
+    plus de 24h) pour que la table ne grossisse pas indéfiniment. Appelé en
+    passant lors de la création d'un lien plutôt que via un cron séparé —
+    suffisant vu le volume attendu (bêta à quelques dizaines d'utilisateurs)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    conn.execute(
+        "DELETE FROM magic_links WHERE expires_at < ? OR (used_at IS NOT NULL AND used_at < ?)",
+        (cutoff, cutoff),
+    )
+
+
+def create_magic_link(email: str, *, rate_limit: bool = True) -> str | None:
     """Crée un token à usage unique (15 min). Ne vérifie pas si l'email a un
     compte actif — cette décision (envoyer l'email ou non) appartient à
-    l'appelant, pour éviter l'énumération de comptes à ce niveau."""
+    l'appelant, pour éviter l'énumération de comptes à ce niveau.
+
+    Anti-spam : si rate_limit=True (par défaut) et qu'un lien non expiré/non
+    utilisé a déjà été émis pour cet email il y a moins de
+    MAGIC_LINK_RESEND_COOLDOWN_SECONDS, ne crée rien et ne renvoie pas
+    d'email — retourne None. L'appelant doit traiter None comme "ne pas
+    envoyer d'email" sans distinguer ce cas d'un email inconnu/inactif côté
+    utilisateur final (message générique), pour ne pas révéler d'info."""
     init_db()
-    token = secrets.token_urlsafe(32)
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)).isoformat()
+    email = email.strip().lower()
+    now = datetime.now(timezone.utc)
     with db_session() as conn:
+        _purge_stale_magic_links(conn)
+        if rate_limit:
+            recent = conn.execute(
+                "SELECT expires_at FROM magic_links "
+                "WHERE email = ? AND used_at IS NULL "
+                "ORDER BY expires_at DESC LIMIT 1",
+                (email,),
+            ).fetchone()
+            if recent:
+                created_at = datetime.fromisoformat(recent["expires_at"]) - timedelta(
+                    minutes=MAGIC_LINK_TTL_MINUTES
+                )
+                if now - created_at < timedelta(seconds=MAGIC_LINK_RESEND_COOLDOWN_SECONDS):
+                    return None
+        token = secrets.token_urlsafe(32)
+        expires_at = (now + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)).isoformat()
         conn.execute(
             "INSERT INTO magic_links (token, email, expires_at, used_at) VALUES (?, ?, ?, NULL)",
-            (token, email.strip().lower(), expires_at),
+            (token, email, expires_at),
         )
     return token
 
@@ -177,3 +246,29 @@ def consume_magic_link(token: str) -> str | None:
             "UPDATE magic_links SET used_at = ? WHERE token = ?", (_now_iso(), token)
         )
         return row["email"]
+
+
+def claim_stripe_event(event_id: str) -> bool:
+    """Marque un événement webhook Stripe comme traité, de façon atomique.
+
+    Retourne True la première fois qu'un event_id donné est vu (l'appelant
+    doit alors traiter l'événement), False s'il a déjà été traité (l'appelant
+    doit répondre 200 sans rejouer les effets de bord — activation de
+    compte, envoi d'email). Stripe retente un webhook tant qu'il ne reçoit
+    pas de 2xx rapide, et permet aussi un renvoi manuel depuis le dashboard :
+    sans cette déduplication, un même paiement peut déclencher plusieurs
+    emails de lien de connexion pour le même client.
+
+    S'appuie sur la contrainte PRIMARY KEY(event_id) : l'INSERT échoue si
+    l'event_id existe déjà, ce qui est atomique même avec deux requêtes
+    concurrentes (SQLite sérialise les écritures)."""
+    init_db()
+    with db_session() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO processed_stripe_events (event_id, processed_at) VALUES (?, ?)",
+                (event_id, _now_iso()),
+            )
+        except sqlite3.IntegrityError:
+            return False
+    return True

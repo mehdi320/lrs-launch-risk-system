@@ -19,6 +19,17 @@ from email.mime.text import MIMEText
 APP_VERSION = "3.5"
 
 
+def _is_safe_header_value(value: str) -> bool:
+    """Rejette toute valeur destinée à devenir un en-tête email (To, From...)
+    si elle contient un retour chariot ou un saut de ligne. Ligne de défense
+    indépendante des validations faites en amont (user_accounts.is_valid_email
+    côté appelant) : ces fonctions peuvent être appelées directement par
+    d'autres scripts (tests, futurs appelants) sans repasser par cette
+    validation, donc on ne fait pas confiance uniquement à l'appelant pour
+    empêcher une injection d'en-tête SMTP."""
+    return bool(value) and "\r" not in value and "\n" not in value
+
+
 def get_smtp_config():
     return (
         os.getenv("SMTP_HOST", ""),
@@ -35,6 +46,8 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
         raise ValueError(
             "SMTP non configuré. Ajoutez SMTP_HOST/PORT/USER/PASSWORD dans .env"
         )
+    if not _is_safe_header_value(to_email):
+        raise ValueError("Adresse email invalide (caractères de contrôle non autorisés).")
 
     c = result.get("_c", {})
     score = c.get("score", 0)
@@ -112,7 +125,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
 def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
     """Envoie une alerte immédiate quand un score baisse de plus de 2 points."""
     host, port, user, password = smtp_config or get_smtp_config()
-    if not host or not user or not to_email:
+    if not host or not user or not to_email or not _is_safe_header_value(to_email):
         return False
 
     url_v = str(entry.get("url", "") or entry.get("offer_type", ""))[:80]
@@ -176,7 +189,7 @@ def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
 def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
     """Envoie un digest des pages surveillées avec scores actuels. Appelé après un run planifié."""
     host, port, user, password = smtp_config or get_smtp_config()
-    if not host or not user or not to_email:
+    if not host or not user or not to_email or not _is_safe_header_value(to_email):
         return False
 
     now_str = datetime.datetime.now().strftime("%d/%m/%Y")
@@ -267,7 +280,7 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
 def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
     """Envoie le lien de connexion à usage unique (15 min) pour accéder à LRS."""
     host, port, user, password = smtp_config or get_smtp_config()
-    if not host or not user or not to_email:
+    if not host or not user or not to_email or not _is_safe_header_value(to_email):
         return False
 
     html_body = f"""
