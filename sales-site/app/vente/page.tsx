@@ -134,7 +134,7 @@ export default function VentePage() {
             </p>
           </div>
 
-          <div className="mt-16 grid gap-8 lg:grid-cols-2">
+          <div className="mt-16 grid gap-8 md:grid-cols-2">
             {/* Module 1 — Audit */}
             <div className="rounded-3xl border border-black/5 bg-[#f5f5f7] p-8 sm:p-10">
               <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-2xl">
