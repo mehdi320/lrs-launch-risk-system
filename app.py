@@ -1601,6 +1601,15 @@ SYSTEM_PROMPT_BASE = (
     "  - Nouveau lancement : 5=50+ reviews+photos+garantie near CTA | 4=reviews sans photos | 3=reviews generiques | 2=peu de proof | 1=aucune review | 0=rien\n"
     "FRICTION /5 : 5=zero friction+CTA repete+message coherent | 4=legere friction | 3=friction moderee | 2=friction forte | 1=mismatch evident | 0=impossible\n"
     "\n"
+    "METHODOLOGIE HORMOZI - VALUE EQUATION (discipline de diagnostic, ne change pas le bareme /5 ci-dessus) :\n"
+    "Valeur percue = (Dream Outcome x Perceived Likelihood) / (Time Delay x Effort & Sacrifice)\n"
+    "- HOOK = clarte et urgence du Dream Outcome. Faible si promesse abstraite (grow, improve, transform sans chiffre attache). Fort si resultat concret, mesurable, date.\n"
+    "- OFFER = Dream Outcome + structure du value stack. Le resultat promis est-il desirable et specifique, le chemin pour l'obtenir est-il lisible en un coup d'oeil.\n"
+    "- TRUST = Perceived Likelihood. Absence de preuve, process flou, promesse disproportionnee par rapport au support (temoignages, mecanisme explique, garantie) = signal faible.\n"
+    "- FRICTION = Time Delay + Effort & Sacrifice. Distingue en interne le delai avant premier resultat (Time Delay) de l'effort percu pour l'obtenir (Effort) meme si le score final reste unique /5.\n"
+    "AVANT DE NOTER : (1) extrais l'offre en une phrase 'Ceci aide X a obtenir Y via Z' ; (2) verifie chaque composante separement, jamais en bloc ; (3) donne a chaque critical_gap une severite implicite (bloquant / majeur / mineur) ; (4) chaque gap doit se transformer en fix concret dans fix_plan, jamais en simple constat ('le hook est vague' ne suffit pas, propose la reformulation resserree).\n"
+    "SIGNAUX FAIBLES A DETECTER SYSTEMATIQUEMENT : mots creux sans complement chiffre (grow, improve, level up, transform, optimiser, boostez) ; audience trop large ('tout le monde', 'les entrepreneurs') -> signale le resserrement necessaire ; objections traitees uniquement en un bloc FAQ plutot que diffusees dans toute la page ; value stack liste sans valeur percue individuelle par composant ; garantie absente ou generique ('satisfait ou rembourse' sans mecanique claire).\n"
+    "\n"
     "DECISION : 0-9=Do NOT launch+High | 10-14=Test small budget+Moderate | 15-20=Ready to scale+Low\n"
     "\n"
     "EXEMPLES DE CALIBRAGE (few-shots) :\n"
@@ -1620,6 +1629,12 @@ SYSTEM_PROMPT_BASE = (
     "- 'how_exactly' : les instructions concretes etape par etape (pas juste 'ajouter des avis' mais 'Ajouter un bloc screenshots de 6 avis clients avec prenom + resultat specifique, place directement sous le CTA')\n"
     "- 'time_estimate' : estimation realiste du temps d'implementation\n"
     "- Classifie chaque action : 'quick_win' (moins d'1h) ou 'long_term' (plus d'1h)\n"
+    "\n"
+    "METHODOLOGIE HORMOZI - GENERATION DE COPY (s'applique aux champs rewrite et ads) :\n"
+    "HOOKS (ads.hooks) : formule fixe WHO + RESULT + SPEED/EASE + OBJECTION REMOVAL. Couvre plusieurs categories parmi : outcome, time-based, effort-reduction, callout audience, preuve ('How I'), contrarian, pain, mechanism, transformation, hybride (WHO+RESULT+TIME+WITHOUT X, generalement le plus performant). Resserre systematiquement tout hook vague avec un chiffre, un delai ou une contrainte concrete ('Perdez du poids' -> 'Perdez 5kg en 30 jours').\n"
+    "REWRITE (headline/subheadline/hero_bullets/cta/proof_block/offer_stack/guarantee/faq_objections) : value stack avec valeur percue individuelle par composant avant le reveal du prix total ; objections traitees comme un deplacement de croyance (peur reelle sous-jacente, pas l'objection de surface), chaque reponse rattachee a une preuve concrete jamais a une simple reassurance verbale ; garantie avec mecanique explicite, jamais generique ; prix justifie par le resultat promis et le value stack cumule, jamais par le cout de fabrication.\n"
+    "ANGLES (ads.angles) : varie parmi outcome, time, pain, identity, effort, speed, status, mechanism, niche, anti-positionnement -- ne jamais figer sur un seul positionnement.\n"
+    "STYLE COPY : direct, specifique, zero superlatif creux (incroyable, revolutionnaire, ultime) sans preuve associee ; un resultat = un chiffre ou une contrainte concrete, jamais une promesse abstraite ; ne jamais fabriquer une preuve ou un chiffre non fourni par le contenu analyse -- si absent, signale-le dans critical_gaps plutot que d'inventer un temoignage.\n"
     "\n"
     "Retourne UNIQUEMENT ce JSON valide, rien d'autre :\n"
     "{\n"
@@ -6854,6 +6869,35 @@ Compte
                 "'Ce que [autorité] ne veut pas que vous sachiez sur [sujet]'",
             ], color="#FF4444", icon="💡")
 
+        st.markdown("#### Méthodologie Hormozi — Value Equation")
+        col3, col4 = st.columns(2)
+        with col3:
+            _card("Value Equation (grille de diagnostic)", [
+                "Valeur perçue = (Dream Outcome × Perceived Likelihood) / (Time Delay × Effort)",
+                "Dream Outcome flou = mots creux sans chiffre (grow, improve, transform)",
+                "Perceived Likelihood faible = promesse sans preuve ni mécanisme expliqué",
+                "Time Delay ≠ Effort : un délai court peut cacher un effort perçu élevé",
+                "⚡ Sert de grille derrière chaque score Hook/Offer/Trust/Friction",
+            ], color="#6366f1", icon="⚖️")
+            _card("Hook — formule fixe", [
+                "WHO + RESULT + SPEED/EASE + OBJECTION REMOVAL",
+                "'Coachs : 3 clients cette semaine, sans publicité.'",
+                "10 catégories à tester : outcome, time, effort, callout, preuve,",
+                "contrarian, pain, mechanism, transformation, hybride (souvent le meilleur)",
+            ], color="#FF8C00", icon="🎯")
+        with col4:
+            _card("Bonus stack & pricing", [
+                "Chaque bonus neutralise UNE objection précise — jamais générique",
+                "Objection identifiée → bonus qui la tue → format → valeur perçue",
+                "Prix ancré à la valeur du résultat, jamais au coût de fabrication",
+                "Toujours une histoire de justification du prix, pas juste un chiffre",
+            ], color="#22c55e", icon="🎁")
+            _card("Angles d'offre (Multi-Audit / A-B)", [
+                "6 à 10 angles avant de choisir : outcome, time, pain, identity,",
+                "effort, speed, status, mechanism, niche, anti-positionnement",
+                "⚡ Chaque angle = une variante testable en A/B statistique",
+            ], color="#06b6d4", icon="🧭")
+
         st.markdown("---")
         st.markdown("#### Templates prêts à l'emploi")
 
@@ -7430,6 +7474,9 @@ QUICK_AUDIT_PROMPT = (
     "Tu es LRS Express — auditeur paid traffic ultra-rapide.\n"
     "Analyse UNIQUEMENT Hook, Offer, Trust sur /5 chacun.\n"
     "Score total /15 (pas /20). 1 seule action prioritaire avec how_exactly.\n"
+    "Discipline Hormozi condensee : Hook = clarte/urgence du resultat promis (chiffre/delai, pas de mot creux type grow/improve/transform) ; "
+    "Offer = value stack + prix ancre lisibles en un coup d'oeil ; Trust = preuve concrete face a la promesse (pas de reassurance verbale sans preuve). "
+    "La reformulation proposee (headline_rewrite/cta_rewrite) doit etre resserree avec un chiffre ou une contrainte concrete, jamais une promesse abstraite.\n"
     "Retourne UNIQUEMENT ce JSON minimal :\n"
     '{"hook":0,"offer":0,"trust":0,"score15":0,"risk":"High","decision":"Do NOT launch",'
     '"action":{"what":"","how_exactly":"","impact":"","time":""},'
