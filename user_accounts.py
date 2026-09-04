@@ -272,3 +272,16 @@ def claim_stripe_event(event_id: str) -> bool:
         except sqlite3.IntegrityError:
             return False
     return True
+
+
+def release_stripe_event(event_id: str) -> None:
+    """Annule un claim_stripe_event() — à appeler si le traitement de
+    l'événement échoue APRÈS avoir été réclamé (ex. exception pendant
+    upsert_user_from_checkout ou create_magic_link), pour que le prochain
+    retry Stripe du même event_id soit retraité au lieu d'être ignoré comme
+    "déjà traité". Sans ça, une activation de compte qui plante en cours de
+    route serait définitivement perdue : le claim empêcherait tout retry
+    ultérieur de refaire le travail, alors qu'il n'a jamais abouti."""
+    init_db()
+    with db_session() as conn:
+        conn.execute("DELETE FROM processed_stripe_events WHERE event_id = ?", (event_id,))

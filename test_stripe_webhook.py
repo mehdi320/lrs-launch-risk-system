@@ -148,6 +148,37 @@ def main():
         sys.exit(1)
     print("✅ Rejeu détecté : aucun doublon d'activation ni de lien magique\n")
 
+    print("── 6) échec de traitement APRÈS le claim — le retry suivant doit quand même activer le compte ──")
+    fault_event_id = "evt_test_fault_" + str(int(time.time()))
+    fault_email = f"fault-{int(time.time())}@example.com"
+    # "data": {} sans "object" -> KeyError pendant le traitement, après le
+    # claim de l'event_id. Sans le relâchement du claim en cas d'exception,
+    # ce paiement serait perdu : le retry Stripe suivant serait ignoré comme
+    # "déjà traité" sans jamais activer le compte.
+    status, body = post_event({"id": fault_event_id, "type": "checkout.session.completed", "data": {}})
+    print(f"   HTTP {status} — {body[:80]!r} (payload cassé, 1er envoi)")
+    if status != 500:
+        print("❌ Un payload qui fait planter le traitement devrait renvoyer 500 "
+              "(pour que Stripe retente), pas être avalé silencieusement.")
+        sys.exit(1)
+    status, body = post_event({
+        "id": fault_event_id,  # même event_id que l'échec précédent
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "mode": "subscription",
+            "customer": "cus_fault_" + str(int(time.time())),
+            "subscription": "sub_fault_" + str(int(time.time())),
+            "customer_details": {"email": fault_email},
+        }},
+    })
+    print(f"   HTTP {status} — {body} (même event_id, payload valide, retry Stripe simulé)")
+    if status != 200 or body != "ok":
+        print("❌ Le retry avec le même event_id devrait être retraité (pas ignoré), "
+              "puisque le premier essai n'a jamais abouti.")
+        sys.exit(1)
+    check_status(fault_email, "active")
+    print("✅ Le paiement n'est pas perdu malgré l'échec intermédiaire\n")
+
     print("Tous les tests sont passés. Rappel : signature non vérifiée dans ce mode —")
     print("testez aussi avec `stripe listen` avant la mise en prod (voir STRIPE_SMTP_SETUP.md).")
 

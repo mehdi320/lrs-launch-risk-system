@@ -340,9 +340,27 @@ async def stripe_webhook(request: Request):
     # surtout renvoyer plusieurs emails de lien de connexion pour le même
     # achat. Si l'event n'a pas d'id (payload de test fait main), on laisse
     # passer sans déduplication plutôt que de bloquer un flux de dev/test.
+    #
+    # Le claim est pris AVANT le traitement (pour bloquer un vrai doublon
+    # concurrent), mais si le traitement plante ensuite, on le relâche dans
+    # le except ci-dessous et on répond 500 : Stripe retente alors le même
+    # event_id, qui sera à nouveau "nouveau" pour claim_stripe_event. Sans
+    # ce relâchement, une exception après le claim (ex. base verrouillée)
+    # activerait un client payant à moitié, puis marquerait silencieusement
+    # tous les retries suivants comme "déjà traités" sans jamais finir le
+    # travail — argent pris, accès jamais activé, personne alerté.
     if event_id and not user_accounts.claim_stripe_event(event_id):
         return PlainTextResponse("événement déjà traité", status_code=200)
 
+    try:
+        return _handle_stripe_event(event_type, event_data)
+    except Exception:
+        if event_id:
+            user_accounts.release_stripe_event(event_id)
+        raise
+
+
+def _handle_stripe_event(event_type: str, event_data: dict) -> PlainTextResponse:
     # ── Abonnement bêta LRS : checkout.session.completed en mode
     # "subscription" (les achats funnel ci-dessous sont en mode "payment"),
     # + le cycle de vie de l'abonnement (mise à jour / résiliation) —

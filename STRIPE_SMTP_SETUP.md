@@ -111,6 +111,12 @@ mais utile à savoir avant de brancher le vrai webhook Stripe :
   traité qu'une seule fois (table `processed_stripe_events`) : un même
   paiement ne peut pas réactiver le compte ni renvoyer plusieurs emails
   de lien de connexion.
+- **Mais un paiement n'est jamais perdu en cas de panne** — si le
+  traitement plante après avoir réclamé l'event (base de données
+  indisponible, bug transitoire...), le claim est relâché et le endpoint
+  répond 500 : Stripe retente alors ce même `event.id`, qui sera
+  retraité normalement plutôt qu'ignoré comme "déjà traité" sans avoir
+  jamais activé le compte.
 - **Lien magique à usage unique, 15 min** — token de 256 bits
   (`secrets.token_urlsafe(32)`), marqué "utilisé" dès le premier clic
   (rejouer l'URL ne fonctionne pas), et expiré après 15 minutes.
