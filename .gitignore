@@ -6,6 +6,10 @@
 # Streamlit secrets locaux
 .streamlit/secrets.toml
 
+# Donnees locales LRS — contiennent des tokens Meta/TikTok, emails, historique
+# d'audits. Ne doivent jamais partir sur GitHub (RGPD + secrets Ads en clair).
+.lrs_*.json
+
 # Python
 __pycache__/
 *.py[cod]

@@ -7,8 +7,13 @@ import requests
 import trafilatura
 import json
 import os
+import re
+import hmac
+import socket
+import ipaddress
 import datetime
 import time
+from urllib.parse import urlparse
 from html.parser import HTMLParser
 
 try:
@@ -599,12 +604,24 @@ def save_drip_data(data):
     except Exception:
         pass
 
+EMAIL_RE = re.compile(r"^[^@\s\r\n]+@[^@\s\r\n]+\.[^@\s\r\n]+$")
+
+def _is_valid_email(email: str) -> bool:
+    """Validation stricte : format email + pas de CR/LF (anti header-injection SMTP)."""
+    if not email or len(email) > 254:
+        return False
+    if "\r" in email or "\n" in email:
+        return False
+    return bool(EMAIL_RE.match(email.strip()))
+
 def register_drip_email(email, name=""):
     """Enregistre l'email de l'utilisateur pour la séquence drip."""
+    if not _is_valid_email(email):
+        return load_drip_data()
     data = load_drip_data()
     if not data.get("email"):
-        data["email"]    = email
-        data["name"]     = name
+        data["email"]    = email.strip()
+        data["name"]     = (name or "").strip().replace("\r", "").replace("\n", "")[:100]
         data["signup"]   = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         data["sent"]     = {}
         save_drip_data(data)
@@ -1398,6 +1415,38 @@ def check_js_heavy(html: str, extracted: str) -> bool:
     html_low = html[:10000].lower()
     return sum(1 for s in js_signals if s in html_low) >= 2
 
+def _is_public_url(url: str) -> bool:
+    """
+    Anti-SSRF : rejette les URLs qui ne pointent pas vers un hôte public
+    (localhost, IP privées/link-local/reservees, cible du metadata endpoint cloud, etc.).
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    if host.lower() in ("localhost", "0.0.0.0"):
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+            return False
+    return True
+
+
 def extract_page(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -1405,10 +1454,29 @@ def extract_page(url):
         "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
+    if not _is_public_url(url):
+        return "", "URL invalide ou pointant vers une ressource interne non autorisee.", False
+
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        r.raise_for_status()
-        html = r.text
+        current_url = url
+        for _ in range(5):  # suit les redirections manuellement pour re-valider chaque cible
+            r = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
+            if r.is_redirect or r.is_permanent_redirect:
+                next_url = r.headers.get("Location", "")
+                if not next_url:
+                    break
+                if not next_url.startswith("http"):
+                    from urllib.parse import urljoin
+                    next_url = urljoin(current_url, next_url)
+                if not _is_public_url(next_url):
+                    return "", "Redirection vers une ressource interne non autorisee.", False
+                current_url = next_url
+                continue
+            r.raise_for_status()
+            html = r.text
+            break
+        else:
+            return "", "Trop de redirections.", False
     except requests.exceptions.ConnectionError:
         return "", "Impossible de se connecter.", False
     except requests.exceptions.Timeout:
@@ -2311,6 +2379,9 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None):
     Configure SMTP dans Streamlit Secrets : [smtp] host/port/user/password
     ou dans les variables d'environnement SMTP_HOST/PORT/USER/PASSWORD.
     """
+    if not _is_valid_email(to_email):
+        raise ValueError("Adresse email destinataire invalide.")
+
     host, port, user, password = _get_smtp_config()
     if not host or not user:
         raise ValueError(
@@ -3927,7 +3998,7 @@ def send_monitoring_digest(monitored_entries, to_email):
     Appelé automatiquement lors du run des audits planifiés.
     """
     host, port, user, password = _get_smtp_config()
-    if not host or not user or not to_email:
+    if not host or not user or not _is_valid_email(to_email):
         return False
 
     light_mode = False
@@ -4018,7 +4089,7 @@ def send_score_drop_alert(entry, prev_score, to_email):
     Envoie une alerte immédiate quand un score baisse de plus de 2 points.
     """
     host, port, user, password = _get_smtp_config()
-    if not host or not user or not to_email:
+    if not host or not user or not _is_valid_email(to_email):
         return False
 
     url_v  = str(entry.get("url","") or entry.get("offer_type",""))[:80]
@@ -7076,6 +7147,30 @@ def render_benchmark_tab():
     )
 
 
+def _safe_password_check(entered: str, expected: str, throttle_key: str) -> bool:
+    """
+    Comparaison en temps constant (anti timing-attack) + throttling anti brute-force
+    (verrouillage progressif apres 5 essais infructueux dans la meme session).
+    """
+    now = time.time()
+    lock_until = st.session_state.get(f"{throttle_key}_lock_until", 0)
+    if now < lock_until:
+        wait = int(lock_until - now)
+        st.error(f"Trop de tentatives. Reessayez dans {wait}s.")
+        return False
+
+    ok = hmac.compare_digest((entered or "").encode("utf-8"), (expected or "").encode("utf-8"))
+    if ok:
+        st.session_state[f"{throttle_key}_attempts"] = 0
+        return True
+
+    attempts = st.session_state.get(f"{throttle_key}_attempts", 0) + 1
+    st.session_state[f"{throttle_key}_attempts"] = attempts
+    if attempts >= 5:
+        st.session_state[f"{throttle_key}_lock_until"] = now + 60
+    return False
+
+
 def check_access():
     """
     Verifie le mot de passe d'acces.
@@ -7104,7 +7199,7 @@ def check_access():
 
     entered = st.text_input("Password", type="password", placeholder="Enter your password...")
     if st.button("Access LRS →", type="primary"):
-        if entered == pwd_required:
+        if _safe_password_check(entered, pwd_required, "app_pw"):
             st.session_state.authenticated = True
             st.rerun()
         else:
@@ -7530,26 +7625,29 @@ def render_quick_audit_result(qr):
 
 def render_admin_view():
     """Vue admin — métriques d'usage (accès protégé par mot de passe admin)."""
-    import hashlib as _hashlib
-
-    admin_pw = ""
-    try:
-        admin_pw = st.secrets.get("admin_password", "")
-    except Exception:
-        admin_pw = os.getenv("LRS_ADMIN_PW", "")
+    admin_pw = os.getenv("LRS_ADMIN_PW", "")
+    if not admin_pw:
+        try:
+            admin_pw = st.secrets.get("admin_password", "")
+        except Exception:
+            pass
 
     if not admin_pw:
         st.warning("Aucun mot de passe admin configuré (LRS_ADMIN_PW ou admin_password dans secrets).")
         return
 
-    pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
-    if not pw_input:
-        st.stop()
-    if pw_input != admin_pw:
-        st.error("Mot de passe incorrect.")
-        st.stop()
-
-    st.success("✅ Accès admin autorisé")
+    if st.session_state.get("admin_authenticated"):
+        st.success("✅ Accès admin autorisé")
+    else:
+        pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
+        if not pw_input:
+            st.stop()
+        if _safe_password_check(pw_input, admin_pw, "admin_pw"):
+            st.session_state.admin_authenticated = True
+            st.success("✅ Accès admin autorisé")
+        else:
+            st.error("Mot de passe incorrect.")
+            st.stop()
     st.markdown("### 📊 Métriques d'usage LRS")
 
     # Lecture fichier usage
