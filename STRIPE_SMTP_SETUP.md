@@ -32,6 +32,12 @@ pour tout valider avant de passer en mode Live.
 4. Enregistrez, puis ouvrez le produit créé : la ligne de prix affiche un
    ID qui commence par `price_...` — **copiez-le**, c'est votre
    `STRIPE_BETA_PRICE_ID`.
+5. [Developers → API keys](https://dashboard.stripe.com/test/apikeys) →
+   copiez la **Secret key** (`sk_test_...`) — c'est votre
+   `STRIPE_SECRET_KEY`. Sans elle, `/checkout/beta` échoue avec une
+   `AuthenticationError` (bug découvert et corrigé le 2026-09-07 : le code
+   créait une Session Checkout sans jamais avoir configuré `stripe.api_key`
+   — voir `creative_studio/serving/app.py`).
 
 ## 2. Configurer le webhook
 
@@ -172,6 +178,7 @@ quelque chose cloche, plutôt que de le découvrir après un vrai paiement.
 chaque variable) :
 
 - [ ] `STRIPE_BETA_PRICE_ID` — étape 1
+- [ ] `STRIPE_SECRET_KEY` — étape 1.5 (`sk_test_...` puis `sk_live_...` en prod)
 - [ ] `STRIPE_WEBHOOK_SECRET` — étape 2 (le vrai, celui du Dashboard —
       pas celui de `stripe listen` une fois passé en prod)
 - [ ] `LRS_APP_URL` — URL publique de l'app Streamlit (ex :

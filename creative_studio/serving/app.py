@@ -60,6 +60,12 @@ VISITOR_COOKIE = "lrs_visitor_id"
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 ALLOW_UNVERIFIED_WEBHOOK = os.environ.get("LRS_CS_ALLOW_UNVERIFIED_WEBHOOK", "").lower() == "true"
 
+# Requis par /checkout/beta (stripe.checkout.Session.create) — le flux funnel
+# ci-dessous ne fait que rediriger vers un Payment Link statique et n'a
+# jamais eu besoin de la clé secrète, d'où son absence jusqu'ici.
+if stripe is not None:
+    stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+
 # ── Abonnement bêta LRS (distinct des Payment Links funnel ci-dessus) ──
 STRIPE_BETA_PRICE_ID = os.environ.get("STRIPE_BETA_PRICE_ID", "")
 LRS_APP_URL = os.environ.get("LRS_APP_URL", "http://localhost:8501")
@@ -280,6 +286,10 @@ def checkout_beta():
         return PlainTextResponse(
             "Paiement indisponible : STRIPE_BETA_PRICE_ID non configuré.", status_code=503
         )
+    if not stripe.api_key:
+        return PlainTextResponse(
+            "Paiement indisponible : STRIPE_SECRET_KEY non configuré.", status_code=503
+        )
     if not LRS_SALES_PAGE_URL:
         return PlainTextResponse(
             "Paiement indisponible : LRS_SALES_PAGE_URL non configuré "
@@ -313,7 +323,13 @@ async def stripe_webhook(request: Request):
 
     if stripe is not None and STRIPE_WEBHOOK_SECRET:
         try:
-            event_data = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+            # construct_event() renvoie un objet stripe.Event (StripeObject),
+            # pas un dict : il supporte l'accès par item (event["type"]) mais
+            # pas .get(), utilisé partout ci-dessous. to_dict() convertit
+            # récursivement (objets imbriqués inclus, ex. event["data"]["object"])
+            # pour que le code existant (écrit pour le dict de
+            # ALLOW_UNVERIFIED_WEBHOOK) fonctionne aussi avec un vrai webhook signé.
+            event_data = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET).to_dict()
         except Exception as exc:  # signature invalide ou payload corrompu
             return PlainTextResponse(f"Webhook invalide: {exc}", status_code=400)
     elif ALLOW_UNVERIFIED_WEBHOOK:

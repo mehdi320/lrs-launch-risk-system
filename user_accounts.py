@@ -23,9 +23,8 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
-DB_PATH = os.environ.get(
-    "LRS_USERS_DB_PATH",
-    os.path.join(os.path.dirname(__file__), ".lrs_users.db"),
+DB_PATH = os.environ.get("LRS_USERS_DB_PATH") or os.path.join(
+    os.path.dirname(__file__), ".lrs_users.db"
 )
 
 MAGIC_LINK_TTL_MINUTES = 15
