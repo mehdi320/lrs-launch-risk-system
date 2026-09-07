@@ -46,10 +46,16 @@ Suivi, Ressources et Creative Studio ont chacun une sous-navigation
   `/api/projects*`, `/api/campaigns*`, `/api/ads-connector/*`,
   `/api/swipefiles*`), contenu (`/api/resources/*`), sortie
   (`/api/export/pdf`, `/api/integrations/*`, `/api/plans`), Creative Studio
-  réel (`/api/creative-studio/generate`), authentification
-  (`/api/auth/login`, `/api/auth/status`, `/api/auth/logout`), onboarding
-  (`/api/onboarding/status`, `/api/onboarding/complete`), monitoring
-  planifié (`/api/monitoring/schedule*`, `/api/monitoring/check`).
+  réel (`/api/creative-studio/generate`), authentification par mot de passe
+  partagé (`/api/auth/login`, `/api/auth/status`, `/api/auth/logout`),
+  abonnement individuel par lien magique Stripe (`/api/auth/consume-magic-link`,
+  `/api/auth/subscription-status`, `/api/auth/request-magic-link` — même
+  `user_accounts.py` que app.py, capacité disponible mais **pas branchée sur
+  le blocage d'accès actuel** : `LRS_APP_URL`, utilisé par le lien magique
+  envoyé après paiement, pointe encore vers l'app Streamlit ; brancher le
+  pilote dessus est une décision produit séparée, pas encore prise),
+  onboarding (`/api/onboarding/status`, `/api/onboarding/complete`),
+  monitoring planifié (`/api/monitoring/schedule*`, `/api/monitoring/check`).
 
   Persiste chaque audit (simple, bulk, comparaison, A/B, projet) dans
   `.lrs_history.json` — le même fichier que lit/écrit l'app Streamlit

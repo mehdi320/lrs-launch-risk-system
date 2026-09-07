@@ -25,6 +25,7 @@ import audit_engine
 import email_alerts
 import integrations
 import resources_content
+import user_accounts
 from jsonstore import load_json_file, save_json_file
 
 try:
@@ -1210,6 +1211,64 @@ def auth_status(request: Request):
 def logout(request: Request):
     request.session.clear()
     return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Abonnement LRS (lien magique Stripe) ────────────────────────
+# Portage de app.py::check_subscription_access() — meme user_accounts.py,
+# meme logique de consommation/renvoi de lien. Ajoute la capacite au
+# pilote sans changer le comportement d'acces actuel : ces endpoints ne
+# sont PAS branches sur _require_auth ci-dessus (qui reste uniquement le
+# mot de passe partage). Un frontend qui veut l'appliquer doit appeler
+# /api/auth/subscription-status et agir en consequence lui-meme — activer
+# un blocage global cote pilote est une decision produit separee (voir
+# LRS_APP_URL, qui pointe aujourd'hui vers l'app Streamlit).
+# ══════════════════════════════════════════════════════════════
+
+class ConsumeMagicLinkRequest(BaseModel):
+    token: str = ""
+
+
+@app.post("/api/auth/consume-magic-link")
+def consume_magic_link(req: ConsumeMagicLinkRequest, request: Request):
+    token = req.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="Token manquant.")
+    email = user_accounts.consume_magic_link(token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Ce lien est invalide ou a expiré.")
+    request.session["subscriber_email"] = email
+    return {"ok": True, "email": email}
+
+
+@app.get("/api/auth/subscription-status")
+def subscription_status(request: Request):
+    email = request.session.get("subscriber_email")
+    if not email:
+        return {"active": False, "email": None}
+    user = user_accounts.get_user(email)
+    return {"active": bool(user and user["status"] == "active"), "email": email}
+
+
+class RequestMagicLinkRequest(BaseModel):
+    email: str = ""
+
+
+@app.post("/api/auth/request-magic-link")
+def request_magic_link(req: RequestMagicLinkRequest):
+    email_clean = req.email.strip().lower()
+    if email_clean and user_accounts.is_valid_email(email_clean):
+        user = user_accounts.get_user(email_clean)
+        if user and user["status"] == "active":
+            # rate_limit=True (défaut) : anti-spam, voir user_accounts.create_magic_link.
+            magic_token = user_accounts.create_magic_link(email_clean)
+            if magic_token:
+                app_url = os.getenv("LRS_APP_URL", "")
+                link = f"{app_url}?token={magic_token}" if app_url else f"?token={magic_token}"
+                email_alerts.send_magic_link_email(email_clean, link, smtp_config=email_alerts.get_smtp_config())
+    # Même message dans tous les cas (email inconnu, inactif, invalide, ou
+    # rate-limité) — anti-énumération, voir app.py::_render_subscription_lock_screen.
+    return {"ok": True, "message": "Si cet email est associé à un abonnement actif, vous recevrez un lien de connexion sous peu."}
 
 
 # ══════════════════════════════════════════════════════════════
