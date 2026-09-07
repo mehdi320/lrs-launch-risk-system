@@ -13,10 +13,37 @@ déploiement réel (voir checklist en bas).
   code et les mêmes dépendances (`requirements.txt`). Le service lancé
   dépend de la commande (CMD par défaut : le pilote).
 - `docker-compose.yml` — orchestration locale/VPS des trois services à
-  partir de la même image. Pas encore lié à une plateforme précise
-  (Fly.io, Render, VPS...).
+  partir de la même image, plus un service `caddy` qui termine le TLS
+  public (voir section TLS ci-dessous). Pensé pour un VPS simple (bind
+  mount, voir limitation de persistance ci-dessous) — pas pour un PaaS à
+  filesystem éphémère (Fly.io, Render...).
+- `Caddyfile` — configuration du reverse proxy : route
+  `app.<LRS_DOMAIN>` → Streamlit, `pilot.<LRS_DOMAIN>` → pilote FastAPI,
+  `api.<LRS_DOMAIN>` → service de diffusion/webhook Stripe. Certificats
+  Let's Encrypt obtenus et renouvelés automatiquement par Caddy.
 - `.dockerignore` — exclut secrets locaux (`.env`), état runtime
   (`.lrs_*.json`, `.lrs_*.db`) et caches de l'image.
+
+## TLS / reverse proxy
+
+Les 3 services applicatifs ne terminent pas le TLS eux-mêmes (voir
+checklist) — c'est le rôle du service `caddy` dans `docker-compose.yml`.
+Étapes pour l'activer :
+
+1. Pointer 3 enregistrements DNS de type A vers l'IP du serveur :
+   `app.<domaine>`, `pilot.<domaine>`, `api.<domaine>`.
+2. Définir `LRS_DOMAIN=<domaine>` dans `.env` (sans le sous-domaine, ex.
+   `LRS_DOMAIN=lrs-app.com`).
+3. Ouvrir les ports 80 et 443 sur le serveur (nécessaires pour la
+   validation Let's Encrypt ET le trafic HTTPS ensuite).
+4. `docker compose up -d` — Caddy obtient les certificats au premier
+   démarrage (peut prendre jusqu'à une minute, voir `docker compose logs
+   caddy` en cas de souci).
+5. `LRS_APP_URL=https://app.<domaine>` et l'URL du webhook Stripe
+   (Dashboard) = `https://api.<domaine>/webhook/stripe`.
+
+Les ports 8501/8600/8000 restent liés à `127.0.0.1` sur l'hôte (debug via
+tunnel SSH uniquement, jamais exposés directement).
 
 ## Persistance des données — limitation connue
 
@@ -96,10 +123,8 @@ fois la plateforme cible choisie.
       sans authentification, même si `APP_PASSWORD` est défini — à
       brancher sur le mécanisme de la plateforme (Docker `HEALTHCHECK`,
       load balancer...).
-- [ ] Reverse proxy / TLS devant les trois ports (8501 Streamlit, 8600
-      pilote, 8000 service de diffusion/webhook) si exposés publiquement —
-      aucun des trois ne sert de TLS lui-même. Le port 8000 doit être
-      joignable par Stripe pour que le webhook fonctionne.
+- [x] Reverse proxy / TLS — géré par le service `caddy` (voir section TLS
+      ci-dessus). Reste à faire : pointer le DNS et définir `LRS_DOMAIN`.
 - [ ] Sauvegarde du volume de données une fois la persistance résolue
       (historique d'audits, base Creative Studio, base comptes/abonnements
       `.lrs_users.db`).

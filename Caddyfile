@@ -1,0 +1,22 @@
+# Reverse proxy + TLS automatique (Let's Encrypt) devant les 3 services —
+# aucun des trois ne termine le TLS lui-même (voir DEPLOYMENT.md). Caddy
+# obtient/renouvelle les certificats tout seul dès que les enregistrements
+# DNS pointent vers ce serveur et que les ports 80/443 sont ouverts.
+#
+# Remplacer LRS_DOMAIN par le vrai domaine (ex. lrs-app.com) — soit ici en
+# dur, soit via la variable d'env LRS_DOMAIN si le domaine change souvent.
+
+app.{$LRS_DOMAIN} {
+	reverse_proxy streamlit:8501
+}
+
+pilot.{$LRS_DOMAIN} {
+	reverse_proxy pilot:8600
+}
+
+# Reçoit /checkout/beta et /webhook/stripe (creative_studio.serving.app) —
+# c'est cette URL + /webhook/stripe qu'il faut déclarer dans le Dashboard
+# Stripe (Developers > Webhooks) une fois le DNS en place.
+api.{$LRS_DOMAIN} {
+	reverse_proxy serving:8000
+}

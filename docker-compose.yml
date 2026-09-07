@@ -2,6 +2,10 @@
 # déploiement précise (VPS, Fly.io, Render...). Sert à faire tourner les
 # deux surfaces web localement ou sur un serveur simple avant de choisir.
 #
+# TLS : le service `caddy` termine le HTTPS (certificats Let's Encrypt
+# automatiques via Caddyfile) devant les 3 services applicatifs, qui restent
+# en HTTP interne sur le réseau Docker — voir DEPLOYMENT.md.
+#
 # Persistance : les deux services montent le dépôt (bind mount `.:/app`)
 # par-dessus le code copié dans l'image, donc l'état (.lrs_*.json,
 # .lrs_creative_studio.db, écrits à côté du code — voir PILOT_UI.md)
@@ -18,8 +22,10 @@ services:
   pilot:
     build: .
     command: ["uvicorn", "pilot_server:app", "--host", "0.0.0.0", "--port", "8600"]
+    # Lié à 127.0.0.1 : joignable en debug via tunnel SSH, pas depuis
+    # l'extérieur — le trafic public passe uniquement par `caddy`.
     ports:
-      - "8600:8600"
+      - "127.0.0.1:8600:8600"
     env_file:
       - .env
     volumes:
@@ -30,7 +36,7 @@ services:
     build: .
     command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     env_file:
       - .env
     volumes:
@@ -39,15 +45,38 @@ services:
 
   # Reçoit le webhook Stripe (achats funnel Creative Studio + activation
   # d'abonnement LRS, voir creative_studio/serving/app.py) et sert
-  # /checkout/beta. Doit être exposé publiquement pour que Stripe puisse
-  # l'atteindre — voir DEPLOYMENT.md.
+  # /checkout/beta. Doit être exposé publiquement (via `caddy`) pour que
+  # Stripe puisse l'atteindre — voir DEPLOYMENT.md.
   serving:
     build: .
     command: ["uvicorn", "creative_studio.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     volumes:
       - .:/app
     restart: unless-stopped
+
+  # Termine le TLS public (Let's Encrypt automatique) et route vers les 3
+  # services ci-dessus par sous-domaine — voir Caddyfile.
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - LRS_DOMAIN=${LRS_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - pilot
+      - streamlit
+      - serving
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
