@@ -904,10 +904,7 @@ def render_ads_connector():
     Interface de connexion aux APIs pub Meta Ads et TikTok Ads.
     Importe automatiquement CTR/CPC/ROAS/CPA dans le Campaign Tracker.
     """
-    bg     = "var(--bg-surface)"
-    border = "var(--border)"
     txt    = "var(--text)"
-    txt2   = "var(--text-secondary)"
 
     creds = load_ads_creds()
 
@@ -2360,7 +2357,6 @@ export_to_notion = integrations.export_to_notion
 def render_integrations_widget(result, meta, key_prefix="integ"):
     """Widget compact Slack / Sheets / Notion."""
     cfg = _get_integration_config()
-    lang = st.session_state.get("lang", "fr")
 
     with st.expander(t("int_title")):
         c1, c2, c3 = st.columns(3)
@@ -2521,7 +2517,6 @@ def render_cumulative_intel():
     """
     history = st.session_state.audit_history
     bg      = "var(--bg-surface)"
-    bg2     = "var(--bg-surface-2)"
     border  = "var(--border)"
     txt     = "var(--text)"
     txt2    = "var(--text-secondary)"
@@ -2724,7 +2719,6 @@ def render_campaign_tracker():
     bg       = "var(--bg-surface)"
     border   = "var(--border)"
     txt      = "var(--text)"
-    txt2     = "var(--text-secondary)"
 
     campaigns = load_campaigns()
 
@@ -2737,10 +2731,8 @@ def render_campaign_tracker():
     sel_camp   = st.selectbox("Campagne", camp_opts, key="camp_select")
 
     if sel_camp == "+ Nouvelle campagne":
-        camp_key = None
         camp_data = {}
     else:
-        camp_key  = sel_camp
         camp_data = campaigns.get(sel_camp, {})
 
     with st.form("campaign_form"):
@@ -2961,7 +2953,6 @@ def render_swipe_library():
     st.caption("Tous les hooks, headlines et CTAs générés ou sauvegardés depuis vos audits. Votre banque personnelle qui grandit à chaque audit.")
 
     # ── Stats librairie ───────────────────────────────────────
-    total = sum(len(v) for v in swipes.values() if isinstance(v, list))
     k1, k2, k3, k4 = st.columns(4)
     for col, label, cat in [(k1,"Headlines","headlines"),(k2,"Hooks","hooks"),(k3,"CTAs","ctas"),(k4,"Angles","angles")]:
         with col:
@@ -3030,7 +3021,6 @@ def render_swipe_library():
 
         for idx, item in enumerate(items[:30]):
             plat_tag = item.get("platform","")
-            off_tag  = item.get("offer","")
             ts_tag   = item.get("ts","")
             sc_tag   = item.get("score_at_save", 0)
             notes_v  = item.get("notes","")
@@ -3199,7 +3189,6 @@ def render_dashboard():
     all_scores  = [e.get("score", 0) for e in history if e.get("score")]
     avg_score   = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
     best_score  = max(all_scores) if all_scores else 0
-    worst_score = min(all_scores) if all_scores else 0
     danger_count = sum(1 for s in all_scores if s <= 9)
     ready_count  = sum(1 for s in all_scores if s >= 15)
 
@@ -3444,10 +3433,10 @@ def render_competitor_audit(api_key):
 
     col_you, col_them = st.columns(2)
     with col_you:
-        st.markdown(f"<div style='color:var(--accent);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🔵 VOTRE PAGE</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:var(--accent);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🔵 VOTRE PAGE</div>", unsafe_allow_html=True)
         your_url = st.text_input("Votre URL", placeholder="https://votre-landing.com", key="comp_your_url")
     with col_them:
-        st.markdown(f"<div style='color:var(--warning);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🟡 CONCURRENT</div>", unsafe_allow_html=True)
+        st.markdown("<div style='color:var(--warning);font-weight:700;font-size:0.85rem;margin-bottom:6px'>🟡 CONCURRENT</div>", unsafe_allow_html=True)
         their_url = st.text_input("URL concurrent", placeholder="https://concurrent.com", key="comp_their_url")
 
     c1, c2, c3 = st.columns(3)
@@ -3485,7 +3474,7 @@ def render_competitor_audit(api_key):
                 content, status, _ = extract_page(url)
                 if not content:
                     errors[side] = f"Impossible d'extraire {url}"
-                    _st.update(label=f"❌ Erreur extraction", state="error", expanded=False)
+                    _st.update(label="❌ Erreur extraction", state="error", expanded=False)
                     continue
                 pt = detect_page_type(content, url)
                 pl = detect_language(content)
@@ -3498,7 +3487,7 @@ def render_competitor_audit(api_key):
                 _increment_usage()
             except Exception as e:
                 errors[side] = str(e)
-                _st.update(label=f"❌ Erreur", state="error", expanded=False)
+                _st.update(label="❌ Erreur", state="error", expanded=False)
 
     for side, msg in errors.items():
         st.error(f"{'Votre page' if side=='you' else 'Concurrent'} : {msg}")
@@ -4073,7 +4062,7 @@ def render_referral_widget():
                         level="success"
                     )
                 save_referral(ref_data)
-                st.success(f"Referral enregistré !" + (" +1 mois offert 🎉" if ref_conv else ""))
+                st.success("Referral enregistré !" + (" +1 mois offert 🎉" if ref_conv else ""))
                 st.rerun()
 
 
@@ -4161,7 +4150,7 @@ def render_ab_tracker(api_key):
                     _st_ab.update(label=f"✅ {label} analysée", state="complete", expanded=False)
                 except Exception as e:
                     st.error(f"{label} : {e}")
-                    _st_ab.update(label=f"❌ Erreur", state="error", expanded=False)
+                    _st_ab.update(label="❌ Erreur", state="error", expanded=False)
 
         if "A" in results_ab and "B" in results_ab:
             ca = results_ab["A"].get("_c", {})
@@ -4240,7 +4229,6 @@ def render_ab_tracker(api_key):
                 continue
             wins_a = sum(1 for r in rounds if r.get("winner")=="A")
             wins_b = sum(1 for r in rounds if r.get("winner")=="B")
-            last   = rounds[-1]
             # "test_type" absent = tests crees avant cette distinction, tous
             # etaient des pages de vente (seul mode disponible a l'epoque).
             # "advert" = valeur d'une version anterieure de cette fonctionnalite
@@ -4749,21 +4737,6 @@ def render_history():
         color  = "var(--danger)" if score <= 9 else "var(--warning)" if score <= 14 else "var(--success)"
         url_entry = entry.get("url", "")
 
-        # Badge delta vs audit précédent (i+1 = plus ancien)
-        delta_badge = ""
-        if i + 1 < len(history):
-            prev_score = history[i + 1].get("score", 0)
-            d = score - prev_score
-            if d != 0:
-                dc = "var(--success)" if d > 0 else "var(--danger)"
-                delta_badge = f"  <span style='color:{dc};font-size:0.85em'>({'+'if d>0 else ''}{d})</span>"
-
-        expander_title = (
-            entry["timestamp"] + " — " + entry["mode"] +
-            " — <span style='color:" + color + ";font-weight:700'>" + str(score) + "/20</span>" +
-            delta_badge + " — " + label
-        )
-
         with st.expander(f"{entry['timestamp']} — {entry['mode']} — {score}/20 — {label}"):
             c1, c2, c3, c4 = st.columns(4)
             with c1: st.metric("Score", str(score) + "/20")
@@ -5029,7 +5002,6 @@ def render_monitoring(api_key):
             first_sc = entries_url[0].get("score", 0)
             last_sc  = entries_url[-1].get("score", 0)
             delta_t  = last_sc - first_sc
-            col_t    = "var(--success)" if delta_t > 0 else "var(--danger)" if delta_t < 0 else "#888"
             sign_t   = "+" if delta_t >= 0 else ""
             met1, met2, met3 = st.columns(3)
             with met1: st.metric("Premier audit", f"{first_sc}/20")
@@ -5192,7 +5164,6 @@ def render_monitoring(api_key):
 
         # Test manuel du digest
         if schedule and st.button("📤 Tester le digest maintenant", key="test_digest_btn"):
-            test_email_d = st.session_state.get("test_digest_email","")
             entries_d = [{
                 "url": s.get("url",""),
                 "score": s.get("last_score",0),
@@ -5264,7 +5235,6 @@ def render_projects(api_key):
         urls     = proj.get("urls", [])
         n_done   = len([u for u in urls if u in audits])
         avg_sc   = round(sum(audits[u]["score"] for u in urls if u in audits) / n_done, 1) if n_done > 0 else None
-        proj_color = "var(--success)" if (avg_sc or 0) >= 15 else "var(--warning)" if (avg_sc or 0) >= 10 else "var(--danger)"
 
         expander_label = (
             f"🗂️ {proj['name']}  —  {n_done}/{len(urls)} audités"
@@ -5524,7 +5494,6 @@ def render_bulk(api_key):
         st.markdown("#### 📋 Détail par page")
         for r in sortable:
             sc = r["score"]
-            sc_color = "var(--success)" if sc >= 15 else "var(--warning)" if sc >= 10 else "var(--danger)"
             with st.expander(f"{r['url'].replace('https://','')[:55]} — {sc}/20 — {r.get('decision','')}"):
                 render_results(r["result"], offer_type=r.get("offer_type"), platform=r.get("platform"))
 
@@ -5632,8 +5601,6 @@ def render_comparison(api_key, model="gpt-4o-mini"):
                 mx = 5 if label != "Total" else 20
                 winner_a = "✅" if va > vb else ("🤝" if va == vb else "")
                 winner_b = "✅" if vb > va else ("🤝" if va == vb else "")
-                hxa = _score_color_str(va, mx)
-                hxb = _score_color_str(vb, mx)
                 comp_rows.append([
                     f"**{label}**",
                     f"{winner_a} **{va}/{mx}**",
@@ -6600,7 +6567,7 @@ def main():
     # ── Calcul alertes (pour badge onglet) ───────────────────
     alerts     = compute_score_alerts(st.session_state.audit_history)
     n_alerts   = len(alerts)
-    suivi_label = f"Suivi 🔴" if n_alerts > 0 else "Suivi"
+    suivi_label = "Suivi 🔴" if n_alerts > 0 else "Suivi"
 
     # ── Sidebar : navigation 2 niveaux (Business Manager / LRS) ──
     _has_history = len(st.session_state.audit_history) > 0

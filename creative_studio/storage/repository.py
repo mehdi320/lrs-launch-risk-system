@@ -20,7 +20,6 @@ from creative_studio.core.variants import (
     FormField,
     FormFieldType,
     FormSubmission,
-    FormSubmissionSource,
     Framework,
     Funnel,
     FunnelObjective,

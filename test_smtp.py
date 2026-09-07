@@ -12,7 +12,6 @@ utilisée en production pour le lien magique de connexion
 d'échec plutôt que le simple True/False que renvoie la fonction en prod.
 """
 
-import os
 import smtplib
 import sys
 

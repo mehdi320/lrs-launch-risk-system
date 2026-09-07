@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table,
     TableStyle, PageBreak, HRFlowable, KeepTogether
@@ -67,7 +67,6 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     buf = io.BytesIO()
     c_  = result.get("_c", {})
     why = result.get("why_this_score", {})
-    mm_ = result.get("message_match", {})
     fp  = result.get("fix_plan", {})
     rw  = result.get("rewrite", {})
     ads = result.get("ads", {})
@@ -116,7 +115,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     client_name  = meta.get("client_name", "")
     report_mode  = meta.get("report_mode", "")
     if client_name and report_mode == "client":
-        title_str = f"<b>🚦 LRS™</b> — Rapport d'Audit Confidentiel"
+        title_str = "<b>🚦 LRS™</b> — Rapport d'Audit Confidentiel"
         sub_str   = f"Préparé pour : <b>{client_name}</b>"
     else:
         title_str = "<b>🚦 LRS™</b> — Launch Risk System"

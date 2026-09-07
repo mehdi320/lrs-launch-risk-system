@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     PageBreak, HRFlowable, KeepTogether
@@ -193,7 +193,6 @@ def generate():
     niche_rows = []
     for i, row in enumerate(niches):
         is_header = (i == 0)
-        bg = colors.HexColor("#0f0f2a") if is_header else (C_SURFACE if i%2==0 else C_SURF2)
         fc = C_ACCENT if is_header else C_LIGHT
         niche_rows.append([
             Paragraph(f"<b>{row[0]}</b>" if is_header else row[0],
