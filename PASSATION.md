@@ -2,8 +2,8 @@
 
 Document de passation complet, du tout début du projet jusqu'à
 maintenant. Sert à réamorcer une nouvelle session Claude sans avoir à
-tout réexpliquer. Dernière mise à jour : 2026-09-04, branche
-`claude/lrs-creative-generation-testing-akbs8x` (44 commits d'avance
+tout réexpliquer. Dernière mise à jour : 2026-09-07, branche
+`claude/lrs-creative-generation-testing-akbs8x` (49 commits d'avance
 sur `main`).
 
 ---
@@ -22,7 +22,8 @@ ecom et vendeurs de produits digitaux :
    priorisé, un rewrite complet (headline, bullets, CTA, garantie,
    FAQ), des angles pub et un script UGC. Trois modes : Funnel Only,
    Ads Only, Full Risk (les deux ensemble + détection des
-   incohérences pub/page).
+   incohérences pub/page). **Moteur LLM : Anthropic (Claude)** — voir
+   section 10, migré depuis OpenAI.
 2. **Creative Studio** — génération de copy (depuis zéro ou à partir
    d'une référence/swipe), score de structure avant/après, funnel
    builder multi-étapes avec éléments de conversion, test A/B
@@ -36,12 +37,20 @@ intégrations (Slack, Sheets, Notion, webhook, API Meta/TikTok Ads).
 
 ### Le produit existe sous deux interfaces
 - **`app.py`** — l'app Streamlit complète, code historique du projet
-  (le plus gros fichier du repo).
+  (le plus gros fichier du repo). C'est la **seule** des deux interfaces
+  à avoir aujourd'hui la logique d'abonnement Stripe complète
+  (`check_subscription_access()`), donc la seule vers laquelle le lien
+  magique envoyé après paiement redirige actuellement (`LRS_APP_URL`).
 - **`pilot_server.py` + `pilot_static/`** — un pilote FastAPI + frontend
   custom (thème clair "glass" façon Apple), construit en parallèle
   pour être la version montrée aux premiers utilisateurs bêta. A
   progressivement rattrapé puis dépassé `app.py` en maturité produit
-  (checklist de mise en ligne, sécurité, etc.).
+  (checklist de mise en ligne, sécurité, etc.). Depuis cette session,
+  il a aussi la **capacité** de gérer le lien magique Stripe
+  (`/api/auth/consume-magic-link` etc., voir section 10) mais elle
+  n'est **pas branchée** sur son blocage d'accès — décision produit non
+  prise : est-ce que le pilote doit devenir l'interface principale à
+  laquelle les clients payants accèdent ?
 
 ### Grandes phases de travail, dans l'ordre chronologique
 1. **Nettoyage et fiabilisation de `app.py`** — audit du code mort,
@@ -86,6 +95,19 @@ intégrations (Slack, Sheets, Notion, webhook, API Meta/TikTok Ads).
     Google tag (GA4/Ads) câblés mais inactifs tant qu'aucun ID n'est
     fourni, bandeau de consentement RGPD bilingue qui bloque le
     chargement des scripts tant que le visiteur n'a pas accepté.
+11. **Validation Stripe/SMTP en conditions réelles + infra de
+    déploiement** (cette session, 2026-09-07) — jusqu'ici tout avait
+    été testé avec des identifiants factices (voir ancienne section 4,
+    corrigée ci-dessous). Cette fois : Stripe CLI installé et
+    authentifié, produit/prix créés dans le sandbox Stripe, paiement
+    réel avec carte de test, webhook signé reçu et traité, SMTP Gmail
+    réel configuré et testé, lien magique cliqué → app déverrouillée.
+    3 bugs bloquants découverts et corrigés (voir section 2). Ajout
+    d'un reverse proxy Caddy (TLS Let's Encrypt automatique) au
+    déploiement Docker. Port de la logique d'abonnement Stripe dans le
+    pilote FastAPI (capacité ajoutée, pas activée). Nettoyage de code
+    (audit ruff, dead code). Build de `sales-site/` validé et déployé
+    sur Vercel pour test (voir section 4).
 
 ## 2. Problématiques
 
@@ -113,15 +135,6 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
 - **Aucun projet Next.js n'existait dans ce repo** avant cette session
   (100% Python) — a nécessité de scaffolder `sales-site/` de zéro
   plutôt que d'ajouter une page dans une structure existante.
-- **Sandbox sans accès réseau vers Stripe/SMTP réels.** Cet
-  environnement ne peut pas atteindre `api.stripe.com` (CONNECT rejeté
-  par la politique réseau) ni un serveur SMTP sur le port 587
-  (timeout) — confirmé empiriquement. Conséquence : impossible de
-  tester un vrai paiement Stripe ou un vrai envoi d'email depuis cette
-  session. Tout a été testé via un webhook non signé
-  (`LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true`) qui simule fidèlement la
-  logique métier, sans remplacer un test réel avec `stripe listen` /
-  un vrai SMTP.
 - **Le copy marketing de la page de vente** est arrivé après une
   première version avec des placeholders `[TEXTE_ICI]` — la page a dû
   être restructurée une seconde fois pour suivre le plan du document
@@ -136,12 +149,59 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
   même (commit `3a8a14c`), testé avec un scénario de panne reproduit
   fidèlement (payload cassé → 500 → retry avec même event_id → compte
   bien activé).
+- **3 bugs bloquants découverts en testant Stripe/SMTP avec de vrais
+  identifiants pour la première fois** (2026-09-07) — tous invisibles
+  tant qu'on ne teste qu'avec des payloads faits main
+  (`LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true`) :
+  - `stripe.api_key` n'était **jamais configuré** nulle part dans le
+    code → `/checkout/beta` plantait systématiquement avec une
+    `AuthenticationError` dès qu'on l'appelait pour de vrai. Le flux
+    funnel historique ne l'avait jamais remarqué car il ne fait que
+    rediriger vers un Payment Link statique (aucun appel API Stripe
+    côté serveur). Corrigé : `stripe.api_key =
+    os.environ.get("STRIPE_SECRET_KEY", "")` ajouté dans
+    `creative_studio/serving/app.py`, nouvelle variable
+    `STRIPE_SECRET_KEY` documentée dans `.env.example` et
+    `STRIPE_SMTP_SETUP.md`.
+  - Le webhook appelait `.get()` sur l'objet renvoyé par
+    `stripe.Webhook.construct_event()` — un `stripe.Event`
+    (StripeObject du SDK), qui supporte l'accès par item
+    (`event["type"]`) mais **pas** `.get()`. Résultat : **tout**
+    webhook réellement signé échouait en 500, alors que le mode
+    `LRS_CS_ALLOW_UNVERIFIED_WEBHOOK` (qui fait `json.loads(payload)`,
+    un vrai dict) fonctionnait sans problème — d'où le fait que ça
+    n'avait jamais été détecté. Corrigé avec `.to_dict()` (conversion
+    récursive, donc `event["data"]["object"]` devient aussi un dict
+    exploitable par le code existant sans le réécrire).
+  - `LRS_USERS_DB_PATH=""` (vide, pas absente) dans `.env` →
+    `user_accounts.DB_PATH` valait `os.environ.get("LRS_USERS_DB_PATH",
+    <chemin par défaut>)`, qui ne retombe sur le défaut que si la
+    variable est **absente**, pas si elle est **vide**. Avec une
+    chaîne vide, `sqlite3.connect("")` ouvre une base SQLite temporaire
+    **anonyme, différente à chaque connexion** → `no such table` au
+    premier vrai appel. Corrigé avec `os.environ.get("LRS_USERS_DB_PATH")
+    or <défaut>` (l'opérateur `or`, pas le 2e argument de `.get()`).
+    Recherché dans tout le repo si ce pattern existait ailleurs avec un
+    défaut non-trivial (un chemin, typiquement) — un seul cas trouvé,
+    corrigé.
+- **Déploiement Vercel accidentel en production** (2026-09-07) — la
+  CLI Vercel (`vercel --yes` sans `--prod=false`) a déployé
+  `sales-site/` directement en production au lieu d'un preview privé,
+  rendant le vrai lien de paiement Stripe public avant que le backend
+  (VPS) soit prêt à recevoir le webhook. Projet supprimé par précaution
+  (`vercel remove`) dès que remarqué. Leçon : toujours forcer un
+  déploiement preview explicitement pour un premier essai visuel.
 
 ## 3. Fichiers importants
 
 ### Pilote (FastAPI + frontend custom) — le plus abouti des deux
 - `pilot_server.py` — backend FastAPI (routes API, login gate, GZip,
-  fichiers statiques).
+  fichiers statiques). Depuis cette session : section "Abonnement LRS
+  (lien magique Stripe)" avec `/api/auth/consume-magic-link`,
+  `/api/auth/subscription-status`, `/api/auth/request-magic-link` —
+  même `user_accounts.py` que `app.py`, testé avec un vrai token, mais
+  **pas branché** sur `_require_auth` (le blocage d'accès actuel reste
+  uniquement le mot de passe partagé).
 - `pilot_static/index.html` — SPA complète (~140 Ko), toutes les vues :
   Dashboard, Audit, Multi-Audit, Suivi, Historique, Ressources,
   Creative Studio, Intégrations.
@@ -155,7 +215,15 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
 ### App Streamlit historique
 - `app.py` — l'app complète (fichier volumineux). `check_access()`
   (mot de passe partagé bêta) puis `check_subscription_access()`
-  (abonnement Stripe + lien magique) protègent l'accès.
+  (abonnement Stripe + lien magique) protègent l'accès. Nettoyée cette
+  session (voir section 11) : ~20 variables mortes retirées, dont deux
+  vraies fonctionnalités abandonnées en cours de route (un badge de
+  delta de score dans l'Historique, une coloration du tableau
+  comparatif A/B) — calculées puis jamais branchées sur le rendu,
+  supprimées plutôt que complétées (hors périmètre d'un nettoyage).
+  Moteur audit : bascule automatique vers **Claude** dès
+  qu'`ANTHROPIC_API_KEY` est configurée, sinon OpenAI (comportement
+  historique inchangé) — voir `audit_engine.py`.
 
 ### Comptes / paiement / email (partagé entre app.py et le webhook)
 - `user_accounts.py` — DB SQLite dédiée (`.lrs_users.db`) : tables
@@ -163,29 +231,53 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
   anti-spam 60s), `processed_stripe_events` (déduplication webhook).
   Fonctions clés : `upsert_user_from_checkout`, `create_magic_link`,
   `consume_magic_link`, `claim_stripe_event` / `release_stripe_event`,
-  `is_valid_email`.
+  `is_valid_email`. `DB_PATH` corrigé cette session (voir section 2).
 - `email_alerts.py` — envoi SMTP (résumé d'audit, alertes de score,
   lien magique), avec protection anti-injection d'en-tête
-  (`_is_safe_header_value`).
+  (`_is_safe_header_value`). Testé avec un vrai SMTP Gmail cette
+  session (`test_smtp.py`, envoi réel confirmé).
 - `creative_studio/serving/app.py` — service FastAPI séparé hébergeant
-  `/webhook/stripe` et `/checkout/beta`.
+  `/webhook/stripe` et `/checkout/beta`. `stripe.api_key` et le parsing
+  `.to_dict()` corrigés cette session (voir section 2).
 - `mcp_server/` — serveur MCP exposant 4 outils Creative Studio.
 - `test_stripe_webhook.py` — 6 scénarios de test (activation, mise à
   jour statut, résiliation, événement ignoré, rejeu d'event dupliqué,
-  échec-puis-retry). Lancer le service avec
+  échec-puis-retry). Ré-exécuté cette session après les corrections —
+  toujours 6/6 (aucune régression). Lancer le service avec
   `LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true uvicorn
   creative_studio.serving.app:app --port 8000` dans un terminal, le
-  script dans un autre.
-- `test_smtp.py` — test d'envoi SMTP direct.
-- `STRIPE_SMTP_SETUP.md` — **runbook à suivre pour la suite** : créer
-  le produit Stripe, configurer le webhook (Dashboard), tester en
-  local (`stripe listen` + carte de test), configurer SMTP, checklist
-  finale des variables d'environnement.
+  script dans un autre. **Attention** : si `STRIPE_WEBHOOK_SECRET` est
+  déjà défini dans `.env`, il prend le pas sur
+  `LRS_CS_ALLOW_UNVERIFIED_WEBHOOK` (le code vérifie la signature en
+  priorité) — surcharger `STRIPE_WEBHOOK_SECRET=` (vide) sur la ligne
+  de commande pour forcer le mode non-vérifié.
+- `test_smtp.py` — test d'envoi SMTP direct. Sortie en français avec
+  accents : sur Windows/console cp1252, lancer avec
+  `PYTHONIOENCODING=utf-8` sinon `UnicodeEncodeError`.
+- `STRIPE_SMTP_SETUP.md` — runbook, **suivi et validé de bout en bout**
+  cette session en mode Test Stripe (voir section 11). Mis à jour avec
+  l'étape `STRIPE_SECRET_KEY` (manquait).
+
+### Déploiement
+- `Dockerfile`, `docker-compose.yml` — 3 services (pilote 8600,
+  Streamlit 8501, webhook 8000). Depuis cette session : 4e service
+  `caddy` (reverse proxy, TLS Let's Encrypt automatique via
+  `LRS_DOMAIN`), les 3 services applicatifs liés à `127.0.0.1` sur
+  l'hôte (plus exposés directement, seul `caddy` publie 80/443).
+- `Caddyfile` — route `app.<LRS_DOMAIN>` → Streamlit,
+  `pilot.<LRS_DOMAIN>` → pilote, `api.<LRS_DOMAIN>` → webhook/checkout.
+- `DEPLOYMENT.md` — checklist mise à jour (TLS/reverse proxy passé de
+  "à faire" à "fait", section dédiée avec les étapes DNS).
+- **Jamais testé avec un vrai serveur** (pas de démon Docker
+  disponible dans cet environnement) — le VPS cible (Google Cloud Free
+  Tier, e2-micro) n'a pas encore été créé, voir section 5.
 
 ### Page de vente (Next.js, nouveau projet indépendant)
 - `sales-site/` — projet Next.js 15.5.25 (App Router + TypeScript +
   Tailwind), son propre `package.json`/`node_modules`/`.next`
-  (gitignorés).
+  (gitignorés). Build validé cette session (`npm run build`, OK).
+  Déployé une fois sur Vercel pour test (voir section 2, incident
+  production) puis retiré — pas de déploiement actif actuellement.
 - `sales-site/app/vente/page.tsx` — page de vente en **anglais**
   (langue par défaut, `/` redirige ici).
 - `sales-site/app/vente/fr/page.tsx` — même page en **français**.
@@ -198,20 +290,13 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
   cookies (bilingue), bloque les pixels tant que non accepté.
 - `sales-site/app/layout.tsx` — lit `NEXT_PUBLIC_META_PIXEL_ID` /
   `NEXT_PUBLIC_GTAG_ID`, les passe à `CookieConsent`.
-- `sales-site/.env.example` — `NEXT_PUBLIC_STRIPE_LINK` + pixels
-  (vides par défaut).
+- `sales-site/.env.example` — `NEXT_PUBLIC_STRIPE_LINK` (un **Payment
+  Link Stripe direct**, indépendant du backend/VPS — le CTA de la page
+  de vente ne passe pas par `/checkout/beta`) + pixels (vides par
+  défaut).
 
 ## 4. Ce qui a raté / limites connues
 
-- **Rien n'a pu être testé avec de vrais identifiants Stripe, SMTP,
-  Meta Pixel ou Google Ads/Analytics** — le sandbox n'y a pas accès
-  réseau, et aucun identifiant réel n'a été fourni. Tout a été testé
-  avec des identifiants factices ou en mode webhook non signé. **Rien
-  de tout ça n'est donc validé en conditions réelles.**
-- **Bug transitoire introduit puis corrigé dans la session** — voir
-  section 2. Le code actuel sur la branche est correct et testé contre
-  ce scénario précis ; mentionné ici pour que la prochaine session
-  sache que ce point a déjà été particulièrement vérifié.
 - **Contenu légal non finalisé** — `pilot_static/privacy.html` et
   `terms.html` sont fidèles aux flux de données réels du code, mais
   explicitement marqués "à faire relire par un professionnel"
@@ -231,35 +316,78 @@ Difficultés réelles rencontrées et comment elles ont été traitées :
 - **Pas de social proof** sur la page de vente — décision explicite de
   l'utilisateur ("sera ajouté manuellement plus tard"), donc absent
   par design, pas un oubli.
-- **`sales-site/` n'a jamais été déployé** — seulement testé en local
-  (`npm run build` + `npm run start`).
+- **`sales-site/` n'est pas déployé actuellement** — testé en local et
+  une fois sur Vercel (retiré après un déploiement accidentel en
+  production, voir section 2). À redéployer en preview d'abord.
+- **Le mot de passe bêta local est un placeholder** —
+  `.streamlit/secrets.toml` contient `APP_PASSWORD = "change-moi"`, à
+  changer avant toute exposition publique de l'app Streamlit.
+- **Écart d'architecture non résolu** — le pilote FastAPI a désormais
+  la capacité technique de gérer l'abonnement Stripe (section 11) mais
+  ce n'est pas activé, et `LRS_APP_URL` (utilisé dans l'email du lien
+  magique) pointe toujours vers Streamlit. Décision produit à prendre :
+  le pilote doit-il devenir l'interface principale des clients
+  payants ?
+- **VPS de production jamais créé** — le déploiement Docker+Caddy est
+  prêt côté code mais n'a jamais tourné sur un vrai serveur. L'
+  utilisateur a explicitement mis cette étape de côté ("je ferai ça à
+  la fin"), ainsi que l'achat du nom de domaine.
+- **Stripe Live non configuré** — tout ce qui a été validé cette
+  session (section 11) est en mode **Test/sandbox**. Passer en Live
+  nécessite : ré-autoriser le CLI Stripe pour le Live (lien de
+  ré-autorisation envoyé à l'utilisateur, pas confirmé complété),
+  créer un nouveau produit/prix Live, récupérer `sk_live_...`, et
+  configurer un vrai endpoint webhook dans le Dashboard Stripe — ce qui
+  nécessite lui-même le VPS + domaine ci-dessus (Stripe doit pouvoir
+  atteindre l'endpoint publiquement).
+- **~70 suggestions de style ruff (bugbear/simplify) volontairement
+  ignorées** — gain cosmétique, risque réel non nul (ex. ajouter
+  `strict=True` à un `zip()` existant changerait le comportement si des
+  listes de longueurs différentes étaient jusqu'ici tolérées). Seul le
+  nettoyage à risque nul (imports/variables/f-strings inutilisés,
+  catégorie `F` de ruff) a été appliqué.
 
 ## 5. Ce que je compte faire ensuite
 
 Rien n'est en cours — la session s'est arrêtée proprement, tout est
 commité et pushé sur `claude/lrs-creative-generation-testing-akbs8x`.
-Ce qui reste à faire dépend presque entièrement d'accès (comptes,
-réseau) que le sandbox Claude n'a pas :
+Ce qui reste dépend presque entièrement de décisions ou d'accès que
+seul l'utilisateur peut fournir :
 
-1. **Configurer Stripe en vrai** — créer le produit/prix, configurer le
-   endpoint webhook dans le Dashboard Stripe (`/webhook/stripe`),
-   récupérer `STRIPE_WEBHOOK_SECRET`, tester avec `stripe listen` et
-   une carte de test avant tout trafic réel. Marche à suivre complète
-   dans `STRIPE_SMTP_SETUP.md`.
-2. **Configurer un vrai SMTP** — `SMTP_HOST/PORT/USER/PASSWORD`, tester
-   avec `test_smtp.py`.
-3. **Récupérer le lien de paiement Stripe** et le mettre dans
-   `sales-site/.env` (`NEXT_PUBLIC_STRIPE_LINK`) avant de déployer la
-   page de vente.
-4. **Déployer `sales-site/`** quelque part (Vercel ou autre).
-5. **Faire relire le contenu légal** (`privacy.html`, `terms.html` du
-   pilote) par un professionnel avant toute mise en ligne publique.
-6. **Quand les comptes pub seront prêts** : renseigner
+1. **Finaliser Stripe en Live** — l'utilisateur a un lien de
+   ré-autorisation CLI en attente (accès Live). Une fois fait : créer
+   le produit/prix Live, récupérer `sk_live_...`, configurer le
+   webhook réel dans le Dashboard (nécessite le point 2).
+2. **Provisionner l'infra** — l'utilisateur a choisi Google Cloud Free
+   Tier (VM `e2-micro`, région `us-west1`/`us-central1`/`us-east1` pour
+   rester gratuit) plutôt qu'un VPS payant (Hetzner envisagé un
+   temps), et un nom de domaine à acheter — **les deux mis de côté
+   explicitement par l'utilisateur pour plus tard**. Une fois prêts :
+   déployer `docker compose up -d` (voir `DEPLOYMENT.md`, section TLS),
+   pointer le DNS, définir `LRS_DOMAIN`.
+3. **Décider de l'architecture d'accès finale** — le pilote a
+   maintenant la capacité de lien magique Stripe (section 11) mais
+   n'est pas branché dessus. Si le pilote doit devenir l'interface
+   principale : brancher `_require_auth` (ou une nouvelle couche) sur
+   `/api/auth/subscription-status`, et changer `LRS_APP_URL` pour
+   pointer vers le pilote au lieu de Streamlit.
+4. **Redéployer `sales-site/` sur Vercel** — en preview d'abord cette
+   fois (leçon de l'incident section 2), avant de repasser en
+   production une fois le backend prêt à recevoir le webhook.
+5. **Changer le mot de passe bêta** (`change-moi`) avant toute
+   exposition publique de Streamlit.
+6. **Faire relire le contenu légal** (`privacy.html`, `terms.html` du
+   pilote, et créer l'équivalent pour `sales-site/`) par un
+   professionnel avant toute mise en ligne publique.
+7. **Vérifier la coquille "quatre axes / cinq éléments"** (section 4)
+   avec l'auteur du copy avant de la corriger.
+8. **Quand les comptes pub seront prêts** : renseigner
    `NEXT_PUBLIC_META_PIXEL_ID` et/ou `NEXT_PUBLIC_GTAG_ID` — le bandeau
    de consentement et le chargement conditionnel des scripts sont déjà
    en place, rien d'autre à coder à ce moment-là.
-7. **Vérifier la coquille "quatre axes / cinq éléments"** (section 4)
-   avec l'auteur du copy avant de la corriger.
+9. **Revue de sécurité complète** — explicitement mise de côté par
+   l'utilisateur pour plus tard ("on fera cela plus tard").
 
 Aucune tâche technique n'est bloquée en interne — tout ce qui précède
-dépend d'accès que seul l'utilisateur peut fournir.
+dépend de décisions produit ou d'accès (comptes, domaine, serveur) que
+seul l'utilisateur peut fournir.
