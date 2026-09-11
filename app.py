@@ -1053,14 +1053,17 @@ _T = {
     "int_slack":        {"fr": "Slack",            "en": "Slack"},
     "int_sheets":       {"fr": "Google Sheets",    "en": "Google Sheets"},
     "int_notion":       {"fr": "Notion",           "en": "Notion"},
+    "int_webhook":      {"fr": "Webhook",          "en": "Webhook"},
     "send_slack":       {"fr": "📤 Envoyer sur Slack", "en": "📤 Send to Slack"},
     "export_sheets":    {"fr": "📊 Exporter vers Sheets", "en": "📊 Export to Sheets"},
     "export_notion":    {"fr": "📝 Exporter vers Notion", "en": "📝 Export to Notion"},
+    "test_webhook":     {"fr": "🔔 Tester le webhook", "en": "🔔 Test webhook"},
     "not_configured":   {"fr": "Non configuré. Ajoutez la clé dans Streamlit Secrets.",
                          "en": "Not configured. Add the key in Streamlit Secrets."},
     "success_slack":    {"fr": "✅ Envoyé sur Slack !",     "en": "✅ Sent to Slack!"},
     "success_sheets":   {"fr": "✅ Exporté vers Sheets !",  "en": "✅ Exported to Sheets!"},
     "success_notion":   {"fr": "✅ Exporté vers Notion !",  "en": "✅ Exported to Notion!"},
+    "success_webhook":  {"fr": "✅ Webhook testé avec succès !", "en": "✅ Webhook test succeeded!"},
 }
 
 def t(key):
@@ -2451,18 +2454,21 @@ def _get_integration_config():
         sheets_id        = cfg.get("GOOGLE_SHEETS_ID",     os.getenv("GOOGLE_SHEETS_ID", ""))
         notion_token     = cfg.get("NOTION_TOKEN",         os.getenv("NOTION_TOKEN", ""))
         notion_db        = cfg.get("NOTION_DATABASE_ID",   os.getenv("NOTION_DATABASE_ID", ""))
+        generic_webhook  = cfg.get("GENERIC_WEBHOOK_URL",  os.getenv("GENERIC_WEBHOOK_URL", ""))
     except Exception:
         slack_webhook = os.getenv("SLACK_WEBHOOK_URL", "")
         sheets_creds  = os.getenv("GOOGLE_SHEETS_CREDS", "")
         sheets_id     = os.getenv("GOOGLE_SHEETS_ID", "")
         notion_token  = os.getenv("NOTION_TOKEN", "")
         notion_db     = os.getenv("NOTION_DATABASE_ID", "")
+        generic_webhook = os.getenv("GENERIC_WEBHOOK_URL", "")
     return {
-        "slack_webhook": slack_webhook,
-        "sheets_creds":  sheets_creds,
-        "sheets_id":     sheets_id,
-        "notion_token":  notion_token,
-        "notion_db":     notion_db,
+        "slack_webhook":   slack_webhook,
+        "sheets_creds":    sheets_creds,
+        "sheets_id":       sheets_id,
+        "notion_token":    notion_token,
+        "notion_db":       notion_db,
+        "generic_webhook": generic_webhook,
     }
 
 
@@ -2685,7 +2691,7 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
     lang = st.session_state.get("lang", "fr")
 
     with st.expander(t("int_title")):
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
 
         # ── Slack ──────────────────────────────────────────────
         with c1:
@@ -2732,6 +2738,22 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                     try:
                         export_to_notion(result, meta)
                         st.success(t("success_notion"))
+                    except Exception as e:
+                        st.error(str(e))
+
+        # ── Webhook générique ────────────────────────────────
+        with c4:
+            st.markdown(f"**{t('int_webhook')}**")
+            if not cfg["generic_webhook"]:
+                st.caption(
+                    "Configurez `GENERIC_WEBHOOK_URL` dans Streamlit Secrets.\n\n"
+                    "Envoie un JSON `audit_completed` après chaque audit."
+                )
+            else:
+                if st.button(t("test_webhook"), key=f"{key_prefix}_webhook"):
+                    try:
+                        send_test_generic_webhook()
+                        st.success(t("success_webhook"))
                     except Exception as e:
                         st.error(str(e))
 
@@ -4980,42 +5002,64 @@ def render_ab_tracker(api_key):
 # ── WEBHOOK GÉNÉRIQUE SORTANT ─────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
+def _build_generic_webhook_payload(result, meta):
+    c = result.get("_c", {})
+    return {
+        "event":      "audit_completed",
+        "version":    APP_VERSION,
+        "timestamp":  meta.get("timestamp",""),
+        "url":        meta.get("url",""),
+        "mode":       meta.get("mode",""),
+        "platform":   meta.get("platform",""),
+        "offer_type": meta.get("offer_type",""),
+        "score":      c.get("score",0),
+        "decision":   c.get("decision",""),
+        "risk":       c.get("risk",""),
+        "hook":       c.get("hook",0),
+        "offer":      c.get("offer",0),
+        "trust":      c.get("trust",0),
+        "friction":   c.get("friction",0),
+        "top_action": result.get("fix_plan",{}).get("top_priority_action",{}).get("what",""),
+    }
+
+
 def fire_generic_webhook(result, meta):
     """
     Envoie un payload JSON après chaque audit vers un webhook générique configurable.
     Configurez GENERIC_WEBHOOK_URL dans Streamlit Secrets ou .env.
+    Échec silencieux : ne doit jamais interrompre le rendu de l'audit.
     """
     try:
-        wh_url = ""
-        try:
-            wh_url = st.secrets.get("GENERIC_WEBHOOK_URL", "")
-        except Exception:
-            pass
-        wh_url = wh_url or os.getenv("GENERIC_WEBHOOK_URL", "")
+        wh_url = _get_integration_config()["generic_webhook"]
         if not wh_url:
             return
-
-        c       = result.get("_c", {})
-        payload = {
-            "event":     "audit_completed",
-            "version":   APP_VERSION,
-            "timestamp": meta.get("timestamp",""),
-            "url":       meta.get("url",""),
-            "mode":      meta.get("mode",""),
-            "platform":  meta.get("platform",""),
-            "offer_type":meta.get("offer_type",""),
-            "score":     c.get("score",0),
-            "decision":  c.get("decision",""),
-            "risk":      c.get("risk",""),
-            "hook":      c.get("hook",0),
-            "offer":     c.get("offer",0),
-            "trust":     c.get("trust",0),
-            "friction":  c.get("friction",0),
-            "top_action": result.get("fix_plan",{}).get("top_priority_action",{}).get("what",""),
-        }
-        requests.post(wh_url, json=payload, timeout=8)
+        requests.post(wh_url, json=_build_generic_webhook_payload(result, meta), timeout=8)
     except Exception:
         pass
+
+
+def send_test_generic_webhook():
+    """
+    Envoie un payload d'exemple vers GENERIC_WEBHOOK_URL pour vérifier la
+    configuration depuis l'UI. Lève une exception en cas d'échec (contrairement
+    à fire_generic_webhook, silencieux car appelé automatiquement après un audit).
+    """
+    wh_url = _get_integration_config()["generic_webhook"]
+    if not wh_url:
+        raise ValueError("GENERIC_WEBHOOK_URL non configuré.")
+
+    sample_result = {"_c": {"score": 14, "decision": "Tester à petit budget",
+                             "risk": "Medium", "hook": 3, "offer": 4,
+                             "trust": 3, "friction": 4},
+                      "fix_plan": {"top_priority_action": {"what": "Test webhook LRS™"}}}
+    sample_meta = {"timestamp": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+                   "url": "https://example.com/test", "mode": "Funnel Only",
+                   "platform": "Meta", "offer_type": "Digital product"}
+    payload = _build_generic_webhook_payload(sample_result, sample_meta)
+    payload["event"] = "test"
+    resp = requests.post(wh_url, json=payload, timeout=8)
+    if resp.status_code not in (200, 201, 202, 204):
+        raise ValueError(f"Webhook répondu {resp.status_code}: {resp.text[:200]}")
 
 
 def render_results(result, offer_type=None, platform=None):
