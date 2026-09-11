@@ -1437,6 +1437,15 @@ def _validate_public_url(url):
     (SSRF : sinon un utilisateur peut faire auditer 169.254.169.254, localhost,
     un service interne, etc. par le serveur qui héberge l'app).
     Retourne (ok: bool, message_erreur: str).
+
+    Limite connue : cette résolution DNS est faite ici, puis requests refait
+    sa propre résolution pour se connecter — un DNS rebinding (réponse
+    différente entre les deux résolutions, quasi simultanées) pourrait en
+    théorie contourner le filtre. Fenêtre d'exploitation très étroite
+    (les deux résolutions ont lieu à quelques millisecondes d'intervalle,
+    dans le même process) ; accepté comme risque résiduel pour un outil
+    interne à usage humain, pas durci davantage (épinglage de connexion)
+    pour ne pas casser la validation TLS/SNI sur les sites en https.
     """
     try:
         parsed = urlparse(url)
@@ -2389,26 +2398,14 @@ def _safe_header(value):
 
 def _send_magic_link_email(to_email, token):
     """Envoie le lien de connexion à un compte Stripe existant (renvoi manuel,
-    en plus de celui déjà envoyé automatiquement par webhook_server.py à l'achat)."""
+    en plus de celui déjà envoyé automatiquement par webhook_server.py à l'achat).
+    Construction du message déléguée à user_accounts.send_magic_link_email,
+    partagée avec webhook_server.py pour éviter la duplication."""
     host, port, user, password = _get_smtp_config()
-    if not host or not user:
-        raise ValueError("SMTP non configuré.")
-    app_url = os.getenv("LRS_APP_URL", "")
-    link = f"{app_url}?magic_token={token}" if app_url else f"?magic_token={token}"
-    body = (
-        "Bonjour,\n\n"
-        f"Voici votre lien de connexion à LRS™ (valable {user_accounts.MAGIC_LINK_TTL_MINUTES} minutes) :\n{link}\n\n"
-        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n"
+    user_accounts.send_magic_link_email(
+        to_email, token, host, port, user, password,
+        app_url=os.getenv("LRS_APP_URL", ""),
     )
-    msg = MIMEText(body)
-    msg["Subject"] = _safe_header("Votre lien de connexion LRS™")
-    msg["From"]    = user
-    msg["To"]      = _safe_header(to_email)
-    with smtplib.SMTP(host, port) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(user, password)
-        server.sendmail(user, to_email, msg.as_string())
 
 
 def send_audit_email(result, meta, to_email, pdf_bytes=None):
@@ -2791,7 +2788,6 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
         return
 
     cfg = _get_integration_config()
-    lang = st.session_state.get("lang", "fr")
 
     with st.expander(t("int_title")):
         c1, c2, c3, c4 = st.columns(4)

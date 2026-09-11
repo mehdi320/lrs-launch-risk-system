@@ -8,8 +8,6 @@
 # (LRS_USERS_DB_PATH doit pointer vers le même fichier des deux côtés).
 
 import os
-import smtplib
-from email.mime.text import MIMEText
 
 import stripe
 from fastapi import FastAPI, Request, HTTPException
@@ -33,28 +31,13 @@ SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 
 
-def _safe_header(value):
-    return str(value).replace("\r", " ").replace("\n", " ").strip()
-
-
 def _send_magic_link_email(to_email, token):
-    if not SMTP_HOST or not SMTP_USER:
-        return  # SMTP non configuré : pas d'envoi, le lien reste consultable en DB pour debug
-    link = f"{LRS_APP_URL}?magic_token={token}"
-    body = (
-        f"Bonjour,\n\n"
-        f"Voici votre lien de connexion à LRS™ (valable 15 minutes) :\n{link}\n\n"
-        f"Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n"
+    """Construction du message déléguée à user_accounts.send_magic_link_email,
+    partagée avec app.py pour éviter la duplication."""
+    user_accounts.send_magic_link_email(
+        to_email, token, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD,
+        app_url=LRS_APP_URL,
     )
-    msg = MIMEText(body)
-    msg["Subject"] = _safe_header("Votre lien de connexion LRS™")
-    msg["From"] = SMTP_USER
-    msg["To"] = _safe_header(to_email)
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
 
 
 @app.get("/health")

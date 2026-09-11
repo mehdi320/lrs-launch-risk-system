@@ -8,7 +8,9 @@ import os
 import re
 import sqlite3
 import secrets
+import smtplib
 import datetime
+from email.mime.text import MIMEText
 
 DB_PATH = os.environ.get("LRS_USERS_DB_PATH") or os.path.join(
     os.path.dirname(__file__), ".lrs_users.db"
@@ -166,24 +168,69 @@ def create_magic_link(email):
 
 
 def consume_magic_link(token):
-    """Valide et consomme un token à usage unique. Retourne l'email ou None."""
+    """
+    Valide et consomme un token à usage unique. Retourne l'email ou None.
+
+    Le check (used/expiration) et le marquage used=1 sont faits en une seule
+    requête UPDATE ... WHERE used=0 AND expires_at > now, pour que deux
+    requêtes concurrentes avec le même token (ex : scanner anti-phishing
+    d'un client mail qui pré-charge le lien, puis clic réel de l'utilisateur)
+    ne puissent pas toutes les deux "gagner" le token : seule une transaction
+    peut faire passer used de 0 à 1, rowcount départage les autres.
+    """
     if not token:
         return None
     conn = _conn()
     try:
+        now = datetime.datetime.utcnow().isoformat()
+        cur = conn.execute(
+            "UPDATE magic_links SET used = 1 "
+            "WHERE token = ? AND used = 0 AND expires_at > ?",
+            (token, now),
+        )
+        if cur.rowcount != 1:
+            conn.rollback()
+            return None
         row = conn.execute(
-            "SELECT * FROM magic_links WHERE token = ?", (token,)
+            "SELECT email FROM magic_links WHERE token = ?", (token,)
         ).fetchone()
-        if not row or row["used"]:
-            return None
-        expires = datetime.datetime.fromisoformat(row["expires_at"])
-        if datetime.datetime.utcnow() > expires:
-            return None
-        conn.execute("UPDATE magic_links SET used = 1 WHERE token = ?", (token,))
         conn.commit()
-        return row["email"]
+        return row["email"] if row else None
     finally:
         conn.close()
+
+
+def _safe_header(value):
+    return str(value).replace("\r", " ").replace("\n", " ").strip()
+
+
+def send_magic_link_email(to_email, token, smtp_host, smtp_port, smtp_user,
+                           smtp_password, app_url=""):
+    """
+    Construit et envoie l'email du lien de connexion. Partagé par app.py
+    (renvoi manuel depuis l'écran de mot de passe) et webhook_server.py
+    (envoi automatique à l'achat) pour ne pas dupliquer la construction du
+    message des deux côtés. Ne fait rien (silencieusement) si le SMTP n'est
+    pas configuré : le lien reste consultable en DB pour debug, et les deux
+    appelants traitent déjà un échec d'envoi comme non bloquant.
+    """
+    if not smtp_host or not smtp_user:
+        return
+    link = f"{app_url}?magic_token={token}" if app_url else f"?magic_token={token}"
+    body = (
+        "Bonjour,\n\n"
+        f"Voici votre lien de connexion à LRS™ (valable {MAGIC_LINK_TTL_MINUTES} minutes) :\n{link}\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n"
+    )
+    msg = MIMEText(body)
+    msg["Subject"] = _safe_header("Votre lien de connexion LRS™")
+    msg["From"]    = smtp_user
+    msg["To"]      = _safe_header(to_email)
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(smtp_user, smtp_password)
+        server.sendmail(smtp_user, to_email, msg.as_string())
 
 
 # ── Idempotence des webhooks Stripe ──────────────────────────
