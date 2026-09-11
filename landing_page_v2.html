@@ -1,0 +1,766 @@
+<title>Launch Risk System</title>
+<style>
+:root{
+  --bg:#EEF1F2;
+  --bg-line:#E1E6E8;
+  --surface:#FFFFFF;
+  --surface-2:#F6F8F8;
+  --ink:#12181B;
+  --ink-soft:#33403F;
+  --muted:#5B6870;
+  --border:#D3DADD;
+  --border-strong:#AEB9BD;
+  --accent:#0F6B66;
+  --accent-ink:#0A4D49;
+  --accent-soft:#DCEEEC;
+  --go:#237A50;
+  --go-soft:#E3F1E8;
+  --test:#A6640F;
+  --test-soft:#F5E9D6;
+  --nogo:#B23D26;
+  --nogo-soft:#F6E1DB;
+  --shadow: 0 1px 0 rgba(18,24,27,.04), 0 8px 24px -14px rgba(18,24,27,.25);
+  --radius: 3px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B0F11;
+    --bg-line:#141B1D;
+    --surface:#121A1C;
+    --surface-2:#0F1618;
+    --ink:#E9EEEC;
+    --ink-soft:#C3CDC9;
+    --muted:#8CA09B;
+    --border:#243133;
+    --border-strong:#33454A;
+    --accent:#4FD1C0;
+    --accent-ink:#8CE8DB;
+    --accent-soft:#12312E;
+    --go:#57C98B;
+    --go-soft:#123324;
+    --test:#E3A548;
+    --test-soft:#332711;
+    --nogo:#E37A63;
+    --nogo-soft:#331C16;
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B0F11;
+  --bg-line:#141B1D;
+  --surface:#121A1C;
+  --surface-2:#0F1618;
+  --ink:#E9EEEC;
+  --ink-soft:#C3CDC9;
+  --muted:#8CA09B;
+  --border:#243133;
+  --border-strong:#33454A;
+  --accent:#4FD1C0;
+  --accent-ink:#8CE8DB;
+  --accent-soft:#12312E;
+  --go:#57C98B;
+  --go-soft:#123324;
+  --test:#E3A548;
+  --test-soft:#332711;
+  --nogo:#E37A63;
+  --nogo-soft:#331C16;
+  --shadow: 0 1px 0 rgba(0,0,0,.4), 0 12px 32px -18px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box;}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;}
+}
+
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-size:16px;
+  line-height:1.55;
+  background-image:
+    linear-gradient(var(--bg-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+h1,h2,h3{
+  font-family:"Big Shoulders Display", "Arial Narrow", sans-serif;
+  font-weight:800;
+  letter-spacing:.01em;
+  text-wrap:balance;
+  color:var(--ink);
+  margin:0;
+}
+
+.mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
+
+a{ color:var(--accent); }
+a:focus-visible, button:focus-visible, .btn:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
+
+.wrap{
+  max-width:1080px;
+  margin:0 auto;
+  padding:0 28px;
+}
+
+.eyebrow{
+  font-family:"IBM Plex Mono", monospace;
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--accent-ink);
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.eyebrow::before{
+  content:"";
+  width:20px;
+  height:2px;
+  background:var(--accent);
+  display:inline-block;
+}
+
+section{ padding:76px 0; border-bottom:1px solid var(--border); }
+section:last-of-type{ border-bottom:none; }
+
+.section-head{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  max-width:680px;
+  margin-bottom:44px;
+}
+.section-head h2{ font-size:clamp(28px,3.6vw,40px); line-height:1.08; }
+.section-head p.lede{
+  font-family:"IBM Plex Sans";
+  font-weight:400;
+  font-size:17px;
+  color:var(--ink-soft);
+  max-width:60ch;
+}
+
+/* ---------- HERO ---------- */
+.hero{
+  padding:64px 0 72px;
+  border-bottom:1px solid var(--border);
+}
+.hero-grid{
+  display:grid;
+  grid-template-columns: 1.05fr .95fr;
+  gap:56px;
+  align-items:center;
+}
+.hero h1{
+  font-size:clamp(34px,4.6vw,54px);
+  line-height:1.03;
+}
+.hero h1 .hl{
+  color:var(--accent-ink);
+  background:linear-gradient(transparent 62%, var(--accent-soft) 62%);
+}
+.hero-sub{
+  margin-top:20px;
+  font-size:18px;
+  color:var(--ink-soft);
+  max-width:52ch;
+}
+.hero-cta{
+  margin-top:32px;
+  display:flex;
+  align-items:center;
+  gap:20px;
+  flex-wrap:wrap;
+}
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  background:var(--accent);
+  color:#04211F;
+  font-family:"IBM Plex Mono",monospace;
+  font-weight:600;
+  font-size:14.5px;
+  letter-spacing:.02em;
+  padding:14px 22px;
+  border-radius:var(--radius);
+  text-decoration:none;
+  border:1px solid var(--accent);
+  box-shadow: var(--shadow);
+  transition:transform .12s ease;
+}
+.btn:hover{ transform:translateY(-1px); }
+:root[data-theme="dark"] .btn, @media (prefers-color-scheme:dark){ }
+.hero-meta{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:13.5px;
+  color:var(--muted);
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.hero-meta b{ color:var(--ink); font-weight:600; }
+
+/* audit card */
+.audit-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:6px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.audit-card-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:14px 18px;
+  border-bottom:1px dashed var(--border-strong);
+  background:var(--surface-2);
+}
+.audit-card-top .tag{
+  font-family:"IBM Plex Mono",monospace;
+  font-size:11.5px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.audit-card-body{
+  padding:26px 24px 22px;
+  display:flex;
+  gap:26px;
+  align-items:center;
+}
+.dial-wrap{ position:relative; width:132px; height:132px; flex:none; }
+.dial-wrap svg{ width:100%; height:100%; display:block; }
+.dial-num{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.dial-num .n{ font-family:"Big Shoulders Display"; font-weight:800; font-size:34px; line-height:1; color:var(--ink); }
+.dial-num .d{ font-family:"IBM Plex Mono"; font-size:11px; color:var(--muted); margin-top:2px; }
+
+.pillars{ flex:1; display:flex; flex-direction:column; gap:10px; }
+.pillar{ display:grid; grid-template-columns:70px 1fr 40px; align-items:center; gap:10px; }
+.pillar .lab{ font-family:"IBM Plex Mono"; font-size:11.5px; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; }
+.pillar .track{ height:6px; background:var(--surface-2); border:1px solid var(--border); border-radius:3px; overflow:hidden; }
+.pillar .fill{ height:100%; background:var(--accent); }
+.pillar .val{ font-family:"IBM Plex Mono"; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; color:var(--ink-soft); }
+
+.verdict-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 24px 20px;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.stamp{
+  font-family:"IBM Plex Mono",monospace;
+  font-weight:700;
+  font-size:13px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:8px 14px;
+  border:2px solid var(--test);
+  color:var(--test);
+  border-radius:4px;
+  transform:rotate(-2deg);
+  background:var(--test-soft);
+}
+.stamp.go{ border-color:var(--go); color:var(--go); background:var(--go-soft); }
+.stamp.nogo{ border-color:var(--nogo); color:var(--nogo); background:var(--nogo-soft); }
+.verdict-note{ font-size:13.5px; color:var(--muted); max-width:30ch; }
+
+/* checklist */
+.check-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:11px; }
+.check-list li{ display:flex; gap:11px; align-items:flex-start; font-size:15.5px; color:var(--ink-soft); }
+.check-list li::before{
+  content:"✓";
+  flex:none;
+  width:19px; height:19px;
+  border-radius:3px;
+  background:var(--accent-soft);
+  color:var(--accent-ink);
+  font-size:12px;
+  font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  margin-top:2px;
+  font-family:"IBM Plex Mono";
+}
+
+/* two column body/aside */
+.split{ display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:start; }
+.split .prose p{ color:var(--ink-soft); font-size:16px; margin:0 0 14px; max-width:56ch; }
+.prose p:last-child{ margin-bottom:0; }
+
+/* mode cards */
+.modes{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:36px; }
+.mode-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:18px 18px 20px;
+}
+.mode-card.full{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+.mode-card .k{ font-family:"IBM Plex Mono"; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); }
+.mode-card h4{ font-family:"IBM Plex Sans"; font-weight:600; font-size:16.5px; margin:6px 0 8px; color:var(--ink); }
+.mode-card p{ font-size:14px; color:var(--ink-soft); margin:0; }
+
+/* problem section callout */
+.problem-flow{
+  display:flex; flex-direction:column; gap:0;
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+  background:var(--surface);
+}
+.problem-flow .row{
+  display:grid; grid-template-columns:150px 1fr; gap:18px;
+  padding:18px 20px;
+  border-bottom:1px solid var(--border);
+}
+.problem-flow .row:last-child{ border-bottom:none; }
+.problem-flow .row.flag{ background:var(--nogo-soft); }
+.problem-flow .t{ font-family:"IBM Plex Mono"; font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding-top:2px;}
+.problem-flow .row.flag .t{ color:var(--nogo); font-weight:600; }
+.problem-flow p{ margin:0; font-size:15px; color:var(--ink-soft); }
+.problem-flow strong{ color:var(--ink); }
+
+/* who it's for */
+.audience{ display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+.audience-card{
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:22px 20px;
+  background:var(--surface);
+}
+.audience-tag{
+  display:inline-block;
+  font-family:"IBM Plex Mono"; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--accent-ink); background:var(--accent-soft);
+  padding:4px 9px; border-radius:3px; margin-bottom:12px;
+}
+.audience-card h4{ font-family:"IBM Plex Sans"; font-weight:600; font-size:16.5px; margin:0 0 8px; }
+.audience-card p{ font-size:14.5px; color:var(--ink-soft); margin:0; }
+
+/* feature list generic */
+.feat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:36px 48px; }
+
+/* integrations chips */
+.chip-row{ display:flex; flex-wrap:wrap; gap:10px; }
+.chip{
+  font-family:"IBM Plex Mono"; font-size:13px;
+  border:1px solid var(--border-strong);
+  border-radius:20px;
+  padding:8px 14px;
+  color:var(--ink-soft);
+  background:var(--surface);
+}
+
+/* pricing */
+.pricing-wrap{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:0;
+  border:1px solid var(--border-strong);
+  border-radius:6px;
+  overflow:hidden;
+  background:var(--surface);
+  box-shadow:var(--shadow);
+}
+.pricing-left{ padding:36px 34px; border-right:1px dashed var(--border-strong); }
+.pricing-right{ padding:36px 34px; background:var(--surface-2); display:flex; flex-direction:column; }
+.slots{ display:flex; gap:7px; margin:16px 0 6px; }
+.slot{
+  width:26px; height:36px;
+  border:1.5px solid var(--accent);
+  border-radius:2px;
+  position:relative;
+}
+.slot::after{
+  content:"";
+  position:absolute; inset:3px;
+  border:1px dashed var(--accent);
+  opacity:.5;
+}
+.slots-label{ font-family:"IBM Plex Mono"; font-size:12.5px; color:var(--muted); }
+.price-tag{ font-family:"Big Shoulders Display"; font-weight:800; font-size:52px; color:var(--ink); line-height:1; margin:18px 0 2px; }
+.price-tag span{ font-size:20px; font-family:"IBM Plex Mono"; font-weight:500; color:var(--muted); }
+.price-strike{ font-family:"IBM Plex Mono"; font-size:13.5px; color:var(--muted); text-decoration:line-through; }
+.price-lock{ font-size:13.5px; color:var(--ink-soft); margin-top:6px; }
+.pricing-right .check-list{ margin-top:6px; margin-bottom:26px;}
+.pricing-right .btn{ align-self:flex-start; }
+.secure-note{ font-family:"IBM Plex Mono"; font-size:12px; color:var(--muted); margin-top:12px; }
+
+/* final cta */
+.final{
+  text-align:left;
+  padding:80px 0 90px;
+}
+.final h2{ font-size:clamp(26px,3.4vw,36px); max-width:22ch; }
+.final .q{ font-size:17px; color:var(--ink-soft); max-width:56ch; margin:16px 0 28px; }
+.final-cta-row{ display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
+
+footer{ padding:26px 0 50px; }
+footer p{ font-family:"IBM Plex Mono"; font-size:12px; color:var(--muted); margin:0; }
+
+@media (max-width: 860px){
+  .hero-grid, .split, .modes, .feat-grid, .audience, .pricing-wrap{ grid-template-columns:1fr; }
+  .pricing-left{ border-right:none; border-bottom:1px dashed var(--border-strong); }
+  .audit-card-body{ flex-direction:column; align-items:stretch; }
+  .dial-wrap{ align-self:center; }
+}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow">Launch Risk System · Pre-launch audit</p>
+      <h1 style="margin-top:14px;">Never launch a campaign on a page that isn't <span class="hl">ready to convert</span></h1>
+      <p class="hero-sub">LRS audits your landing page and your ad before you spend a single dollar on paid traffic, and gives you a clear verdict: launch, test small, or start over.</p>
+      <div class="hero-cta">
+        <a class="btn" href="#offer">Join the beta →</a>
+        <div class="hero-meta">
+          <span><b>€50/mo</b> for life</span>
+          <span>7 spots only</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="audit-card" aria-label="Example audit result">
+      <div class="audit-card-top">
+        <span class="tag">Full Risk · example audit</span>
+        <span class="tag mono">landingpage.com/offer</span>
+      </div>
+      <div class="audit-card-body">
+        <div class="dial-wrap">
+          <svg viewBox="0 0 132 132">
+            <circle cx="66" cy="66" r="54" fill="none" stroke="var(--surface-2)" stroke-width="12"/>
+            <circle cx="66" cy="66" r="54" fill="none" stroke="var(--test)" stroke-width="12"
+              stroke-dasharray="339.3" stroke-dashoffset="115.3" stroke-linecap="round"
+              transform="rotate(-90 66 66)"/>
+          </svg>
+          <div class="dial-num">
+            <span class="n">58</span>
+            <span class="d">/ 80 PTS</span>
+          </div>
+        </div>
+        <div class="pillars">
+          <div class="pillar"><span class="lab">Hook</span><span class="track"><span class="fill" style="width:70%"></span></span><span class="val">14/20</span></div>
+          <div class="pillar"><span class="lab">Offer</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="val">16/20</span></div>
+          <div class="pillar"><span class="lab">Trust</span><span class="track"><span class="fill" style="width:55%"></span></span><span class="val">11/20</span></div>
+          <div class="pillar"><span class="lab">Friction</span><span class="track"><span class="fill" style="width:85%"></span></span><span class="val">17/20</span></div>
+        </div>
+      </div>
+      <div class="verdict-row" style="border-top:1px solid var(--border);">
+        <span class="stamp">Test small budget</span>
+        <span class="verdict-note">Trust pillar is dragging the score — fix before scaling spend.</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="problem">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">The problem</p>
+      <h2>The real cost of a launch isn't the ad spend. It's what you don't see before you launch.</h2>
+    </div>
+    <div class="split">
+      <div class="prose">
+        <p>You know the sequence. You finish a landing page, you write an ad, you're convinced it's going to work (because you spent three days on it, because the brief is solid, because "it feels right"). You turn on the budget. Two days later you're staring at your CPA wondering if the problem is targeting, creative, or the page itself.</p>
+        <p>Most of the time, the problem isn't traffic. It's that you launched a page or an ad that wasn't ready to convert in the first place, and you found out with money already spent instead of before.</p>
+        <p><strong>LRS exists to remove that after-the-fact discovery step.</strong></p>
+      </div>
+      <div class="problem-flow">
+        <div class="row">
+          <span class="t">Day 0</span>
+          <p>Page and ad look finished. Budget goes live.</p>
+        </div>
+        <div class="row">
+          <span class="t">Day 2</span>
+          <p>CPA climbs. Targeting, creative, or the page — you don't know which.</p>
+        </div>
+        <div class="row flag">
+          <span class="t">Discovery</span>
+          <p><strong>Found out after spend:</strong> the page was never ready to convert.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="what-it-is">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What it is</p>
+      <h2>A risk filter before you spend, not another creation tool</h2>
+      <p class="lede">LRS™ (Launch Risk System) is a pre-launch audit copilot for paid traffic (Meta, TikTok, Google). Before you commit a single dollar of budget, it scores your landing page, your ad, and how well they match each other, then gives you a clear launch verdict: don't launch, test with a small budget, or ready to scale.</p>
+    </div>
+    <p class="prose" style="max-width:62ch; color:var(--ink-soft); font-size:16px;">It's not a tool that tells you "this is pretty well written." It's a system that tells you whether to spend or fix it first.</p>
+  </div>
+</section>
+
+<section id="engine">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">The audit engine</p>
+      <h2>The core of the product</h2>
+      <p class="lede">You pick the mode based on what you have.</p>
+    </div>
+
+    <div class="modes">
+      <div class="mode-card">
+        <span class="k">Mode 01</span>
+        <h4>Funnel Only</h4>
+        <p>To audit a landing page on its own.</p>
+      </div>
+      <div class="mode-card">
+        <span class="k">Mode 02</span>
+        <h4>Ads Only</h4>
+        <p>To audit an ad script or ad copy on its own.</p>
+      </div>
+      <div class="mode-card full">
+        <span class="k">Mode 03 · most complete</span>
+        <h4>Full Risk</h4>
+        <p>Audits the ad and the landing page together and catches mismatches between them — a promise the ad makes that the page doesn't back up, a tone shift, an offer that no longer matches.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="prose">
+        <p>Scoring is structured across four pillars scored out of 20 (hook, offer, trust, friction and message consistency), with an explicit methodology that adapts to the type of offer (ecommerce or digital) and the type of page detected automatically (product page, catalog, homepage, SaaS, lead gen, blog). This isn't a vague opinion about your page. It's a reproducible score.</p>
+        <p>In two minutes, you know whether to launch, test with a small budget, or start over, instead of finding out after burning $500 in ad spend trying to figure it out.</p>
+      </div>
+      <ul class="check-list">
+        <li>A clear launch verdict</li>
+        <li>An action plan prioritized by effort and impact</li>
+        <li>An estimate of your current CVR vs. the CVR after fixes</li>
+        <li>A complete rewrite: headline, bullets, CTA, offer stack, guarantee, FAQ</li>
+        <li>Ready-to-use ad variants: angles, hooks, 20–30s UGC script</li>
+        <li>Automatic language detection (English, French, or mixed)</li>
+        <li>Scoring adapted to an established brand or a new launch</li>
+        <li>Streaming analysis with real-time progress</li>
+        <li>Quick Audit for a fast first read before going deeper</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="studio">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Creative studio</p>
+      <h2>Once the diagnosis is made, you fix it in the same tool</h2>
+      <p class="lede">An audit that tells you what's wrong is useful. An audit that hands you a testable fix directly is what saves you the days you'd otherwise spend hunting for a copywriter or opening a third tool.</p>
+    </div>
+    <p class="prose" style="max-width:64ch; color:var(--ink-soft); font-size:16px; margin-bottom:36px;">Creative Studio generates copy variants, from scratch or from an existing reference (a competitor's swipe, a page that already worked for you). It scores the copy before and after on promise clarity, proof, audience clarity, conversion elements, readability and CTA clarity — a structural score, not a conversion prediction, because we'll never sell you a number we can't back up.</p>
+    <div class="feat-grid">
+      <ul class="check-list">
+        <li>Copy generation from scratch or from a reference (competitor swipe, a page that already worked)</li>
+        <li>Before/after scoring: promise, proof, audience, conversion elements, readability, CTA</li>
+        <li>A/B testing with guardrails: auto-stop underperforming variants, protection against statistical peeking, protection against wasted test budget</li>
+        <li>Multi-step Funnel Builder, exit-intent popup included</li>
+      </ul>
+      <ul class="check-list">
+        <li>Built-in conversion elements: countdown, limited-time discount, stock counter</li>
+        <li>Step-by-step drop-off analytics</li>
+        <li>Automatically generated email sequences</li>
+        <li>PDF export of the winning variant</li>
+        <li>Build from scratch or optimize an existing page/ad</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="over-time">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Over time</p>
+      <h2>This isn't built for one launch. It's built for all your launches</h2>
+      <p class="lede">A page that scores well today won't necessarily score well in a month. LRS schedules automatic audits (every 7, 14, or 30 days) and alerts you the moment a score moves significantly, up or down.</p>
+    </div>
+    <div class="split">
+      <ul class="check-list">
+        <li>Multi-page projects grouped and audited in one click</li>
+        <li>Meta or TikTok Ads API connection: LRS score linked to your campaigns' real ROAS</li>
+        <li>Bulk audit up to 20 URLs at once (CSV import and export)</li>
+        <li>Side-by-side or before/after comparison of two pages</li>
+        <li>Audit a competitor's page with the same grid as yours</li>
+      </ul>
+      <div class="prose">
+        <p>History keeps a score evolution chart and your progress delta since your very first audit.</p>
+        <p><strong>LRS isn't just for launch day.</strong> It becomes the dashboard that tells you a page is degrading before your ROAS tells you instead.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="library">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">A library that grows with you</p>
+      <h2>Not a tool you reopen from zero every time</h2>
+    </div>
+    <div class="split">
+      <ul class="check-list">
+        <li>Ads Library organized by platform (Meta, TikTok, Google), funnel type, and copywriting approach</li>
+        <li>Private Swipe Files: your best-scoring headlines, hooks, and CTAs, reusable from one audit to the next</li>
+      </ul>
+      <ul class="check-list">
+        <li>Detection of recurring patterns across your successful audits</li>
+        <li>2025 Benchmark Report and a built-in pre-launch checklist</li>
+      </ul>
+    </div>
+    <p class="prose" style="margin-top:28px; color:var(--ink-soft); max-width:60ch;">Every audit enriches a personal library you reuse. Value compounds with usage, it doesn't reset to zero with every launch.</p>
+  </div>
+</section>
+
+<section id="habit">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Built to be used, not forgotten</p>
+      <h2>Most audit tools open once, before a launch, then sit untouched until the next one</h2>
+    </div>
+    <div class="split">
+      <div class="prose">
+        <p>LRS is built around habit, not a one-shot check. A guided onboarding gets you to your first audit fast, and a demo mode lets you try the tool without touching your quota. Every alert lands in one place instead of buried across your inbox.</p>
+        <p>When a score improves, you see it, not just as a new number but as visible progress, with an activation checklist that keeps you moving instead of stalling on setup. A weekly digest and re-audit reminders show up on their own, so you're not the one who has to remember whether a page you launched a month ago has quietly drifted. And if LRS keeps other media buyers from launching blind too, the built-in referral program pays you back for it.</p>
+      </div>
+      <ul class="check-list">
+        <li>Guided interactive onboarding</li>
+        <li>Demo mode to try the tool without spending quota</li>
+        <li>Centralized notification center</li>
+        <li>Visual feedback when a score improves</li>
+        <li>Weekly digest and automatic re-audit reminders</li>
+        <li>Built-in referral program</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="agencies">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">For agencies</p>
+      <h2>If you audit accounts other than your own</h2>
+      <p class="lede">Professional PDF export (LRS branding, four pages), a Client Report customizable with the recipient's name, and a white-label Agency Report let you deliver the audit directly to a client under your own brand, without switching to an external template.</p>
+    </div>
+  </div>
+</section>
+
+<section id="integrations">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Integrations</p>
+      <h2>LRS fits into your workflow, it doesn't add a new one</h2>
+      <p class="lede">You don't need to open one more app, LRS plugs into what you already use.</p>
+    </div>
+    <div class="chip-row">
+      <span class="chip">Slack notifications</span>
+      <span class="chip">Google Sheets export</span>
+      <span class="chip">Notion export</span>
+      <span class="chip">Generic webhook</span>
+      <span class="chip">Results by email</span>
+      <span class="chip">Meta Ads API</span>
+      <span class="chip">TikTok Ads API</span>
+    </div>
+  </div>
+</section>
+
+<section id="different">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What's different</p>
+      <h2>What makes LRS different</h2>
+    </div>
+    <p class="prose" style="max-width:66ch; color:var(--ink-soft); font-size:16.5px;">Most existing tools score a page. That's where they stop. LRS delivers an actionable launch verdict (launch, test small, don't launch), with the fix already generated through Creative Studio, and ongoing tracking through monitoring, history, and live campaign connections. Few tools go all the way from verdict, to fix, to post-launch tracking, in one place.</p>
+  </div>
+</section>
+
+<section id="who">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Who it's for</p>
+      <h2>Built for people who launch often</h2>
+    </div>
+    <div class="audience">
+      <div class="audience-card">
+        <span class="audience-tag">Media buyer</span>
+        <h4>Paid traffic marketers</h4>
+        <p>Meta, TikTok, Google Ads — for people who launch campaigns regularly and don't have time to find out after the fact that a page wasn't ready.</p>
+      </div>
+      <div class="audience-card">
+        <span class="audience-tag">Ecom / digital</span>
+        <h4>Sellers &amp; product launchers</h4>
+        <p>Courses, SaaS, before committing budget.</p>
+      </div>
+      <div class="audience-card">
+        <span class="audience-tag">Agency</span>
+        <h4>Paid traffic agencies</h4>
+        <p>For agencies auditing client accounts who need to deliver a professional report under their own brand.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="offer">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Launch offer</p>
+      <h2>Full access, at beta pricing</h2>
+      <p class="lede">One plan, everything included. The price stays locked for life as long as your subscription stays active.</p>
+    </div>
+
+    <div class="pricing-wrap">
+      <div class="pricing-left">
+        <p class="slots-label">7 of 7 spots available</p>
+        <div class="slots" aria-hidden="true">
+          <span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="slot"></span><span class="slot"></span>
+        </div>
+        <p class="price-tag">€50<span>/mo</span></p>
+        <p class="price-strike">€100+/mo after the beta</p>
+        <p class="price-lock">Price locked for life · limited to the first 7 sign-ups</p>
+      </div>
+      <div class="pricing-right">
+        <p class="mono" style="font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin:0 0 14px;">Full access — audit + creative studio</p>
+        <ul class="check-list">
+          <li>One plan, everything included, no limited tier</li>
+          <li>Unlimited audits (Funnel, Ads, Full Risk)</li>
+          <li>Full Creative Studio (copy, funnel, A/B tests, emails)</li>
+          <li>Price locked for life as long as your subscription stays active</li>
+        </ul>
+        <a class="btn" href="#offer">Join the beta →</a>
+        <p class="secure-note">Secure payment via Stripe · cancel anytime</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final" style="border-bottom:none;">
+  <div class="wrap">
+    <p class="eyebrow">Before you spend one more dollar on ads</p>
+    <h2 style="margin-top:14px;">The question isn't whether your next page will convert.</h2>
+    <p class="q">It's whether you want to find out before or after you've paid for the traffic. Audit your next landing page or ad with LRS, and know in two minutes whether to launch, test small, or start over.</p>
+    <div class="final-cta-row">
+      <a class="btn" href="#offer">Join the beta →</a>
+      <span class="hero-meta mono">7 spots left out of 7 · €50/mo for life</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>LRS™ — Launch Risk System · Pre-launch audit for paid traffic</p>
+  </div>
+</footer>
