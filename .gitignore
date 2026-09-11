@@ -6,6 +6,10 @@
 # Streamlit secrets locaux
 .streamlit/secrets.toml
 
+# Données runtime locales (historique, usage, comptes utilisateurs — PII)
+.lrs_*.json
+.lrs_*.db
+
 # Python
 __pycache__/
 *.py[cod]

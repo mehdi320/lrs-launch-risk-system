@@ -32,6 +32,11 @@ try:
 except ImportError:
     pass
 
+try:
+    import user_accounts
+except ImportError:
+    user_accounts = None
+
 APP_VERSION    = "3.5"
 MAX_PAGE_CHARS = 8000
 
@@ -351,7 +356,16 @@ PLAN_LIMITS = {
 }
 
 def _get_plan():
-    """Retourne le plan actif ('free'|'starter'|'pro'|'agency')."""
+    """
+    Retourne le plan actif ('free'|'starter'|'pro'|'agency').
+    Priorité : compte Stripe authentifié par lien magique (multi-tenant)
+    > licence Lemon Squeezy collée dans Secrets > LRS_PLAN (mode dev/single-tenant).
+    """
+    email = st.session_state.get("authenticated_email")
+    if email and user_accounts:
+        user = user_accounts.get_user(email)
+        if user and user.get("status") == "active" and user.get("plan") in PLAN_LIMITS:
+            return user["plan"]
     try:
         plan = st.secrets.get("license", {}).get("plan", "")
         if plan in PLAN_LIMITS:
@@ -2371,6 +2385,30 @@ def _safe_header(value):
     URL ou un email fourni par l'utilisateur contenant des \\r/\\n.
     """
     return str(value).replace("\r", " ").replace("\n", " ").strip()
+
+
+def _send_magic_link_email(to_email, token):
+    """Envoie le lien de connexion à un compte Stripe existant (renvoi manuel,
+    en plus de celui déjà envoyé automatiquement par webhook_server.py à l'achat)."""
+    host, port, user, password = _get_smtp_config()
+    if not host or not user:
+        raise ValueError("SMTP non configuré.")
+    app_url = os.getenv("LRS_APP_URL", "")
+    link = f"{app_url}?magic_token={token}" if app_url else f"?magic_token={token}"
+    body = (
+        "Bonjour,\n\n"
+        f"Voici votre lien de connexion à LRS™ (valable {user_accounts.MAGIC_LINK_TTL_MINUTES} minutes) :\n{link}\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.\n"
+    )
+    msg = MIMEText(body)
+    msg["Subject"] = _safe_header("Votre lien de connexion LRS™")
+    msg["From"]    = user
+    msg["To"]      = _safe_header(to_email)
+    with smtplib.SMTP(host, port) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(user, password)
+        server.sendmail(user, to_email, msg.as_string())
 
 
 def send_audit_email(result, meta, to_email, pdf_bytes=None):
@@ -7237,7 +7275,45 @@ def check_access():
                 st.error(f"Too many attempts. Try again in {lockout_sec}s.")
             else:
                 st.error("Invalid password. Purchase your access to get your password.")
+
+    if user_accounts:
+        with st.expander("Déjà client ? Recevez votre lien de connexion"):
+            req_email = st.text_input("Votre email", key="magic_link_request_email")
+            if st.button("Envoyer le lien", key="magic_link_request_btn"):
+                generic_msg = "Si ce compte existe, un lien de connexion vient d'être envoyé."
+                if not user_accounts.is_valid_email(req_email):
+                    st.error("Email invalide.")
+                else:
+                    user = user_accounts.get_user(req_email)
+                    if user and user.get("status") == "active":
+                        token = user_accounts.create_magic_link(req_email)
+                        if token:
+                            try:
+                                _send_magic_link_email(req_email, token)
+                            except Exception:
+                                pass  # ne jamais exposer une erreur SMTP au client
+                    st.success(generic_msg)  # même message que le compte existe ou non
     return False
+
+
+def _consume_magic_link_from_url():
+    """
+    Si l'URL contient ?magic_token=..., tente d'authentifier l'utilisateur
+    avant même l'écran de mot de passe. Le token est retiré de l'URL dans
+    tous les cas (succès ou échec) pour ne pas rester en clair dans l'adresse
+    et ne pas être re-consommé (à usage unique) au prochain rerun.
+    """
+    if not user_accounts:
+        return
+    token = st.query_params.get("magic_token")
+    if not token:
+        return
+    email = user_accounts.consume_magic_link(token)
+    if email:
+        st.session_state.authenticated       = True
+        st.session_state.authenticated_email = email
+    st.query_params.clear()
+    st.rerun()
 
 
 # ── ANTI-CHURN : Auto-email post-audit ──────────────────────
@@ -7766,6 +7842,7 @@ def render_admin_view():
 
 def main():
     init_session()
+    _consume_magic_link_from_url()
     light_mode = st.session_state.get("light_mode", False)
     inject_css(light_mode=light_mode)
 

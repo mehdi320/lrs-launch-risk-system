@@ -3,3 +3,8 @@ openai>=1.14.0
 requests>=2.31.0
 trafilatura>=1.8.0
 python-dotenv>=1.0.0
+
+# Abonnement Stripe (webhook_server.py)
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+stripe>=9.0.0
