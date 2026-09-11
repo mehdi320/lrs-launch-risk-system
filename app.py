@@ -7219,6 +7219,151 @@ def render_benchmark_tab():
     )
 
 
+_LEGAL_DRAFT_NOTICE = (
+    "⚠️ **Brouillon.** Ce document décrit fidèlement les flux de données réels "
+    "de l'application (fichiers, emails, sous-traitants), mais n'a pas été relu "
+    "par un professionnel du droit et ne constitue pas un avis juridique. "
+    "Les mentions entre crochets sont à compléter avant toute mise en ligne publique."
+)
+
+
+def render_privacy_page():
+    st.markdown("# Politique de confidentialité — LRS™")
+    st.warning(_LEGAL_DRAFT_NOTICE)
+    st.markdown(f"""
+*Dernière mise à jour : {datetime.datetime.now().strftime('%d/%m/%Y')}*
+
+### 1. Responsable du traitement
+**[Nom de l'exploitant]**, **[forme juridique]**, **[adresse]**, **[SIRET/SIREN]**.
+Contact : **[email de contact]**.
+
+### 2. Données collectées
+
+| Donnée | Quand | Où elle est stockée |
+|---|---|---|
+| URL de la page auditée, texte de la publicité, contexte fourni | À chaque audit | Envoyée au fournisseur du moteur d'analyse (§3), conservée dans l'historique local |
+| Email | Compte (lien magique), digest, alertes, parrainage | Fichiers locaux (`.lrs_drip.json`, `.lrs_referral.json`) et base `user_accounts` (abonnement) |
+| Historique des audits, scores, plans d'action générés | À chaque audit | `.lrs_history.json` sur le serveur |
+| Données d'usage (nombre d'audits/mois) | En continu | `.lrs_usage.json` |
+| Identifiant client Stripe, identifiant d'abonnement, statut | À l'achat, mis à jour par le webhook Stripe | Base `user_accounts` (SQLite) |
+| Jeton d'accès aux comptes publicitaires Meta/TikTok, si vous les connectez | Si vous activez l'intégration Ads API | `.lrs_ads_creds.json` sur le serveur |
+
+Aucun moyen de paiement (numéro de carte) n'est stocké par LRS™ — Stripe les traite directement.
+
+### 3. Destinataires des données
+
+- **Fournisseur du moteur d'audit (OpenAI ou Anthropic, selon la configuration du
+  déploiement)** : reçoit le contenu de la page et/ou de la publicité soumis pour
+  analyse, ainsi que le contexte optionnel que vous ajoutez.
+- **Stripe** : traite le paiement et l'abonnement.
+- **Le serveur SMTP configuré par l'exploitant** : achemine les emails (résumé
+  d'audit, digest, alertes, lien de connexion).
+- **Intégrations optionnelles, activées uniquement si vous ou l'exploitant les
+  configurez** : Slack, Google Sheets, Notion, un webhook générique. Aucune
+  donnée ne leur est envoyée tant qu'elles ne sont pas configurées.
+- **Meta / TikTok**, si vous connectez vos comptes publicitaires pour l'Ads API.
+
+### 4. Durée de conservation
+Les données sont conservées tant que votre compte est actif. Il n'y a pas
+aujourd'hui de purge automatique de l'historique ou des fichiers locaux —
+une suppression sur demande reste possible manuellement (voir §6).
+
+### 5. Sécurité
+Des mesures raisonnables sont en place : chiffrement TLS du trafic, protection
+contre les attaques par force brute et par timing sur les accès protégés par
+mot de passe, filtrage des URLs auditées pour empêcher un accès aux réseaux
+internes du serveur, filtrage des injections d'en-tête dans les emails
+sortants. Aucun système n'est invulnérable ; contactez-nous en cas de
+découverte d'une faille.
+
+### 6. Vos droits
+Si le Règlement Général sur la Protection des Données (RGPD) s'applique à vous
+(résidents de l'Union européenne notamment) : droit d'accès, de rectification,
+d'effacement et de portabilité de vos données. Pour exercer ces droits :
+**[email de contact]**.
+
+### 7. Cookies et traceurs
+L'application utilise un cookie de session technique nécessaire à son
+fonctionnement (pas de finalité publicitaire). Si l'exploitant active des
+pixels publicitaires (Meta Pixel, Google Ads/Analytics) sur un site vitrine
+séparé, un bandeau de consentement conforme s'applique à ce site — sans
+rapport avec l'application elle-même.
+
+### 8. Contact
+Pour toute question relative à cette politique : **[email de contact]**.
+""")
+    if st.button("← Retour à LRS™"):
+        st.query_params.clear()
+        st.rerun()
+
+
+def render_terms_page():
+    st.markdown("# Conditions Générales d'Utilisation et de Vente — LRS™")
+    st.warning(_LEGAL_DRAFT_NOTICE)
+    st.markdown(f"""
+*Dernière mise à jour : {datetime.datetime.now().strftime('%d/%m/%Y')}*
+
+### 1. Objet
+Les présentes conditions régissent l'accès et l'utilisation de LRS™ (Launch
+Risk System), un outil d'audit de pages de vente et de publicités avant
+lancement de campagne, édité par **[Nom de l'exploitant]**.
+
+### 2. Description du service
+LRS™ analyse une page de vente et/ou un texte publicitaire fournis par
+l'utilisateur et restitue un score, un verdict, un plan d'action, des
+suggestions de réécriture et des angles publicitaires. Le service est fourni
+« en l'état » ; les scores et recommandations sont **indicatifs** et ne
+garantissent aucun résultat commercial ou publicitaire.
+
+### 3. Compte et accès
+L'accès se fait soit par un mot de passe partagé communiqué par l'exploitant,
+soit par un lien de connexion à usage unique envoyé par email après un
+paiement validé via Stripe. Vous êtes responsable de la confidentialité de
+vos identifiants et du lien reçu.
+
+### 4. Abonnement, prix et résiliation
+Les plans, tarifs et modalités de facturation sont ceux affichés au moment de
+la souscription et gérés via Stripe. L'abonnement se renouvelle automatiquement
+selon la périodicité choisie jusqu'à résiliation. La résiliation prend effet
+à la fin de la période en cours ; l'accès repasse alors au plan gratuit.
+**[Détailler ici la politique de remboursement le cas échéant.]**
+
+### 5. Utilisation autorisée
+Vous vous engagez à :
+- n'auditer que des pages et publicités que vous êtes autorisé à analyser ;
+- ne pas tenter de contourner les limites techniques du service (quotas,
+  filtrage des URLs, limites de tentatives de connexion) ;
+- ne pas utiliser le service à des fins illégales ou pour analyser du contenu
+  illégal.
+
+Tout manquement peut entraîner la suspension ou la résiliation de l'accès,
+sans préavis en cas d'abus manifeste.
+
+### 6. Propriété intellectuelle
+La méthodologie de scoring, les textes, l'interface et le code de LRS™
+restent la propriété de **[Nom de l'exploitant]**. Les contenus que vous
+soumettez pour audit (pages, textes publicitaires) restent votre propriété ;
+vous garantissez disposer des droits nécessaires pour les soumettre.
+
+### 7. Limitation de responsabilité
+LRS™ est un outil d'aide à la décision. **[Nom de l'exploitant]** ne saurait
+être tenu responsable des décisions de lancement, de budget publicitaire ou
+de résultats commerciaux fondées sur les scores et recommandations du
+service.
+
+### 8. Droit applicable
+**[À compléter — ex. : les présentes conditions sont soumises au droit
+français ; tout litige relève des tribunaux compétents du ressort de
+[ville].]**
+
+### 9. Contact
+**[email de contact]**.
+""")
+    if st.button("← Retour à LRS™"):
+        st.query_params.clear()
+        st.rerun()
+
+
 def check_access():
     """
     Verifie le mot de passe d'acces.
@@ -7289,6 +7434,8 @@ def check_access():
                             except Exception:
                                 pass  # ne jamais exposer une erreur SMTP au client
                     st.success(generic_msg)  # même message que le compte existe ou non
+
+    st.caption("[Politique de confidentialité](?legal=privacy) · [Conditions d'utilisation](?legal=terms)")
     return False
 
 
@@ -7838,6 +7985,17 @@ def render_admin_view():
 
 def main():
     init_session()
+
+    # Pages légales : accessibles sans mot de passe (obligation standard),
+    # avant toute autre logique d'accès.
+    legal_page = st.query_params.get("legal")
+    if legal_page == "privacy":
+        render_privacy_page()
+        st.stop()
+    if legal_page == "terms":
+        render_terms_page()
+        st.stop()
+
     _consume_magic_link_from_url()
     light_mode = st.session_state.get("light_mode", False)
     inject_css(light_mode=light_mode)
@@ -8433,6 +8591,8 @@ def main():
             render_benchmark_tab()
         with sub8:
             render_changelog()
+
+    st.caption("[Politique de confidentialité](?legal=privacy) · [Conditions d'utilisation](?legal=terms)")
 
 
 if __name__ == "__main__":
