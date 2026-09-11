@@ -275,8 +275,10 @@ R : Non. LRS est un outil de pré-audit, pas de gestion de campagnes.
 Il t'aide à vérifier que tes fondamentaux sont solides avant de lancer.
 
 Q : Est-ce que mes données sont sauvegardées ?
-R : L'historique de tes audits est sauvegardé localement dans ta session.
-Rien n'est stocké sur des serveurs externes.
+R : L'historique de tes audits est sauvegardé sur le serveur qui héberge LRS.
+Le contenu que tu soumets (page, texte de pub) est transmis au moteur d'analyse
+(OpenAI ou Anthropic) pour générer le score. Détail complet dans notre
+politique de confidentialité.
 ```
 
 ---
@@ -290,7 +292,12 @@ LRS™ — Launch Risk System
 Outil d'audit paid traffic pré-lancement.
 
 Les estimations CVR sont indicatives. LRS est un outil d'aide à la décision.
+
+Politique de confidentialité · Conditions d'utilisation
 ```
+*(les deux liens pointent vers `[URL_APP_LRS]?legal=privacy` et
+`[URL_APP_LRS]?legal=terms` — remplace `[URL_APP_LRS]` par l'URL réelle de
+l'app une fois déployée)*
 
 ---
 
