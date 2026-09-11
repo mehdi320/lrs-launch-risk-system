@@ -9,6 +9,10 @@ import json
 import os
 import datetime
 import time
+import hmac
+import socket
+import ipaddress
+from urllib.parse import urlparse
 from html.parser import HTMLParser
 
 try:
@@ -648,9 +652,9 @@ def check_and_send_drip():
         try:
             html_body = step["body_fn"](to_email, name)
             msg = MIMEMultipart("alternative")
-            msg["Subject"] = step["subject"]
+            msg["Subject"] = _safe_header(step["subject"])
             msg["From"]    = user
-            msg["To"]      = to_email
+            msg["To"]      = _safe_header(to_email)
             msg.attach(MIMEText(html_body, "html"))
             with smtplib.SMTP(host, port) as server:
                 server.ehlo(); server.starttls(); server.login(user, password)
@@ -1401,6 +1405,43 @@ def check_js_heavy(html: str, extracted: str) -> bool:
     html_low = html[:10000].lower()
     return sum(1 for s in js_signals if s in html_low) >= 2
 
+def _is_blocked_ip(ip_str):
+    """True si l'IP ne doit pas être atteinte par un fetch serveur (SSRF)."""
+    try:
+        ip = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True
+    return (
+        ip.is_private or ip.is_loopback or ip.is_link_local or
+        ip.is_reserved or ip.is_multicast or ip.is_unspecified
+    )
+
+
+def _validate_public_url(url):
+    """
+    Bloque les URLs pointant vers un hôte interne/privé avant tout fetch serveur
+    (SSRF : sinon un utilisateur peut faire auditer 169.254.169.254, localhost,
+    un service interne, etc. par le serveur qui héberge l'app).
+    Retourne (ok: bool, message_erreur: str).
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False, "URL invalide."
+    if parsed.scheme not in ("http", "https"):
+        return False, "Seuls les liens http/https sont acceptés."
+    host = parsed.hostname
+    if not host:
+        return False, "URL invalide."
+    try:
+        addrs = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False, "Nom de domaine introuvable."
+    if not addrs or any(_is_blocked_ip(a[4][0]) for a in addrs):
+        return False, "Cette URL pointe vers une adresse non autorisée."
+    return True, ""
+
+
 def extract_page(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -1409,9 +1450,23 @@ def extract_page(url):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        r.raise_for_status()
-        html = r.text
+        current_url = url
+        for _ in range(6):  # suit les redirections manuellement pour re-valider chaque hop
+            ok, err = _validate_public_url(current_url)
+            if not ok:
+                return "", err, False
+            r = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
+            if r.is_redirect or r.is_permanent_redirect:
+                next_url = r.headers.get("Location", "")
+                if not next_url:
+                    return "", "Redirection invalide.", False
+                current_url = requests.compat.urljoin(current_url, next_url)
+                continue
+            r.raise_for_status()
+            html = r.text
+            break
+        else:
+            return "", "Trop de redirections.", False
     except requests.exceptions.ConnectionError:
         return "", "Impossible de se connecter.", False
     except requests.exceptions.Timeout:
@@ -2308,6 +2363,16 @@ def _get_smtp_config():
         return (os.getenv("SMTP_HOST",""), int(os.getenv("SMTP_PORT",587)),
                 os.getenv("SMTP_USER",""), os.getenv("SMTP_PASSWORD",""))
 
+
+def _safe_header(value):
+    """
+    Retire les retours à la ligne d'une valeur avant de l'injecter dans un
+    en-tête email (Subject/To) — évite l'injection d'en-têtes SMTP via une
+    URL ou un email fourni par l'utilisateur contenant des \\r/\\n.
+    """
+    return str(value).replace("\r", " ").replace("\n", " ").strip()
+
+
 def send_audit_email(result, meta, to_email, pdf_bytes=None):
     """
     Envoie le résumé de l'audit par email.
@@ -2373,9 +2438,9 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None):
 </body></html>"""
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🚦 LRS Audit — Score {score}/20 — {decision} — {str(url)[:40]}"
+    msg["Subject"] = _safe_header(f"🚦 LRS Audit — Score {score}/20 — {decision} — {str(url)[:40]}")
     msg["From"]    = user
-    msg["To"]      = to_email
+    msg["To"]      = _safe_header(to_email)
     msg.attach(MIMEText(html_body, "html"))
 
     if pdf_bytes:
@@ -4021,9 +4086,9 @@ def send_monitoring_digest(monitored_entries, to_email):
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"LRS™ Digest — {len(monitored_entries)} pages · {now_str}"
+        msg["Subject"] = _safe_header(f"LRS™ Digest — {len(monitored_entries)} pages · {now_str}")
         msg["From"]    = user
-        msg["To"]      = to_email
+        msg["To"]      = _safe_header(to_email)
         msg.attach(MIMEText(html_body, "html"))
         with smtplib.SMTP(host, port) as server:
             server.ehlo()
@@ -4087,9 +4152,9 @@ def send_score_drop_alert(entry, prev_score, to_email):
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"⚠️ LRS™ Alerte — Score chute de {abs(delta)} pts · {url_v[:40]}"
+        msg["Subject"] = _safe_header(f"⚠️ LRS™ Alerte — Score chute de {abs(delta)} pts · {url_v[:40]}")
         msg["From"]    = user
-        msg["To"]      = to_email
+        msg["To"]      = _safe_header(to_email)
         msg.attach(MIMEText(html_body, "html"))
         with smtplib.SMTP(host, port) as server:
             server.ehlo()
@@ -7146,13 +7211,32 @@ def check_access():
     st.markdown("### Enter your access password")
     st.markdown("Don't have access yet? [Get LRS™ access](#)")  # remplace # par ton lien Lemon Squeezy
 
+    max_attempts   = 5
+    lockout_sec    = 60
+    fail_count     = st.session_state.get("access_fail_count", 0)
+    locked_until   = st.session_state.get("access_locked_until", 0)
+
+    if locked_until and time.time() < locked_until:
+        remaining = int(locked_until - time.time())
+        st.error(f"Too many attempts. Try again in {remaining}s.")
+        return False
+
     entered = st.text_input("Password", type="password", placeholder="Enter your password...")
     if st.button("Access LRS →", type="primary"):
-        if entered == pwd_required:
+        # Comparaison à temps constant : évite une fuite d'info par timing attack
+        if hmac.compare_digest(entered, pwd_required):
             st.session_state.authenticated = True
+            st.session_state.access_fail_count = 0
             st.rerun()
         else:
-            st.error("Invalid password. Purchase your access to get your password.")
+            fail_count += 1
+            st.session_state.access_fail_count = fail_count
+            if fail_count >= max_attempts:
+                st.session_state.access_locked_until = time.time() + lockout_sec
+                st.session_state.access_fail_count = 0
+                st.error(f"Too many attempts. Try again in {lockout_sec}s.")
+            else:
+                st.error("Invalid password. Purchase your access to get your password.")
     return False
 
 
@@ -7266,9 +7350,9 @@ def send_post_audit_email_auto(result, meta):
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"🚦 LRS Audit — {score}/20 · {dec} · Top action disponible"
+        msg["Subject"] = _safe_header(f"🚦 LRS Audit — {score}/20 · {dec} · Top action disponible")
         msg["From"]    = user
-        msg["To"]      = to_email
+        msg["To"]      = _safe_header(to_email)
         msg.attach(MIMEText(html_body, "html"))
         with smtplib.SMTP(host, port) as server:
             server.ehlo(); server.starttls(); server.login(user, password)
@@ -7391,9 +7475,9 @@ def send_weekly_digest_email():
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"📊 LRS Bilan — {len(recent)} audits · Score moyen {avg}/20 cette semaine"
+        msg["Subject"] = _safe_header(f"📊 LRS Bilan — {len(recent)} audits · Score moyen {avg}/20 cette semaine")
         msg["From"]    = user
-        msg["To"]      = to_email
+        msg["To"]      = _safe_header(to_email)
         msg.attach(MIMEText(html_body, "html"))
         with smtplib.SMTP(host, port) as server:
             server.ehlo(); server.starttls(); server.login(user, password)
@@ -7576,22 +7660,43 @@ def render_admin_view():
     """Vue admin — métriques d'usage (accès protégé par mot de passe admin)."""
     import hashlib as _hashlib
 
-    admin_pw = ""
-    try:
-        admin_pw = st.secrets.get("admin_password", "")
-    except Exception:
-        admin_pw = os.getenv("LRS_ADMIN_PW", "")
+    admin_pw = os.getenv("LRS_ADMIN_PW", "")
+    if not admin_pw:
+        try:
+            admin_pw = st.secrets.get("admin_password", "")
+        except Exception:
+            pass
 
     if not admin_pw:
         st.warning("Aucun mot de passe admin configuré (LRS_ADMIN_PW ou admin_password dans secrets).")
         return
 
-    pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
-    if not pw_input:
-        st.stop()
-    if pw_input != admin_pw:
-        st.error("Mot de passe incorrect.")
-        st.stop()
+    if st.session_state.get("admin_authenticated"):
+        pass
+    else:
+        max_attempts = 5
+        lockout_sec  = 60
+        locked_until = st.session_state.get("admin_locked_until", 0)
+        if locked_until and time.time() < locked_until:
+            st.error(f"Trop de tentatives. Réessayez dans {int(locked_until - time.time())}s.")
+            st.stop()
+
+        pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
+        if not pw_input:
+            st.stop()
+        # Comparaison à temps constant : évite une fuite d'info par timing attack
+        if not hmac.compare_digest(pw_input, admin_pw):
+            fail_count = st.session_state.get("admin_fail_count", 0) + 1
+            st.session_state.admin_fail_count = fail_count
+            if fail_count >= max_attempts:
+                st.session_state.admin_locked_until = time.time() + lockout_sec
+                st.session_state.admin_fail_count = 0
+                st.error(f"Trop de tentatives. Réessayez dans {lockout_sec}s.")
+            else:
+                st.error("Mot de passe incorrect.")
+            st.stop()
+        st.session_state.admin_authenticated = True
+        st.session_state.admin_fail_count = 0
 
     st.success("✅ Accès admin autorisé")
     st.markdown("### 📊 Métriques d'usage LRS")
