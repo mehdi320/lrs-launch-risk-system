@@ -13,6 +13,7 @@ import hmac
 import socket
 import ipaddress
 import logging
+import html
 from urllib.parse import urlparse
 from html.parser import HTMLParser
 
@@ -297,15 +298,61 @@ def get_decision(score):
     if score <= 14: return "Test small budget", "Moderate"
     return "Ready to scale", "Low"
 
-# ── PERSISTANCE ──────────────────────────────────────────────
-HISTORY_FILE   = os.path.join(os.path.dirname(__file__), ".lrs_history.json")
-PROFILES_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_profiles.json")
-PROJECTS_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_projects.json")
-SCHEDULE_FILE  = os.path.join(os.path.dirname(__file__), ".lrs_schedule.json")
-ONBOARDING_FILE= os.path.join(os.path.dirname(__file__), ".lrs_onboarded.json")
-USAGE_FILE     = os.path.join(os.path.dirname(__file__), ".lrs_usage.json")
-DRIP_FILE      = os.path.join(os.path.dirname(__file__), ".lrs_drip.json")
-ADS_CREDS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_ads_creds.json")
+# ── PERSISTANCE — ISOLATION PAR UTILISATEUR ──────────────────
+# Avant ce correctif, tous les fichiers ci-dessous étaient des chemins
+# uniques et globaux : chargés à l'identique dans CHAQUE session Streamlit,
+# quel que soit le compte connecté. Concrètement, deux bêta testeurs
+# connectés en même temps partageaient le même historique d'audits, le même
+# quota, et — plus grave — le même token Meta/TikTok Ads. Chaque fonction
+# ci-dessous route désormais vers un sous-dossier propre à l'utilisateur
+# authentifié (par email, via le compte Stripe/lien magique).
+#
+# Limite assumée : les sessions authentifiées par le seul mot de passe
+# partagé historique (APP_PASSWORD, sans email) n'ont pas d'identité
+# individuelle — elles continuent de partager un espace commun ("_shared"),
+# comme avant ce correctif. C'est le chemin réservé à l'exploitant pour ses
+# propres tests, pas celui des bêta testeurs payants (qui passent tous par
+# Stripe + lien magique et ont donc un email). Isoler aussi ce chemin
+# demanderait de forcer une identité (email) même sans paiement — hors
+# scope d'un correctif ciblé.
+
+USER_DATA_ROOT = os.path.join(os.path.dirname(__file__), "data", "users")
+
+
+def _current_user_ns():
+    """
+    Espace de nommage de l'utilisateur courant, dérivé de son email
+    authentifié (compte Stripe / lien magique). "_shared" pour les sessions
+    authentifiées par le seul mot de passe partagé (pas d'identité connue).
+    """
+    email = st.session_state.get("authenticated_email", "")
+    if not email:
+        return "_shared"
+    safe = "".join(c if (c.isalnum() or c in "-_.@") else "_" for c in email.strip().lower())
+    return safe or "_shared"
+
+
+def _user_file(filename):
+    """Chemin, propre à l'utilisateur courant, pour un fichier de données donné."""
+    d = os.path.join(USER_DATA_ROOT, _current_user_ns())
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+    return os.path.join(d, filename)
+
+
+def HISTORY_FILE():    return _user_file(".lrs_history.json")
+def PROFILES_FILE():   return _user_file(".lrs_profiles.json")
+def PROJECTS_FILE():   return _user_file(".lrs_projects.json")
+def SCHEDULE_FILE():   return _user_file(".lrs_schedule.json")
+def ONBOARDING_FILE(): return _user_file(".lrs_onboarded.json")
+def USAGE_FILE():      return _user_file(".lrs_usage.json")
+def DRIP_FILE():       return _user_file(".lrs_drip.json")
+def ADS_CREDS_FILE():  return _user_file(".lrs_ads_creds.json")
+
+# Verrou anti-brute-force : volontairement PAS namespacé par utilisateur
+# (il s'applique avant authentification, keyé par IP — cf check_login_lockout).
 LOGIN_ATTEMPTS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_login_attempts.json")
 
 
@@ -484,8 +531,8 @@ def _get_plan():
 def _load_usage():
     """Charge les données d'usage depuis .lrs_usage.json."""
     try:
-        if os.path.exists(USAGE_FILE):
-            with open(USAGE_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(USAGE_FILE()):
+            with open(USAGE_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -493,7 +540,7 @@ def _load_usage():
 
 def _save_usage(data):
     try:
-        with open(USAGE_FILE, "w", encoding="utf-8") as f:
+        with open(USAGE_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f)
     except Exception:
         pass
@@ -709,8 +756,8 @@ DRIP_SEQUENCE = [
 
 def load_drip_data():
     try:
-        if os.path.exists(DRIP_FILE):
-            with open(DRIP_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(DRIP_FILE()):
+            with open(DRIP_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -718,7 +765,7 @@ def load_drip_data():
 
 def save_drip_data(data):
     try:
-        with open(DRIP_FILE, "w", encoding="utf-8") as f:
+        with open(DRIP_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -836,8 +883,8 @@ def render_email_capture_widget():
 
 def load_ads_creds():
     try:
-        if os.path.exists(ADS_CREDS_FILE):
-            with open(ADS_CREDS_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(ADS_CREDS_FILE()):
+            with open(ADS_CREDS_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -845,7 +892,7 @@ def load_ads_creds():
 
 def save_ads_creds(data):
     try:
-        with open(ADS_CREDS_FILE, "w", encoding="utf-8") as f:
+        with open(ADS_CREDS_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -1200,8 +1247,8 @@ def t(key):
 def load_history_file():
     """Charge l'historique depuis le fichier JSON (persistant entre sessions)."""
     try:
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(HISTORY_FILE()):
+            with open(HISTORY_FILE(), "r", encoding="utf-8") as f:
                 data = json.load(f)
                 # Nettoyer les entrées sans champ 'result' (compatibilité)
                 return [e for e in data if isinstance(e, dict)]
@@ -1221,7 +1268,7 @@ def write_history_file(history):
                 r = {k: v for k, v in entry["result"].items() if k != "_c"}
                 e["result"] = r
             clean.append(e)
-        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        with open(HISTORY_FILE(), "w", encoding="utf-8") as f:
             json.dump(clean[:50], f, ensure_ascii=False, indent=2)
     except Exception:
         pass  # Silencieux si pas de droits d'écriture (Streamlit Cloud)
@@ -1229,8 +1276,8 @@ def write_history_file(history):
 # ── PROFILS SAUVEGARDÉS ──────────────────────────────────────
 def load_profiles():
     try:
-        if os.path.exists(PROFILES_FILE):
-            with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(PROFILES_FILE()):
+            with open(PROFILES_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1238,7 +1285,7 @@ def load_profiles():
 
 def save_profiles(profiles):
     try:
-        with open(PROFILES_FILE, "w", encoding="utf-8") as f:
+        with open(PROFILES_FILE(), "w", encoding="utf-8") as f:
             json.dump(profiles, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -1256,8 +1303,8 @@ def delete_profile(name):
 # ── AUDITS PLANIFIÉS ─────────────────────────────────────────
 def load_schedule():
     try:
-        if os.path.exists(SCHEDULE_FILE):
-            with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(SCHEDULE_FILE()):
+            with open(SCHEDULE_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1265,7 +1312,7 @@ def load_schedule():
 
 def save_schedule(schedule):
     try:
-        with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
+        with open(SCHEDULE_FILE(), "w", encoding="utf-8") as f:
             json.dump(schedule, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -1273,7 +1320,7 @@ def save_schedule(schedule):
 # ── ONBOARDING ───────────────────────────────────────────────
 def is_onboarded():
     try:
-        if os.path.exists(ONBOARDING_FILE):
+        if os.path.exists(ONBOARDING_FILE()):
             return True
     except Exception:
         pass
@@ -1281,7 +1328,7 @@ def is_onboarded():
 
 def mark_onboarded():
     try:
-        with open(ONBOARDING_FILE, "w", encoding="utf-8") as f:
+        with open(ONBOARDING_FILE(), "w", encoding="utf-8") as f:
             json.dump({"done": True, "date": datetime.datetime.now().strftime("%d/%m/%Y")}, f)
     except Exception:
         pass
@@ -1289,8 +1336,8 @@ def mark_onboarded():
 # ── PROJETS MULTI-PAGES ──────────────────────────────────────
 def load_projects():
     try:
-        if os.path.exists(PROJECTS_FILE):
-            with open(PROJECTS_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(PROJECTS_FILE()):
+            with open(PROJECTS_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -1298,7 +1345,7 @@ def load_projects():
 
 def save_projects(projects):
     try:
-        with open(PROJECTS_FILE, "w", encoding="utf-8") as f:
+        with open(PROJECTS_FILE(), "w", encoding="utf-8") as f:
             json.dump(projects, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -3255,12 +3302,12 @@ def render_cumulative_intel():
 # ── SCORING CAMPAGNE EN CONTINU ───────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
-CAMPAIGN_FILE = os.path.join(os.path.dirname(__file__), ".lrs_campaigns.json")
+def CAMPAIGN_FILE(): return _user_file(".lrs_campaigns.json")
 
 def load_campaigns():
     try:
-        if os.path.exists(CAMPAIGN_FILE):
-            with open(CAMPAIGN_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(CAMPAIGN_FILE()):
+            with open(CAMPAIGN_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -3268,7 +3315,7 @@ def load_campaigns():
 
 def save_campaigns(data):
     try:
-        with open(CAMPAIGN_FILE, "w", encoding="utf-8") as f:
+        with open(CAMPAIGN_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -3537,12 +3584,12 @@ def render_campaign_tracker():
 # ── LIBRAIRIE SWIPE FILES PRIVÉE ──────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
-SWIPE_FILE = os.path.join(os.path.dirname(__file__), ".lrs_swipefiles.json")
+def SWIPE_FILE(): return _user_file(".lrs_swipefiles.json")
 
 def load_swipefiles():
     try:
-        if os.path.exists(SWIPE_FILE):
-            with open(SWIPE_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(SWIPE_FILE()):
+            with open(SWIPE_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -3550,7 +3597,7 @@ def load_swipefiles():
 
 def save_swipefiles(data):
     try:
-        with open(SWIPE_FILE, "w", encoding="utf-8") as f:
+        with open(SWIPE_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -3704,12 +3751,12 @@ def render_swipe_library():
 
 
 # ── REWRITE TRACKER ──────────────────────────────────────────
-REWRITES_FILE = os.path.join(os.path.dirname(__file__), ".lrs_rewrites.json")
+def REWRITES_FILE(): return _user_file(".lrs_rewrites.json")
 
 def load_rewrites():
     try:
-        if os.path.exists(REWRITES_FILE):
-            with open(REWRITES_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(REWRITES_FILE()):
+            with open(REWRITES_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -3717,7 +3764,7 @@ def load_rewrites():
 
 def save_rewrites(data):
     try:
-        with open(REWRITES_FILE, "w", encoding="utf-8") as f:
+        with open(REWRITES_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -4077,9 +4124,11 @@ def render_dashboard():
             st.markdown("")
             st.markdown(f"<div style='color:{txt};font-weight:700;font-size:0.92rem;margin-bottom:8px'>⚡ Quick wins — dernier audit</div>", unsafe_allow_html=True)
             for qw in qws[:3]:
-                what   = qw.get("what", "")
-                impact = qw.get("impact", "")
-                effort = qw.get("effort", "")
+                # html.escape : ces champs viennent de fix_plan.quick_wins, généré
+                # par le LLM, injecté ensuite dans un bloc unsafe_allow_html=True.
+                what   = html.escape(qw.get("what", ""))
+                impact = html.escape(qw.get("impact", ""))
+                effort = html.escape(qw.get("effort", ""))
                 tag_c  = "#22c55e" if effort == "Faible" else "#f59e0b"
                 st.markdown(
                     f"<div style='background:{bg_card};border-left:3px solid {tag_c};"
@@ -4821,12 +4870,12 @@ def render_benchmark_context(score, offer_type, platform):
 # ── NOTIFICATION CENTER ───────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
-NOTIF_FILE = os.path.join(os.path.dirname(__file__), ".lrs_notifications.json")
+def NOTIF_FILE(): return _user_file(".lrs_notifications.json")
 
 def load_notifications():
     try:
-        if os.path.exists(NOTIF_FILE):
-            with open(NOTIF_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(NOTIF_FILE()):
+            with open(NOTIF_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -4834,7 +4883,7 @@ def load_notifications():
 
 def save_notifications(data):
     try:
-        with open(NOTIF_FILE, "w", encoding="utf-8") as f:
+        with open(NOTIF_FILE(), "w", encoding="utf-8") as f:
             json.dump(data[-50:], f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -4907,12 +4956,12 @@ def render_notification_center():
 # ── SYSTÈME DE REFERRAL ───────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
-REFERRAL_FILE = os.path.join(os.path.dirname(__file__), ".lrs_referral.json")
+def REFERRAL_FILE(): return _user_file(".lrs_referral.json")
 
 def load_referral():
     try:
-        if os.path.exists(REFERRAL_FILE):
-            with open(REFERRAL_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(REFERRAL_FILE()):
+            with open(REFERRAL_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -4920,7 +4969,7 @@ def load_referral():
 
 def save_referral(data):
     try:
-        with open(REFERRAL_FILE, "w", encoding="utf-8") as f:
+        with open(REFERRAL_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -5027,12 +5076,12 @@ def render_referral_widget():
 # ── A/B TEST TRACKER ──────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════
 
-AB_FILE = os.path.join(os.path.dirname(__file__), ".lrs_abtests.json")
+def AB_FILE(): return _user_file(".lrs_abtests.json")
 
 def load_abtests():
     try:
-        if os.path.exists(AB_FILE):
-            with open(AB_FILE, "r", encoding="utf-8") as f:
+        if os.path.exists(AB_FILE()):
+            with open(AB_FILE(), "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -5040,7 +5089,7 @@ def load_abtests():
 
 def save_abtests(data):
     try:
-        with open(AB_FILE, "w", encoding="utf-8") as f:
+        with open(AB_FILE(), "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
@@ -5282,10 +5331,15 @@ def render_results(result, offer_type=None, platform=None):
     score = c.get("score", 0)
     risk  = c.get("risk", "High")
     dec   = c.get("decision", "Do NOT launch")
-    ms    = mm.get("status", "N/A")
+    # html.escape : status vient de la sortie du LLM, injecté ensuite dans
+    # un bloc unsafe_allow_html=True.
+    ms    = html.escape(mm.get("status", "N/A"))
 
     lrs_meta           = result.get("lrs", {})
-    page_type_display  = lrs_meta.get("page_type", "")
+    # html.escape : page_type vient de la sortie du LLM (analyse du contenu
+    # scrapé sur la page auditée) — injecté ensuite dans un bloc
+    # unsafe_allow_html=True, donc jamais affiché sans échappement.
+    page_type_display  = html.escape(lrs_meta.get("page_type", ""))
     score_color        = RISK_COLORS.get(risk, "#888")
     dec_emoji          = "🔴" if risk == "High" else "🟡" if risk == "Moderate" else "🟢"
     bar_filled         = round(score / 20 * 10)
@@ -5422,14 +5476,14 @@ def render_results(result, offer_type=None, platform=None):
                 Action prioritaire #1
               </div>
               <div style='color:#fff;font-weight:700;font-size:0.95rem;margin-bottom:8px'>
-                {top_prio.get("what","")}
+                {html.escape(top_prio.get("what",""))}
               </div>
               <div style='color:#aaa;font-size:0.85rem;line-height:1.6'>
-                {top_prio.get("how_exactly","")}
+                {html.escape(top_prio.get("how_exactly",""))}
               </div>
               <div style='color:#555;font-size:0.78rem;margin-top:8px'>
-                Impact : {top_prio.get("expected_impact","")} &nbsp;·&nbsp;
-                Temps : {top_prio.get("time_estimate","")}
+                Impact : {html.escape(top_prio.get("expected_impact",""))} &nbsp;·&nbsp;
+                Temps : {html.escape(top_prio.get("time_estimate",""))}
               </div>
             </div>""",
             unsafe_allow_html=True,
@@ -5561,12 +5615,27 @@ def render_results(result, offer_type=None, platform=None):
     with rw_col:
         with st.expander("✍️ Rewrite recommandé"):
             def _copy_btn(text, key):
-                """Bouton copier avec JS clipboard."""
+                """
+                Bouton copier avec JS clipboard.
+
+                text vient de la sortie du LLM (rewrite/hooks/angles), donc
+                potentiellement influençable par un contenu injecté dans la
+                page auditée. L'échappement précédent (replace \\, ` et ')
+                ne neutralisait pas une séquence </script> dans le texte, qui
+                aurait pu fermer le <script> prématurément et exécuter du JS
+                arbitraire dans le contexte du composant. json.dumps échappe
+                correctement guillemets/backslashes/unicode ; on neutralise
+                en plus </script et <script pour empêcher toute sortie du tag.
+                """
                 import streamlit.components.v1 as components
-                safe = text.replace("\\", "\\\\").replace("`", "\\`").replace("'", "\\'")
+                safe = (
+                    json.dumps(text or "")
+                    .replace("</script", "<\\/script")
+                    .replace("<script", "\\u003cscript")
+                )
                 if st.button("📋 Copier", key=key, help="Copier dans le presse-papiers"):
                     components.html(
-                        f"<script>navigator.clipboard.writeText('{safe}').catch(()=>{{}})</script>",
+                        f"<script>navigator.clipboard.writeText({safe}).catch(()=>{{}})</script>",
                         height=0,
                     )
                     st.toast("✅ Copié !")
@@ -7960,10 +8029,10 @@ def render_quick_audit_result(qr):
                 border-radius:8px;padding:14px 18px;margin-top:14px'>
               <div style='color:#FF4444;font-size:0.72rem;font-weight:700;text-transform:uppercase;
                    letter-spacing:1px;margin-bottom:4px'>⚡ Action prioritaire</div>
-              <div style='color:#fff;font-weight:700;font-size:0.93rem'>{action.get('what','')}</div>
-              <div style='color:#aaa;font-size:0.84rem;margin-top:6px'>{action.get('how_exactly','')}</div>
+              <div style='color:#fff;font-weight:700;font-size:0.93rem'>{html.escape(action.get('what',''))}</div>
+              <div style='color:#aaa;font-size:0.84rem;margin-top:6px'>{html.escape(action.get('how_exactly',''))}</div>
               <div style='color:#555;font-size:0.78rem;margin-top:6px'>
-                Impact : {action.get('impact','')} &nbsp;·&nbsp; Temps : {action.get('time','')}
+                Impact : {html.escape(action.get('impact',''))} &nbsp;·&nbsp; Temps : {html.escape(action.get('time',''))}
               </div>
             </div>""",
             unsafe_allow_html=True,
@@ -8028,9 +8097,9 @@ def render_admin_view():
 
     # Lecture fichier usage
     usage_data = {}
-    if os.path.exists(USAGE_FILE):
+    if os.path.exists(USAGE_FILE()):
         try:
-            with open(USAGE_FILE) as f:
+            with open(USAGE_FILE()) as f:
                 usage_data = json.load(f)
         except Exception:
             usage_data = {}

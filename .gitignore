@@ -9,6 +9,8 @@
 # Données runtime locales (historique, usage, comptes utilisateurs — PII)
 .lrs_*.json
 .lrs_*.db
+# Données runtime par utilisateur (isolation multi-tenant, cf app.py _user_file)
+/data/
 
 # Python
 __pycache__/
