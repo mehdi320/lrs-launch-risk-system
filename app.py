@@ -12,8 +12,20 @@ import time
 import hmac
 import socket
 import ipaddress
+import logging
 from urllib.parse import urlparse
 from html.parser import HTMLParser
+
+# ── LOGGING SERVEUR ──────────────────────────────────────────
+# Avant ce correctif, les erreurs étaient soit affichées brutes à l'utilisateur
+# (avec un risque de fuite d'URL/token, cf. _safe_err), soit avalées en silence
+# (except Exception: pass) sans aucune trace. Les deux cas rendaient tout
+# incident (abus, panne d'un service tiers) impossible à investiguer après coup.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger("lrs")
 
 try:
     from lrs_pdf_report import generate_pdf_report
@@ -294,6 +306,100 @@ ONBOARDING_FILE= os.path.join(os.path.dirname(__file__), ".lrs_onboarded.json")
 USAGE_FILE     = os.path.join(os.path.dirname(__file__), ".lrs_usage.json")
 DRIP_FILE      = os.path.join(os.path.dirname(__file__), ".lrs_drip.json")
 ADS_CREDS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_ads_creds.json")
+LOGIN_ATTEMPTS_FILE = os.path.join(os.path.dirname(__file__), ".lrs_login_attempts.json")
+
+
+def _safe_err(e):
+    """
+    Message d'erreur sûr à afficher à l'utilisateur.
+
+    Les exceptions réseau bas niveau (ConnectionError, Timeout...) embarquent
+    l'URL complète — donc les tokens passés en paramètre de requête (Meta/
+    TikTok Ads) — dans leur str(). On les remplace par un message générique.
+    Les erreurs déjà reformatées proprement par notre propre code (ValueError
+    levées à la main, sans URL ni secret dedans) passent telles quelles.
+    Dans tous les cas, l'exception complète part dans les logs serveur.
+    """
+    logger.exception("Erreur capturée : %s", e)
+    if isinstance(e, requests.exceptions.RequestException):
+        return "Erreur de connexion au service distant. Réessayez dans quelques instants."
+    return str(e)
+
+
+def _client_ip():
+    """
+    IP du client pour le rate-limit de connexion, lue depuis les en-têtes
+    transmis par le reverse proxy (Caddy). Sans ces en-têtes (dev local, ou
+    Streamlit trop ancien pour exposer st.context), on retombe sur une clé
+    commune : le verrou devient global au lieu d'être par IP — moins précis,
+    mais toujours mieux qu'un verrou par session (contournable en un clic).
+    """
+    try:
+        headers = st.context.headers
+        fwd = headers.get("X-Forwarded-For", "")
+        if fwd:
+            return fwd.split(",")[0].strip()
+        real_ip = headers.get("X-Real-Ip", "")
+        if real_ip:
+            return real_ip
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _load_login_attempts():
+    try:
+        if os.path.exists(LOGIN_ATTEMPTS_FILE):
+            with open(LOGIN_ATTEMPTS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_login_attempts(data):
+    try:
+        with open(LOGIN_ATTEMPTS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+
+def check_login_lockout(scope, max_attempts=5, lockout_sec=60):
+    """
+    Verrou anti-brute-force partagé (fichier), keyé par (scope, IP) — plus
+    contournable en ouvrant un nouvel onglet privé, contrairement à l'ancien
+    verrou stocké dans st.session_state. `scope` distingue le mot de passe
+    app du mot de passe admin (deux compteurs indépendants).
+    Retourne (locked: bool, seconds_remaining: int).
+    """
+    key = f"{scope}:{_client_ip()}"
+    attempts = _load_login_attempts()
+    entry = attempts.get(key, {})
+    locked_until = entry.get("locked_until", 0)
+    if locked_until and time.time() < locked_until:
+        return True, int(locked_until - time.time())
+    return False, 0
+
+
+def register_login_failure(scope, max_attempts=5, lockout_sec=60):
+    key = f"{scope}:{_client_ip()}"
+    attempts = _load_login_attempts()
+    entry = attempts.get(key, {"count": 0, "locked_until": 0})
+    entry["count"] = entry.get("count", 0) + 1
+    if entry["count"] >= max_attempts:
+        entry["locked_until"] = time.time() + lockout_sec
+        entry["count"] = 0
+        logger.warning("Verrou anti-brute-force déclenché pour scope=%s ip=%s", scope, _client_ip())
+    attempts[key] = entry
+    _save_login_attempts(attempts)
+
+
+def register_login_success(scope):
+    key = f"{scope}:{_client_ip()}"
+    attempts = _load_login_attempts()
+    attempts.pop(key, None)
+    _save_login_attempts(attempts)
 
 # ── PLAN / QUOTA SYSTEM ──────────────────────────────────────
 PLAN_LIMITS = {
@@ -977,7 +1083,7 @@ Votre **Ad Account ID** se trouve dans Meta Ads Manager → Paramètres du compt
                                 st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
                                 st.caption("Allez dans **Suivi → Campagnes en cours** pour voir les diagnostics.")
                         except Exception as e:
-                            st.error(f"Erreur Meta API : {e}")
+                            st.error(f"Erreur Meta API : {_safe_err(e)}")
 
     else:  # TikTok Ads
         st.markdown("##### 🎵 TikTok Ads — Marketing API v1.3")
@@ -1036,7 +1142,7 @@ Votre **Ad Account ID** se trouve dans Meta Ads Manager → Paramètres du compt
                                 save_campaigns(existing)
                                 st.success(f"✅ {imported} campagne(s) importée(s) dans le Campaign Tracker !")
                         except Exception as e:
-                            st.error(f"Erreur TikTok API : {e}")
+                            st.error(f"Erreur TikTok API : {_safe_err(e)}")
 
 
 # ── TRADUCTIONS (EN / FR) ────────────────────────────────────
@@ -2806,7 +2912,7 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         send_slack_notification(result, meta)
                         st.success(t("success_slack"))
                     except Exception as e:
-                        st.error(str(e))
+                        st.error(_safe_err(e))
 
         # ── Google Sheets ──────────────────────────────────────
         with c2:
@@ -2822,7 +2928,7 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         export_to_sheets(result, meta)
                         st.success(t("success_sheets"))
                     except Exception as e:
-                        st.error(str(e))
+                        st.error(_safe_err(e))
 
         # ── Notion ─────────────────────────────────────────────
         with c3:
@@ -2838,7 +2944,7 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         export_to_notion(result, meta)
                         st.success(t("success_notion"))
                     except Exception as e:
-                        st.error(str(e))
+                        st.error(_safe_err(e))
 
         # ── Webhook générique ────────────────────────────────
         with c4:
@@ -2854,7 +2960,7 @@ def render_integrations_widget(result, meta, key_prefix="integ"):
                         send_test_generic_webhook()
                         st.success(t("success_webhook"))
                     except Exception as e:
-                        st.error(str(e))
+                        st.error(_safe_err(e))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -4447,7 +4553,7 @@ def render_agency_report_widget(result, meta, key_prefix="agency"):
                     key=f"{key_prefix}_dl"
                 )
             except Exception as e:
-                st.error(f"Erreur génération : {e}")
+                st.error(f"Erreur génération : {_safe_err(e)}")
 
 
 def render_email_widget(result, meta, key_prefix="email"):
@@ -5000,7 +5106,7 @@ def render_ab_tracker(api_key):
                         _increment_usage()
                         _st_ab.update(label=f"✅ {label} analysée", state="complete", expanded=False)
                     except Exception as e:
-                        st.error(f"{label} : {e}")
+                        st.error(f"{label} : {_safe_err(e)}")
                         _st_ab.update(label=f"❌ Erreur", state="error", expanded=False)
 
             if "A" in results_ab and "B" in results_ab:
@@ -6002,7 +6108,7 @@ def render_monitoring(api_key):
                                     st.success(f"Audit terminé : {res.get('_c',{}).get('score',0)}/20")
                                     st.rerun()
                             except Exception as e:
-                                st.error(str(e))
+                                st.error(_safe_err(e))
 
                 act1, act2 = st.columns(2)
                 with act1:
@@ -6259,7 +6365,7 @@ def render_bulk(api_key):
                 else:
                     st.warning("Aucune URL valide trouvée dans le fichier.")
             except Exception as e:
-                st.error(f"Erreur lecture CSV : {e}")
+                st.error(f"Erreur lecture CSV : {_safe_err(e)}")
 
     bc1, bc2, bc3 = st.columns(3)
     with bc1: bulk_mode   = st.selectbox("Mode",      ["Funnel Only","Full Risk"], key="bulk_mode")
@@ -6443,7 +6549,7 @@ def render_comparison(api_key, model="gpt-4o-mini"):
                     results[col_key] = {"result": res, "label": label, "url": url,
                                         "page_type": page_type}
                 except Exception as e:
-                    st.error(f"Erreur audit {label} : {e}"); return
+                    st.error(f"Erreur audit {label} : {_safe_err(e)}"); return
 
         if len(results) == 2:
             st.markdown("---")
@@ -7196,7 +7302,7 @@ def render_benchmark_tab():
                     use_container_width=True,
                 )
             except Exception as e:
-                st.error(f"Rapport temporairement indisponible : {e}")
+                st.error(f"Rapport temporairement indisponible : {_safe_err(e)}")
 
     st.markdown("---")
     st.markdown("#### 📌 Extraits du rapport")
@@ -7392,11 +7498,12 @@ def check_access():
 
     max_attempts   = 5
     lockout_sec    = 60
-    fail_count     = st.session_state.get("access_fail_count", 0)
-    locked_until   = st.session_state.get("access_locked_until", 0)
 
-    if locked_until and time.time() < locked_until:
-        remaining = int(locked_until - time.time())
+    # Verrou anti-brute-force partagé par IP (fichier), pas par session Streamlit :
+    # un verrou en session se réinitialise en ouvrant un nouvel onglet privé, donc
+    # ne freine pas réellement un brute-force en volume.
+    locked, remaining = check_login_lockout("app", max_attempts, lockout_sec)
+    if locked:
         st.error(f"Too many attempts. Try again in {remaining}s.")
         return False
 
@@ -7405,15 +7512,13 @@ def check_access():
         # Comparaison à temps constant : évite une fuite d'info par timing attack
         if hmac.compare_digest(entered, pwd_required):
             st.session_state.authenticated = True
-            st.session_state.access_fail_count = 0
+            register_login_success("app")
             st.rerun()
         else:
-            fail_count += 1
-            st.session_state.access_fail_count = fail_count
-            if fail_count >= max_attempts:
-                st.session_state.access_locked_until = time.time() + lockout_sec
-                st.session_state.access_fail_count = 0
-                st.error(f"Too many attempts. Try again in {lockout_sec}s.")
+            register_login_failure("app", max_attempts, lockout_sec)
+            still_locked, remaining = check_login_lockout("app", max_attempts, lockout_sec)
+            if still_locked:
+                st.error(f"Too many attempts. Try again in {remaining}s.")
             else:
                 st.error("Invalid password. Purchase your access to get your password.")
 
@@ -7895,9 +8000,12 @@ def render_admin_view():
     else:
         max_attempts = 5
         lockout_sec  = 60
-        locked_until = st.session_state.get("admin_locked_until", 0)
-        if locked_until and time.time() < locked_until:
-            st.error(f"Trop de tentatives. Réessayez dans {int(locked_until - time.time())}s.")
+        # Même verrou partagé par IP que check_access() — un compteur en
+        # session ne freinait pas un brute-force en volume (nouvel onglet
+        # privé = compteur remis à zéro).
+        locked, remaining = check_login_lockout("admin", max_attempts, lockout_sec)
+        if locked:
+            st.error(f"Trop de tentatives. Réessayez dans {remaining}s.")
             st.stop()
 
         pw_input = st.text_input("🔑 Mot de passe admin", type="password", key="admin_pw_input")
@@ -7905,17 +8013,15 @@ def render_admin_view():
             st.stop()
         # Comparaison à temps constant : évite une fuite d'info par timing attack
         if not hmac.compare_digest(pw_input, admin_pw):
-            fail_count = st.session_state.get("admin_fail_count", 0) + 1
-            st.session_state.admin_fail_count = fail_count
-            if fail_count >= max_attempts:
-                st.session_state.admin_locked_until = time.time() + lockout_sec
-                st.session_state.admin_fail_count = 0
-                st.error(f"Trop de tentatives. Réessayez dans {lockout_sec}s.")
+            register_login_failure("admin", max_attempts, lockout_sec)
+            still_locked, remaining = check_login_lockout("admin", max_attempts, lockout_sec)
+            if still_locked:
+                st.error(f"Trop de tentatives. Réessayez dans {remaining}s.")
             else:
                 st.error("Mot de passe incorrect.")
             st.stop()
         st.session_state.admin_authenticated = True
-        st.session_state.admin_fail_count = 0
+        register_login_success("admin")
 
     st.success("✅ Accès admin autorisé")
     st.markdown("### 📊 Métriques d'usage LRS")
