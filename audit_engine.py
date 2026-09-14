@@ -38,7 +38,15 @@ except ImportError:
     pass
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MAX_PAGE_CHARS = 8000
+# 8000 (~2000 tokens) etait beaucoup trop bas pour du long-form copywriting —
+# un advertorial reel depasse facilement 15 000 mots (~80 000+ caracteres).
+# Les modeles utilises ici (gpt-4o-mini : 128k tokens, Claude : 200k) ont
+# largement la place pour plus de contexte ; le cout supplementaire est
+# marginal face au risque deja materialise une fois (score fausse par un
+# contenu tronque avant meme d'atteindre l'offre). Releve a 20 000 —
+# toujours pas une garantie de tout capturer sur les pages les plus
+# longues (voir _head_and_tail), mais une reduction reelle du risque.
+MAX_PAGE_CHARS = 20000
 
 # Modele Claude par defaut pour l'audit — aligne sur
 # creative_studio/core/llm_client.py::DEFAULT_MODEL.
@@ -55,6 +63,38 @@ def load_txt(filename):
 
 def clamp(text, n=MAX_PAGE_CHARS):
     return text[:n] + "[TRONQUE]" if len(text) > n else text
+
+
+def _head_and_tail(full, budget=MAX_PAGE_CHARS):
+    """
+    Sur les pages longues (advertorials, longues sales letters — un
+    advertorial reel peut depasser 80 000 caracteres), un simple
+    text[:budget] ne montre jamais la fin de la page. Or c'est exactement
+    la ou vit l'offre/le prix/la garantie/le CTA final sur ce type de
+    page — un troncage pur produisait donc systematiquement un faux
+    "absence totale d'offre", meme quand l'offre est bien la, juste plus
+    loin que budget caracteres. On garde donc le debut (hook, above the
+    fold) ET la fin (offre/CTA) plutot qu'un bloc continu depuis le debut.
+    """
+    if len(full) <= budget:
+        return "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + full
+
+    # Fin agrandie (3000 -> 6000) : l'offre/CTA final tient generalement
+    # dans ~3000 caracteres, mais une fin plus large augmente les chances
+    # d'attraper aussi la derniere section avant (temoignages, recap
+    # d'objections) quand elle est proche du CTA — pas garanti sur les
+    # pages les plus longues ou ces sections sont a des dizaines de
+    # milliers de caracteres du bas (aucun budget raisonnable ne les
+    # attrape alors sans une vraie extraction par section).
+    above_fold = full[:2000]
+    tail_size = 6000
+    head_extra = full[2000:budget - tail_size] if budget > (2000 + tail_size) else ""
+    tail = full[-tail_size:]
+    return (
+        "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
+        (("\n\n=== SUITE DE LA PAGE ===\n" + head_extra) if head_extra else "") +
+        "\n\n=== FIN DE LA PAGE (offre/CTA/garantie — potentiellement loin dans le scroll) ===\n" + tail
+    )
 
 
 def get_api_key():
@@ -218,16 +258,14 @@ def extract_page(url):
 
     if trafilatura_text and len(trafilatura_text) > 200 and not use_fallback:
         full = trafilatura_text
-        above_fold = full[:2000]
-        rest = full[2000:]
-        prioritized = (
-            "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
-            ("\n\n=== SUITE DE LA PAGE ===\n" + rest if rest else "")
-        )
-        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)", is_js
+        prioritized = _head_and_tail(full)
+        status = f"Contenu extrait ({min(len(full), MAX_PAGE_CHARS)}/{len(full)} caracteres)"
+        return clamp(prioritized, n=len(prioritized)), status, is_js
 
     if len(fallback) > 100:
-        return clamp(fallback), f"Extraction partielle ({len(fallback[:MAX_PAGE_CHARS])} caracteres)", is_js
+        prioritized = _head_and_tail(fallback)
+        status = f"Extraction partielle ({min(len(fallback), MAX_PAGE_CHARS)}/{len(fallback)} caracteres)"
+        return clamp(prioritized, n=len(prioritized)), status, is_js
 
     return html[:2000], "Extraction faible.", True
 
