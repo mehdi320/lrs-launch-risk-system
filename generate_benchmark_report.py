@@ -8,7 +8,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     PageBreak, HRFlowable, KeepTogether
@@ -193,7 +193,6 @@ def generate():
     niche_rows = []
     for i, row in enumerate(niches):
         is_header = (i == 0)
-        bg = colors.HexColor("#0f0f2a") if is_header else (C_SURFACE if i%2==0 else C_SURF2)
         fc = C_ACCENT if is_header else C_LIGHT
         niche_rows.append([
             Paragraph(f"<b>{row[0]}</b>" if is_header else row[0],
@@ -675,7 +674,9 @@ def generate():
 
 
 if __name__ == "__main__":
+    import os as _os
     pdf_bytes = generate()
-    with open("/sessions/beautiful-ecstatic-allen/mnt/LRS/LRS_Benchmark_Report_2025.pdf", "wb") as f:
+    out_path = _os.path.join(_os.path.dirname(__file__), "assets", "LRS_Benchmark_Report_2025.pdf")
+    with open(out_path, "wb") as f:
         f.write(pdf_bytes)
-    print(f"✅ Benchmark Report généré — {len(pdf_bytes):,} bytes")
+    print(f"✅ Benchmark Report généré — {len(pdf_bytes):,} bytes — {out_path}")

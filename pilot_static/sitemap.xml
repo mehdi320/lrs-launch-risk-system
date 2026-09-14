@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LRS™ Pilote est une application privée (voir robots.txt : Disallow: /) —
+  ce sitemap n'a d'utilité que si vous changez délibérément cette politique
+  pour rendre l'écran de connexion public/indexable. Il ne liste que la
+  racine, seule URL publique de cette app monopage.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://votre-domaine.example/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

@@ -1,0 +1,4 @@
+# LRS™ Pilote — application privée (mot de passe + abonnement requis).
+# Rien ici n'est destiné à être indexé par un moteur de recherche.
+User-agent: *
+Disallow: /

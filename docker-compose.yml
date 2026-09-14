@@ -1,44 +1,82 @@
+# Squelette d'orchestration générique — pas encore lié à une plateforme de
+# déploiement précise (VPS, Fly.io, Render...). Sert à faire tourner les
+# deux surfaces web localement ou sur un serveur simple avant de choisir.
+#
+# TLS : le service `caddy` termine le HTTPS (certificats Let's Encrypt
+# automatiques via Caddyfile) devant les 3 services applicatifs, qui restent
+# en HTTP interne sur le réseau Docker — voir DEPLOYMENT.md.
+#
+# Persistance : les deux services montent le dépôt (bind mount `.:/app`)
+# par-dessus le code copié dans l'image, donc l'état (.lrs_*.json,
+# .lrs_creative_studio.db, écrits à côté du code — voir PILOT_UI.md)
+# persiste directement dans le dépôt, comme en local sans Docker. C'est
+# volontairement simple pour un squelette ; une vraie mise en prod sur un
+# PaaS à filesystem éphémère (Fly.io, Render...) nécessitera d'abord un
+# `LRS_DATA_DIR` configurable pour séparer code et données sur un volume
+# persistant dédié — voir DEPLOYMENT.md.
+#
+# Secrets : `.env` est chargé via env_file. Sur une vraie plateforme,
+# remplacer par son secret manager plutôt qu'un fichier commité/monté.
+
 services:
-  app:
+  pilot:
     build: .
-    command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0
-    env_file: .env
-    volumes:
-      - lrs-data:/app/data
-    environment:
-      - LRS_USERS_DB_PATH=/app/data/.lrs_users.db
+    command: ["uvicorn", "pilot_server:app", "--host", "0.0.0.0", "--port", "8600"]
+    # Lié à 127.0.0.1 : joignable en debug via tunnel SSH, pas depuis
+    # l'extérieur — le trafic public passe uniquement par `caddy`.
     ports:
-      - "127.0.0.1:8501:8501"   # pas exposé directement, seul Caddy publie 80/443
+      - "127.0.0.1:8600:8600"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
     restart: unless-stopped
 
-  webhook:
+  streamlit:
     build: .
-    command: uvicorn webhook_server:app --host 0.0.0.0 --port 8000
-    env_file: .env
+    command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
+    ports:
+      - "127.0.0.1:8501:8501"
+    env_file:
+      - .env
     volumes:
-      - lrs-data:/app/data
-    environment:
-      - LRS_USERS_DB_PATH=/app/data/.lrs_users.db
+      - .:/app
+    restart: unless-stopped
+
+  # Reçoit le webhook Stripe (achats funnel Creative Studio + activation
+  # d'abonnement LRS, voir creative_studio/serving/app.py) et sert
+  # /checkout/beta. Doit être exposé publiquement (via `caddy`) pour que
+  # Stripe puisse l'atteindre — voir DEPLOYMENT.md.
+  serving:
+    build: .
+    command: ["uvicorn", "creative_studio.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "127.0.0.1:8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
     restart: unless-stopped
 
+  # Termine le TLS public (Let's Encrypt automatique) et route vers les 3
+  # services ci-dessus par sous-domaine — voir Caddyfile.
   caddy:
     image: caddy:2-alpine
-    depends_on:
-      - app
-      - webhook
-    env_file: .env
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - LRS_DOMAIN=${LRS_DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - pilot
+      - streamlit
+      - serving
     restart: unless-stopped
 
 volumes:
-  lrs-data:
-  caddy-data:
-  caddy-config:
+  caddy_data:
+  caddy_config:

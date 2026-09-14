@@ -1,0 +1,6 @@
+"""Point d'entrée : python -m mcp_server (depuis la racine du dépôt)."""
+
+from mcp_server.server import main
+
+if __name__ == "__main__":
+    main()

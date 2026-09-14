@@ -1,0 +1,65 @@
+# LRS™ — CREATIVE STUDIO — FRAMEWORKS DE COPYWRITING
+# Contexte : génération d'advertorials et de pages de vente pour produits digitaux,
+# trafic payant froid (Meta / TikTok), objectif conversion directe vers un lien de paiement.
+
+================================================================
+FRAMEWORK : AIDA (Attention — Interest — Desire — Action)
+================================================================
+
+Structure séquentielle classique, efficace pour des offres où le visiteur n'a
+pas encore conscience précise de son problème.
+
+- ATTENTION : headline + hook qui interrompt le scroll. Spécificité, tension,
+  résultat chiffré ou pattern interrupt. Pas de généralité produit-centrique.
+- INTEREST : développer pourquoi ce sujet concerne le lecteur maintenant.
+  Un fait surprenant, une statistique, une histoire courte et crédible.
+- DESIRE : peindre la transformation / le résultat futur désiré. Bénéfices
+  concrets, pas de caractéristiques techniques. Preuve sociale si pertinente.
+- ACTION : CTA unique, sans ambiguïté, avec une raison d'agir maintenant
+  (rareté, bonus, prix qui remonte).
+
+================================================================
+FRAMEWORK : PAS (Problem — Agitate — Solve)
+================================================================
+
+Plus direct qu'AIDA, très efficace en cold traffic quand le visiteur vit déjà
+le problème mais ne l'a pas formulé clairement.
+
+- PROBLEM : nommer le problème exact du lecteur, dans ses mots à lui, pas
+  dans le jargon du vendeur.
+- AGITATE : amplifier le coût de l'inaction — temps perdu, argent perdu,
+  frustration accumulée, conséquences à 6/12 mois si rien ne change.
+  Objectif : rendre le statu quo inconfortable, sans être putaclic.
+- SOLVE : présenter le produit comme la résolution logique et directe du
+  problème agité. Lien de causalité clair entre douleur et solution.
+
+================================================================
+FRAMEWORK : HORMOZI VALUE STACKING
+================================================================
+
+Best adapté aux pages de vente avec offre à valeur perçue élevée. L'objectif
+est de rendre le prix insignifiant face à la valeur empilée.
+
+- Value Equation : (Résultat rêvé x Probabilité perçue de succès) /
+  (Délai perçu x Effort et sacrifice perçu). Chaque section du copy doit
+  maximiser le numérateur ou minimiser le dénominateur.
+- OFFER STACK : lister chaque composant de l'offre séparément avec sa valeur
+  perçue individuelle (module principal + bonus + garantie + support),
+  puis sommer pour créer un écart énorme avec le prix final.
+- GARANTIE : réduire le risque perçu à zéro ou l'inverser (garantie qui coûte
+  cher au vendeur si le client échoue, pas juste "satisfait ou remboursé").
+- URGENCE / RARETÉ réelle : deadline, places limitées, bonus qui disparaît —
+  jamais fabriquée artificiellement si le contexte ne le permet pas.
+- CTA : présente l'action comme la suite logique après l'empilement de valeur,
+  jamais comme une demande isolée.
+
+================================================================
+RÈGLES COMMUNES (tous frameworks)
+================================================================
+
+- Écrire pour un lecteur qui scrolle vite sur mobile : phrases courtes,
+  paragraphes de 1 à 3 lignes.
+- Aucune promesse non tenable ni chiffre inventé — la crédibilité prime sur
+  l'emphase.
+- Le ton s'adapte à l'audience cible fournie en entrée, pas un ton générique.
+- Une seule action demandée par variante (pas de CTA multiples concurrents).

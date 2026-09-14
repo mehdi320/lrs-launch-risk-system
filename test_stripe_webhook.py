@@ -1,128 +1,187 @@
-# Tests du webhook Stripe (webhook_server.py) — 6 scénarios :
-# activation, mise à jour de statut, résiliation, événement ignoré,
-# rejeu d'un event dupliqué, échec puis retry.
-#
-# Lancer : LRS_ALLOW_UNVERIFIED_WEBHOOK=true LRS_USERS_DB_PATH=/tmp/lrs_test_users.db \
-#          python3 -m pytest test_stripe_webhook.py -v
-# (ou simplement `python3 test_stripe_webhook.py`, un petit runner est fourni en bas de fichier)
+#!/usr/bin/env python3
+"""Teste le webhook Stripe étendu (activation + cycle de vie de
+l'abonnement LRS) contre une instance locale de
+creative_studio.serving.app, sans clé Stripe réelle ni carte bancaire.
 
-import os
-import tempfile
+Prérequis : lancer le service en mode test AVANT ce script, dans un autre
+terminal, DEPUIS LA RACINE DU REPO :
 
-os.environ["LRS_USERS_DB_PATH"] = os.path.join(tempfile.gettempdir(), "lrs_test_users.db")
-if os.path.exists(os.environ["LRS_USERS_DB_PATH"]):
-    os.remove(os.environ["LRS_USERS_DB_PATH"])
-os.environ["LRS_ALLOW_UNVERIFIED_WEBHOOK"] = "true"
-os.environ["STRIPE_WEBHOOK_SECRET"] = ""  # forcer le mode non-vérifié pour les tests
+    LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true \
+      uvicorn creative_studio.serving.app:app --port 8000
+
+(LRS_CS_ALLOW_UNVERIFIED_WEBHOOK=true désactive la vérification de
+signature Stripe pour ce test local — ne jamais l'activer en production.)
+
+Ce script doit tourner dans le même dossier / même .env que le service
+testé (en particulier LRS_USERS_DB_PATH si vous l'avez personnalisé,
+sinon les deux utilisent le même fichier par défaut .lrs_users.db).
+
+Usage :
+    python3 test_stripe_webhook.py [email de test]
+
+Ceci valide la LOGIQUE du webhook (routage par mode/type d'événement,
+écriture en base). Avant la mise en prod, validez aussi la vérification
+de signature réelle avec `stripe listen --forward-to
+localhost:8000/webhook/stripe` — voir STRIPE_SMTP_SETUP.md.
+"""
+
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 import user_accounts
-import webhook_server
-from fastapi.testclient import TestClient
 
-client = TestClient(webhook_server.app)
+WEBHOOK_URL = "http://127.0.0.1:8000/webhook/stripe"
 
 
-def _event(event_id, event_type, obj):
-    return {"id": event_id, "type": event_type, "data": {"object": obj}}
-
-
-def test_checkout_completed_creates_user_and_magic_link():
-    resp = client.post("/webhook/stripe", json=_event(
-        "evt_1", "checkout.session.completed",
-        {"customer_details": {"email": "buyer@example.com"},
-         "customer": "cus_1", "subscription": "sub_1"},
-    ))
-    assert resp.status_code == 200, resp.text
-    user = user_accounts.get_user("buyer@example.com")
-    assert user is not None
-    assert user["plan"] == webhook_server.CHECKOUT_PLAN
-    assert user["status"] == "active"
-
-
-def test_subscription_updated_changes_plan_status():
-    resp = client.post("/webhook/stripe", json=_event(
-        "evt_2", "customer.subscription.updated",
-        {"id": "sub_1", "status": "past_due"},
-    ))
-    assert resp.status_code == 200, resp.text
-    user = user_accounts.get_user("buyer@example.com")
-    assert user["status"] == "past_due"
-    assert user["plan"] == "free"  # dégradé, pas actif
-
-
-def test_subscription_deleted_revokes_access():
-    resp = client.post("/webhook/stripe", json=_event(
-        "evt_3", "customer.subscription.deleted",
-        {"id": "sub_1"},
-    ))
-    assert resp.status_code == 200, resp.text
-    user = user_accounts.get_user("buyer@example.com")
-    assert user["status"] == "canceled"
-    assert user["plan"] == "free"
-
-
-def test_unhandled_event_type_is_ignored():
-    resp = client.post("/webhook/stripe", json=_event(
-        "evt_4", "payment_intent.created", {"id": "pi_1"},
-    ))
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["type"] == "payment_intent.created"
-
-
-def test_duplicate_event_id_is_not_reprocessed():
-    user_accounts.upsert_user_from_checkout("dup@example.com", "starter",
-                                             stripe_subscription_id="sub_dup")
-    ev = _event("evt_5", "customer.subscription.deleted", {"id": "sub_dup"})
-    r1 = client.post("/webhook/stripe", json=ev)
-    assert r1.status_code == 200 and r1.json()["status"] == "processed"
-    user = user_accounts.get_user("dup@example.com")
-    assert user["status"] == "canceled"
-
-    # Rejeu : réactive manuellement pour prouver que le 2e appel ne retouche rien
-    user_accounts.upsert_user_from_checkout("dup@example.com", "starter",
-                                             stripe_subscription_id="sub_dup", status="active")
-    r2 = client.post("/webhook/stripe", json=ev)
-    assert r2.status_code == 200 and r2.json()["status"] == "already_processed"
-    user = user_accounts.get_user("dup@example.com")
-    assert user["status"] == "active"  # pas re-traité, donc pas re-annulé
-
-
-def test_failure_then_retry_with_same_event_id_succeeds():
-    original = webhook_server._EVENT_HANDLERS["checkout.session.completed"]
-    calls = {"n": 0}
-
-    def flaky(data):
-        calls["n"] += 1
-        if calls["n"] == 1:
-            raise RuntimeError("panne simulée (ex: SMTP down)")
-        original(data)
-
-    webhook_server._EVENT_HANDLERS["checkout.session.completed"] = flaky
+def post_event(event):
+    data = json.dumps(event).encode("utf-8")
+    req = urllib.request.Request(
+        WEBHOOK_URL, data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
     try:
-        ev = _event("evt_6", "checkout.session.completed",
-                     {"customer_details": {"email": "retry@example.com"},
-                      "customer": "cus_6", "subscription": "sub_6"})
-        r1 = client.post("/webhook/stripe", json=ev)
-        assert r1.status_code == 500
-        assert user_accounts.get_user("retry@example.com") is None  # pas de compte fantôme
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8")
+    except urllib.error.URLError as e:
+        print(f"❌ Impossible de joindre {WEBHOOK_URL} : {e}")
+        print("   → Le service tourne-t-il ? Voir la docstring de ce script pour la commande de lancement.")
+        sys.exit(1)
 
-        r2 = client.post("/webhook/stripe", json=ev)  # Stripe retry, même event_id
-        assert r2.status_code == 200, r2.text
-        assert user_accounts.get_user("retry@example.com") is not None
-    finally:
-        webhook_server._EVENT_HANDLERS["checkout.session.completed"] = original
+
+def check_status(email, expected):
+    u = user_accounts.get_user(email)
+    print("   État en base :", u)
+    if not u or u["status"] != expected:
+        print(f"❌ Statut attendu \"{expected}\", obtenu {u['status'] if u else None!r}.")
+        sys.exit(1)
+
+
+def main():
+    email = sys.argv[1] if len(sys.argv) > 1 else f"test-webhook-{int(time.time())}@example.com"
+    customer_id = "cus_test_" + str(int(time.time()))
+    subscription_id = "sub_test_" + str(int(time.time()))
+
+    print(f"Email de test : {email}\n")
+
+    print("── 1) checkout.session.completed (mode=subscription) — activation ──")
+    status, body = post_event({
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "mode": "subscription",
+            "customer": customer_id,
+            "subscription": subscription_id,
+            "customer_details": {"email": email},
+        }},
+    })
+    print(f"   HTTP {status} — {body}")
+    check_status(email, "active")
+    print("✅ Activation OK\n")
+
+    print("── 2) customer.subscription.updated (status=past_due) — échec de paiement récurrent ──")
+    status, body = post_event({
+        "type": "customer.subscription.updated",
+        "data": {"object": {"id": subscription_id, "status": "past_due"}},
+    })
+    print(f"   HTTP {status} — {body}")
+    check_status(email, "past_due")
+    print("✅ Synchronisation past_due OK\n")
+
+    print("── 3) customer.subscription.deleted — résiliation ──")
+    status, body = post_event({
+        "type": "customer.subscription.deleted",
+        "data": {"object": {"id": subscription_id, "status": "canceled"}},
+    })
+    print(f"   HTTP {status} — {body}")
+    check_status(email, "canceled")
+    print("✅ Résiliation OK\n")
+
+    print("── 4) événement non pertinent (invoice.paid) — doit être ignoré proprement ──")
+    status, body = post_event({"type": "invoice.paid", "data": {"object": {}}})
+    print(f"   HTTP {status} — {body}")
+    if status != 200:
+        print("❌ Un événement inconnu devrait renvoyer 200 (\"ignoré\"), pas une erreur.")
+        sys.exit(1)
+    print("✅ Événement ignoré proprement\n")
+
+    print("── 5) rejeu du même event_id (retry Stripe / renvoi manuel) — doit être ignoré ──")
+    replay_email = f"replay-{int(time.time())}@example.com"
+    replay_customer = "cus_replay_" + str(int(time.time()))
+    replay_subscription = "sub_replay_" + str(int(time.time()))
+    replay_event = {
+        "id": "evt_test_replay_" + str(int(time.time())),
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "mode": "subscription",
+            "customer": replay_customer,
+            "subscription": replay_subscription,
+            "customer_details": {"email": replay_email},
+        }},
+    }
+    status, body = post_event(replay_event)
+    print(f"   HTTP {status} — {body} (1er envoi)")
+    if status != 200 or body != "ok":
+        print("❌ Le premier envoi devrait être traité normalement.")
+        sys.exit(1)
+    status, body = post_event(replay_event)
+    print(f"   HTTP {status} — {body} (2e envoi, même event_id)")
+    if status != 200 or body != "événement déjà traité":
+        print("❌ Le rejeu du même event_id aurait dû être détecté et ignoré "
+              "(sinon : double activation possible + double email envoyé).")
+        sys.exit(1)
+    links = [
+        r for r in user_accounts.get_connection().execute(
+            "SELECT token FROM magic_links WHERE email = ?", (replay_email,)
+        ).fetchall()
+    ]
+    if len(links) != 1:
+        print(f"❌ Un seul lien magique attendu malgré le rejeu, {len(links)} trouvé(s).")
+        sys.exit(1)
+    print("✅ Rejeu détecté : aucun doublon d'activation ni de lien magique\n")
+
+    print("── 6) échec de traitement APRÈS le claim — le retry suivant doit quand même activer le compte ──")
+    fault_event_id = "evt_test_fault_" + str(int(time.time()))
+    fault_email = f"fault-{int(time.time())}@example.com"
+    # "data": {} sans "object" -> KeyError pendant le traitement, après le
+    # claim de l'event_id. Sans le relâchement du claim en cas d'exception,
+    # ce paiement serait perdu : le retry Stripe suivant serait ignoré comme
+    # "déjà traité" sans jamais activer le compte.
+    status, body = post_event({"id": fault_event_id, "type": "checkout.session.completed", "data": {}})
+    print(f"   HTTP {status} — {body[:80]!r} (payload cassé, 1er envoi)")
+    if status != 500:
+        print("❌ Un payload qui fait planter le traitement devrait renvoyer 500 "
+              "(pour que Stripe retente), pas être avalé silencieusement.")
+        sys.exit(1)
+    status, body = post_event({
+        "id": fault_event_id,  # même event_id que l'échec précédent
+        "type": "checkout.session.completed",
+        "data": {"object": {
+            "mode": "subscription",
+            "customer": "cus_fault_" + str(int(time.time())),
+            "subscription": "sub_fault_" + str(int(time.time())),
+            "customer_details": {"email": fault_email},
+        }},
+    })
+    print(f"   HTTP {status} — {body} (même event_id, payload valide, retry Stripe simulé)")
+    if status != 200 or body != "ok":
+        print("❌ Le retry avec le même event_id devrait être retraité (pas ignoré), "
+              "puisque le premier essai n'a jamais abouti.")
+        sys.exit(1)
+    check_status(fault_email, "active")
+    print("✅ Le paiement n'est pas perdu malgré l'échec intermédiaire\n")
+
+    print("Tous les tests sont passés. Rappel : signature non vérifiée dans ce mode —")
+    print("testez aussi avec `stripe listen` avant la mise en prod (voir STRIPE_SMTP_SETUP.md).")
 
 
 if __name__ == "__main__":
-    tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
-    passed, failed = 0, 0
-    for t in tests:
-        try:
-            t()
-            print(f"OK   {t.__name__}")
-            passed += 1
-        except AssertionError as e:
-            print(f"FAIL {t.__name__}: {e}")
-            failed += 1
-    print(f"\n{passed} passed, {failed} failed")
-    raise SystemExit(1 if failed else 0)
+    main()

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Politique de confidentialité — LRS™</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<meta name="robots" content="noindex, nofollow" />
+<style>
+  :root {
+    --bg-gradient:
+      radial-gradient(1200px circle at 12% -10%, rgba(0,122,255,0.16), transparent 55%),
+      radial-gradient(1000px circle at 92% 6%, rgba(175,82,222,0.12), transparent 50%),
+      radial-gradient(900px circle at 50% 108%, rgba(52,199,89,0.10), transparent 55%),
+      #f5f5f7;
+    --surface: rgba(255,255,255,0.70);
+    --border: rgba(60,60,67,0.10);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-muted: #86868b;
+    --accent: #007aff;
+    --glass-blur: blur(24px) saturate(180%);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 24px 100px; }
+  .card {
+    background: var(--surface);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 40px 44px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+  }
+  a.back { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 20px 0 6px; }
+  .updated { color: var(--text-muted); font-size: 13px; margin-bottom: 32px; }
+  h2 { font-size: 16px; font-weight: 700; margin: 28px 0 8px; }
+  p, li { font-size: 14.5px; line-height: 1.65; color: var(--text-secondary); }
+  ul { padding-left: 20px; margin: 8px 0; }
+  .notice {
+    background: rgba(255,149,0,0.10); border: 1px solid rgba(255,149,0,0.25);
+    border-radius: 12px; padding: 14px 18px; font-size: 13px; color: var(--text);
+    margin: 24px 0;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← Retour à LRS™</a>
+    <h1>Politique de confidentialité</h1>
+    <div class="updated">Dernière mise à jour : à compléter avant publication</div>
+
+    <div class="card">
+      <div class="notice">
+        <strong>Modèle à personnaliser.</strong> Ce texte décrit fidèlement
+        les données que LRS™ traite techniquement (voir le code du projet),
+        mais ce n'est pas un avis juridique. Faites-le relire par un
+        professionnel avant mise en ligne, en particulier si vous visez des
+        utilisateurs dans l'UE (RGPD) — nom légal de l'exploitant, base
+        légale de traitement, délégué à la protection des données le cas
+        échéant, etc.
+      </div>
+
+      <h2>Qui exploite LRS™</h2>
+      <p>[Nom / raison sociale de l'exploitant], [adresse ou pays
+        d'établissement], [email de contact].</p>
+
+      <h2>Données que nous traitons</h2>
+      <ul>
+        <li><strong>Contenu que vous soumettez</strong> : URL de landing page
+          et/ou texte publicitaire que vous collez pour lancer un audit —
+          transmis à un modèle d'IA (OpenAI ou Anthropic selon
+          configuration) pour générer le score et les recommandations.</li>
+        <li><strong>Adresse email</strong> : utilisée pour l'authentification
+          (lien de connexion à usage unique) et, si vous l'activez, l'envoi
+          du rapport d'audit ou d'alertes de suivi.</li>
+        <li><strong>Données d'abonnement</strong> : statut d'abonnement,
+          identifiant client et identifiant d'abonnement Stripe. Nous ne
+          voyons ni ne stockons jamais votre numéro de carte bancaire — le
+          paiement est intégralement géré par Stripe.</li>
+        <li><strong>Historique d'audits</strong> : scores et résultats des
+          audits que vous lancez, conservés pour vous permettre de suivre
+          votre progression.</li>
+        <li><strong>Cookie de session</strong> : un seul cookie, strictement
+          nécessaire pour rester connecté — aucun cookie publicitaire ou de
+          mesure d'audience par défaut.</li>
+      </ul>
+
+      <h2>Destinataires / sous-traitants</h2>
+      <ul>
+        <li><strong>OpenAI et/ou Anthropic</strong> — génèrent l'analyse à
+          partir du contenu que vous soumettez.</li>
+        <li><strong>Stripe</strong> — traite le paiement de l'abonnement.</li>
+        <li><strong>Notre prestataire d'envoi d'email (SMTP)</strong> —
+          achemine les emails transactionnels (lien de connexion, rapports).</li>
+        <li>Le cas échéant, si vous activez des intégrations optionnelles
+          (Slack, Google Sheets, Notion, Meta/TikTok Ads) : ces services
+          reçoivent uniquement les données que vous choisissez d'y
+          envoyer.</li>
+      </ul>
+
+      <h2>Durée de conservation</h2>
+      <p>Vos données sont conservées tant que votre compte est actif. Vous
+        pouvez demander leur suppression à tout moment à [email de
+        contact].</p>
+
+      <h2>Vos droits</h2>
+      <p>Selon votre juridiction (RGPD pour les résidents de l'UE
+        notamment), vous disposez d'un droit d'accès, de rectification, de
+        suppression et de portabilité de vos données. Contactez [email de
+        contact] pour l'exercer.</p>
+
+      <h2>Sécurité</h2>
+      <p>Les mots de passe et jetons de connexion sont traités avec des
+        mécanismes de comparaison à temps constant, les liens de connexion
+        sont à usage unique et expirent après 15 minutes, et l'accès à
+        l'application est protégé par abonnement.</p>
+    </div>
+  </div>
+</body>
+</html>

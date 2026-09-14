@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FAQ — LRS™</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<meta name="robots" content="noindex, nofollow" />
+<style>
+  :root {
+    --bg-gradient:
+      radial-gradient(1200px circle at 12% -10%, rgba(0,122,255,0.16), transparent 55%),
+      radial-gradient(1000px circle at 92% 6%, rgba(175,82,222,0.12), transparent 50%),
+      radial-gradient(900px circle at 50% 108%, rgba(52,199,89,0.10), transparent 55%),
+      #f5f5f7;
+    --surface: rgba(255,255,255,0.70);
+    --border: rgba(60,60,67,0.10);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-muted: #86868b;
+    --accent: #007aff;
+    --glass-blur: blur(24px) saturate(180%);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                 "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 64px 24px 100px; }
+  a.back { color: var(--accent); text-decoration: none; font-size: 14px; font-weight: 600; }
+  h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 20px 0 32px; }
+  details.card {
+    background: var(--surface);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px 22px;
+    margin-bottom: 12px;
+  }
+  summary {
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "+"; color: var(--accent); font-weight: 800; margin-right: 10px; }
+  details[open] summary::before { content: "–"; }
+  details p { font-size: 14px; line-height: 1.6; color: var(--text-secondary); margin: 12px 0 2px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← Retour à LRS™</a>
+    <h1>Questions fréquentes</h1>
+
+    <details class="card" open>
+      <summary>Qu'est-ce que LRS™ ?</summary>
+      <p>LRS™ (Launch Risk System) audite une landing page et/ou un texte
+        publicitaire avant que vous ne dépensiez en pub. En 15 secondes,
+        vous obtenez un score sur 20 (Hook, Offre, Confiance, Friction), un
+        verdict (à ne pas lancer / tester petit budget / prêt à scaler), et
+        un plan d'action concret avec des reformulations prêtes à
+        l'emploi.</p>
+    </details>
+
+    <details class="card">
+      <summary>Quels sont les modes d'audit disponibles ?</summary>
+      <p><strong>Funnel Only</strong> analyse uniquement la landing page à
+        partir de son URL. <strong>Ads Only</strong> analyse uniquement le
+        texte de la publicité que vous collez. <strong>Full Risk</strong>
+        combine les deux et évalue aussi la cohérence entre l'annonce et la
+        page de destination.</p>
+    </details>
+
+    <details class="card">
+      <summary>Comment fonctionne l'abonnement ?</summary>
+      <p>Un seul plan, sans engagement, facturé mensuellement via Stripe —
+        le paiement se fait sur une page Stripe sécurisée, nous ne voyons
+        jamais votre numéro de carte. Vous pouvez résilier à tout moment.</p>
+    </details>
+
+    <details class="card">
+      <summary>Comment je me connecte à l'app ?</summary>
+      <p>Pas de mot de passe à retenir : indiquez votre email, vous recevez
+        un lien de connexion à usage unique, valable 15 minutes. Cliquez
+        dessus pour accéder à l'app. Si vous ne recevez rien, vérifiez vos
+        spams ou redemandez un lien.</p>
+    </details>
+
+    <details class="card">
+      <summary>Le score est-il une garantie de résultat ?</summary>
+      <p>Non. LRS™ analyse le texte de votre page/publicité avec un modèle
+        d'IA et signale les problèmes les plus fréquents observés sur des
+        pages qui convertissent mal — ce n'est pas une garantie de
+        performance publicitaire, et ça ne remplace pas un vrai test en
+        conditions réelles. Voir aussi le point sur les preuves visuelles
+        ci-dessous.</p>
+    </details>
+
+    <details class="card">
+      <summary>LRS™ voit-il les images/preuves visuelles de ma page ?</summary>
+      <p>Non, l'analyse porte sur le texte extrait de la page — pas sur les
+        images, avis clients affichés en capture d'écran, badges de
+        paiement, etc. Si votre score « Confiance » (Trust) est bas, vérifiez
+        manuellement que ces preuves visuelles sont bien présentes avant de
+        conclure qu'elles manquent.</p>
+    </details>
+
+    <details class="card">
+      <summary>Puis-je auditer plusieurs pages à la fois ?</summary>
+      <p>Oui, via Multi-Audit → Bulk (jusqu'à 20 URLs en une fois, saisie
+        manuelle ou import CSV). Multi-Audit propose aussi un mode
+        Comparaison (2 pages côte à côte), un mode Concurrents, et un
+        A/B Test entre deux variantes.</p>
+    </details>
+
+    <details class="card">
+      <summary>Qu'est-ce que le Suivi (Monitoring) ?</summary>
+      <p>Vous pouvez planifier un re-audit automatique périodique d'une
+        page et être alerté par email si son score baisse de plus de 2
+        points — utile pour détecter qu'une page s'est dégradée (contenu
+        modifié, offre changée) sans y repenser vous-même.</p>
+    </details>
+
+    <details class="card">
+      <summary>Mes données sont-elles en sécurité ?</summary>
+      <p>Les mots de passe/liens de connexion utilisent des mécanismes de
+        comparaison à temps constant et des tokens à usage unique, l'accès
+        à l'app est protégé par abonnement individuel, et aucune donnée de
+        carte bancaire n'est stockée par LRS™ — voir la
+        <a href="/privacy.html" style="color:var(--accent)">politique de confidentialité</a>
+        pour le détail.</p>
+    </details>
+
+    <details class="card">
+      <summary>Comment annuler mon abonnement ?</summary>
+      <p>Directement depuis votre espace client Stripe (lien fourni à la
+        souscription), ou en nous contactant. L'accès reste actif jusqu'à
+        la fin de la période déjà payée.</p>
+    </details>
+  </div>
+</body>
+</html>
