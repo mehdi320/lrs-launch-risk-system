@@ -21,6 +21,18 @@
 .lrs_history.json
 .lrs_onboarded.json
 .lrs_referral.json
+.lrs_login_attempts.json
+.lrs_swipefiles.json
+.lrs_projects.json
+.lrs_campaigns.json
+.lrs_abtests.json
+.lrs_ads_creds.json
+.lrs_schedule.json
+
+# Données par utilisateur (isolation multi-tenant, app.py) — emails
+# d'abonnés en noms de dossier + leur historique d'audits, ne doit jamais
+# être commité
+data/users/
 
 # Python
 __pycache__/

@@ -4439,7 +4439,7 @@ def render_competitor_audit(api_key):
     with c1:
         comp_platform = st.selectbox("Plateforme", ["Meta","TikTok","Google","Mixed"], key="comp_platform")
     with c2:
-        comp_offer = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="comp_offer")
+        comp_offer = st.selectbox("Type d'offre", ["Digital product","Ecom (produit physique)"], key="compaudit_offer")
     with c3:
         comp_model = st.selectbox("Modèle IA", ["gpt-4o-mini","gpt-4o"], key="comp_model")
 
@@ -8687,9 +8687,11 @@ def main():
                 # Notification in-app
                 _score_r = result.get("_c", {}).get("score", 0)
                 _risk_r  = result.get("_c", {}).get("risk", "")
+                _level_r = "danger" if _risk_r == "High" else "warning" if _risk_r == "Moderate" else "success"
                 push_notification(
-                    f"Audit terminé — Score {_score_r}/20 ({_risk_r})",
-                    icon="🚦", notif_type="audit"
+                    "🚦 Audit terminé",
+                    f"Score {_score_r}/20 ({_risk_r}) — {landing_url}",
+                    level=_level_r,
                 )
                 # Auto-email post-audit (silencieux, si SMTP + email configurés)
                 try:
