@@ -6,7 +6,8 @@ uniquement des clics dans les dashboards Stripe/SMTP et le remplissage de
 `.env`.
 
 Contexte technique (déjà en place, voir DEPLOYMENT.md) :
-- `check_subscription_access()` dans `app.py` gate l'accès à l'app.
+- La logique portée de `check_subscription_access()` dans `pilot_server.py`
+  (autour de `consume_magic_link`/`request_magic_link`) gate l'accès au pilote.
 - Le webhook Stripe est étendu dans `creative_studio/serving/app.py`
   (`POST /webhook/stripe`, port 8000) — même endpoint que les achats
   funnel Creative Studio.
@@ -76,7 +77,8 @@ uniquement pour cette session de test locale.
 
 Pour un test complet et réaliste (recommandé, plutôt que
 `stripe trigger` qui ne simule pas un vrai parcours d'abonnement) :
-1. Démarrez aussi `streamlit run app.py` et le service de diffusion.
+1. Démarrez aussi `uvicorn pilot_server:app --port 8600` (le pilote) et
+   le service de diffusion.
 2. Ouvrez `http://localhost:8000/checkout/beta` dans un navigateur — ça
    doit rediriger vers une vraie page Stripe Checkout (si vous avez une
    erreur 503, `STRIPE_BETA_PRICE_ID` ou `LRS_SALES_PAGE_URL` manque dans

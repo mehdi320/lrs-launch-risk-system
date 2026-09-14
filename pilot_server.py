@@ -6,6 +6,7 @@
 #
 # Lancer : uvicorn pilot_server:app --port 8600 --reload
 
+import contextvars
 import datetime
 import os
 import secrets as _secrets
@@ -65,34 +66,105 @@ def health():
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _STATIC_DIR = os.path.join(_BASE_DIR, "pilot_static")
 
-# Mêmes fichiers que l'app Streamlit (app.py) : le pilote lit/écrit dans le
-# même état partagé pour que les deux UIs restent synchronisées.
-HISTORY_FILE = os.path.join(_BASE_DIR, ".lrs_history.json")
-PROJECTS_FILE = os.path.join(_BASE_DIR, ".lrs_projects.json")
-CAMPAIGN_FILE = os.path.join(_BASE_DIR, ".lrs_campaigns.json")
-AB_FILE = os.path.join(_BASE_DIR, ".lrs_abtests.json")
-SWIPE_FILE = os.path.join(_BASE_DIR, ".lrs_swipefiles.json")
-ADS_CREDS_FILE = os.path.join(_BASE_DIR, ".lrs_ads_creds.json")
-SCHEDULE_FILE = os.path.join(_BASE_DIR, ".lrs_schedule.json")
-ONBOARDING_FILE = os.path.join(_BASE_DIR, ".lrs_onboarded.json")
+# ══════════════════════════════════════════════════════════════
+# ── PERSISTANCE — ISOLATION PAR UTILISATEUR ─────────────────────
+# Avant ce correctif, tous les fichiers ci-dessous étaient des chemins
+# uniques et globaux : chargés à l'identique pour CHAQUE abonné connecté au
+# pilote. Concrètement, deux clients bêta connectés en même temps
+# partageaient le même historique d'audits, le même quota, et les mêmes
+# identifiants Meta/TikTok Ads. Portage du correctif déjà appliqué côté
+# Streamlit (app.py, désormais retiré — voir DEPLOYMENT.md) : chaque
+# fichier route désormais vers un sous-dossier propre à l'utilisateur
+# authentifié (par email, via le compte Stripe/lien magique).
+#
+# Contrainte FastAPI (différente de Streamlit) : il n'y a pas d'équivalent
+# implicite à `st.session_state` accessible depuis n'importe quelle
+# fonction. On utilise un ContextVar, fixé au tout début de chaque requête
+# dans `_require_auth` ci-dessous — isolé par requête/tâche asyncio, donc
+# pas de fuite entre requêtes concurrentes de deux utilisateurs différents.
+#
+# Limite assumée (identique à app.py) : les sessions authentifiées par le
+# seul mot de passe partagé (APP_PASSWORD, sans email) n'ont pas d'identité
+# individuelle — elles partagent un espace commun ("_shared"). C'est le
+# chemin réservé à l'exploitant pour ses propres tests, pas celui des
+# clients bêta payants (qui passent tous par Stripe + lien magique et ont
+# donc un email).
+# ══════════════════════════════════════════════════════════════
+
+_current_user_email: "contextvars.ContextVar[str]" = contextvars.ContextVar(
+    "current_user_email", default=""
+)
+
+USER_DATA_ROOT = os.path.join(_BASE_DIR, "data", "users")
+
+
+def _current_user_ns():
+    """Espace de nommage de l'utilisateur courant pour cette requête."""
+    email = _current_user_email.get()
+    if not email:
+        return "_shared"
+    safe = "".join(c if (c.isalnum() or c in "-_.@") else "_" for c in email.strip().lower())
+    return safe or "_shared"
+
+
+def _user_file(filename):
+    """Chemin, propre à l'utilisateur courant, pour un fichier de données donné."""
+    d = os.path.join(USER_DATA_ROOT, _current_user_ns())
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+    return os.path.join(d, filename)
+
+
+def HISTORY_FILE():    return _user_file(".lrs_history.json")
+def PROJECTS_FILE():   return _user_file(".lrs_projects.json")
+def CAMPAIGN_FILE():   return _user_file(".lrs_campaigns.json")
+def AB_FILE():         return _user_file(".lrs_abtests.json")
+def SWIPE_FILE():      return _user_file(".lrs_swipefiles.json")
+def ADS_CREDS_FILE():  return _user_file(".lrs_ads_creds.json")
+def SCHEDULE_FILE():   return _user_file(".lrs_schedule.json")
+def ONBOARDING_FILE(): return _user_file(".lrs_onboarded.json")
 
 
 # ══════════════════════════════════════════════════════════════
-# ── Accès par mot de passe (miroir de app.py::check_access) ────
-# Un seul mot de passe partagé (pas de comptes multi-utilisateurs — l'app
-# Streamlit de référence n'en a pas non plus : l'accès payant se fait via
-# un lien d'achat externe qui donne ce mot de passe).
+# ── Accès : mot de passe admin OU abonnement bêta actif ─────────
+# Deux façons d'accéder au pilote :
+# 1. APP_PASSWORD (mot de passe partagé) — réservé à l'exploitant pour ses
+#    propres tests, pas aux clients payants.
+# 2. Abonnement Stripe actif (lien magique -> subscriber_email en session)
+#    — le vrai chemin des clients bêta. Pas de palier "Free" : sans l'un
+#    des deux, pas d'accès à l'API.
+# Le statut d'abonnement est revérifié en base à chaque requête (pas
+# seulement au moment du lien magique) pour qu'une résiliation
+# (customer.subscription.deleted) coupe l'accès immédiatement, pas
+# seulement à l'expiration du cookie de session.
 # _get_app_password() est définie plus haut (avant `app = FastAPI(...)`),
 # nécessaire dès le lifespan de démarrage.
 # ══════════════════════════════════════════════════════════════
 
+def _active_subscriber_email(request: Request):
+    email = request.session.get("subscriber_email")
+    if not email:
+        return None
+    user = user_accounts.get_user(email)
+    return email if (user and user.get("status") == "active") else None
+
+
 @app.middleware("http")
 async def _require_auth(request: Request, call_next):
-    pwd_required = _get_app_password()
+    subscriber_email = _active_subscriber_email(request)
+    _current_user_email.set(subscriber_email or "")
+
     path = request.url.path
-    if not pwd_required or not path.startswith("/api/") or path in ("/api/auth/login", "/api/auth/status", "/api/health"):
+    pwd_required = _get_app_password()
+    if not pwd_required or not path.startswith("/api/") or path in (
+        "/api/auth/login", "/api/auth/status", "/api/health",
+        "/api/auth/consume-magic-link", "/api/auth/subscription-status",
+        "/api/auth/request-magic-link",
+    ):
         return await call_next(request)
-    if request.session.get("authenticated"):
+    if request.session.get("authenticated") or subscriber_email:
         return await call_next(request)
     return JSONResponse({"detail": "Authentification requise."}, status_code=401)
 
@@ -123,7 +195,7 @@ def _default_swipes():
 
 
 def _load_history():
-    return [e for e in load_json_file(HISTORY_FILE, list) if isinstance(e, dict)]
+    return [e for e in load_json_file(HISTORY_FILE(), list) if isinstance(e, dict)]
 
 
 def _auto_save_swipes(result, meta):
@@ -132,7 +204,7 @@ def _auto_save_swipes(result, meta):
     rw = result.get("rewrite", {})
     if not rw.get("headline") and not rw.get("cta_primary"):
         return
-    swipes = load_json_file(SWIPE_FILE, _default_swipes)
+    swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     ts = meta.get("timestamp", "")
     score = result.get("_c", {}).get("score", 0)
     if rw.get("headline"):
@@ -147,7 +219,7 @@ def _auto_save_swipes(result, meta):
             "offer": meta.get("offer_type", ""), "notes": "", "ts": ts,
             "score_at_save": score, "manual": False,
         })
-    save_json_file(SWIPE_FILE, swipes)
+    save_json_file(SWIPE_FILE(), swipes)
 
 
 def _save_history_entry(result, meta):
@@ -160,7 +232,7 @@ def _save_history_entry(result, meta):
     }
     history.insert(0, entry)
     history = history[:50]
-    save_json_file(HISTORY_FILE, history)
+    save_json_file(HISTORY_FILE(), history)
     _auto_save_swipes(result, meta)
 
 
@@ -591,7 +663,7 @@ def run_compare(req: CompareRequest):
 
 @app.get("/api/abtests")
 def list_abtests():
-    return {"abtests": load_json_file(AB_FILE, dict)}
+    return {"abtests": load_json_file(AB_FILE(), dict)}
 
 
 class ABTestRunRequest(BaseModel):
@@ -639,7 +711,7 @@ def run_abtest(req: ABTestRunRequest):
     sa, sb = ca.get("score", 0), cb.get("score", 0)
     winner = "B" if sb > sa else "A" if sa > sb else "="
 
-    abtests = load_json_file(AB_FILE, dict)
+    abtests = load_json_file(AB_FILE(), dict)
     ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     if name not in abtests:
         abtests[name] = {"name": name, "hypothesis": req.hypothesis, "test_type": req.test_type, "rounds": [], "created": ts}
@@ -649,7 +721,7 @@ def run_abtest(req: ABTestRunRequest):
         "crit_a": {k: ca.get(k, 0) for k in crit_keys},
         "crit_b": {k: cb.get(k, 0) for k in crit_keys},
     })
-    save_json_file(AB_FILE, abtests)
+    save_json_file(AB_FILE(), abtests)
 
     return {
         "winner": winner,
@@ -661,9 +733,9 @@ def run_abtest(req: ABTestRunRequest):
 
 @app.delete("/api/abtests/{name}")
 def delete_abtest(name: str):
-    abtests = load_json_file(AB_FILE, dict)
+    abtests = load_json_file(AB_FILE(), dict)
     abtests.pop(name, None)
-    save_json_file(AB_FILE, abtests)
+    save_json_file(AB_FILE(), abtests)
     return {"ok": True}
 
 
@@ -673,7 +745,7 @@ def delete_abtest(name: str):
 
 @app.get("/api/projects")
 def list_projects():
-    return {"projects": load_json_file(PROJECTS_FILE, dict)}
+    return {"projects": load_json_file(PROJECTS_FILE(), dict)}
 
 
 class ProjectCreateRequest(BaseModel):
@@ -690,21 +762,21 @@ def create_project(req: ProjectCreateRequest):
         raise HTTPException(status_code=400, detail="Nom du projet requis.")
     if not urls:
         raise HTTPException(status_code=400, detail="Ajoutez au moins une URL.")
-    projects = load_json_file(PROJECTS_FILE, dict)
+    projects = load_json_file(PROJECTS_FILE(), dict)
     projects[name] = {
         "name": name, "notes": req.notes.strip(), "urls": urls,
         "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
         "audits": {},
     }
-    save_json_file(PROJECTS_FILE, projects)
+    save_json_file(PROJECTS_FILE(), projects)
     return {"projects": projects}
 
 
 @app.delete("/api/projects/{name}")
 def delete_project(name: str):
-    projects = load_json_file(PROJECTS_FILE, dict)
+    projects = load_json_file(PROJECTS_FILE(), dict)
     projects.pop(name, None)
-    save_json_file(PROJECTS_FILE, projects)
+    save_json_file(PROJECTS_FILE(), projects)
     return {"ok": True}
 
 
@@ -719,7 +791,7 @@ class ProjectAuditRequest(BaseModel):
 
 @app.post("/api/projects/{name}/audit")
 def audit_project(name: str, req: ProjectAuditRequest):
-    projects = load_json_file(PROJECTS_FILE, dict)
+    projects = load_json_file(PROJECTS_FILE(), dict)
     proj = projects.get(name)
     if not proj:
         raise HTTPException(status_code=404, detail="Projet introuvable.")
@@ -747,7 +819,7 @@ def audit_project(name: str, req: ProjectAuditRequest):
             c = result.get("_c", {})
             ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
             proj["audits"][url] = {"score": c.get("score", 0), "decision": c.get("decision", ""), "timestamp": ts}
-            save_json_file(PROJECTS_FILE, projects)
+            save_json_file(PROJECTS_FILE(), projects)
             meta = {
                 "mode": mode, "platform": req.platform, "offer_type": req.offer_type,
                 "url": url, "timestamp": ts, "brand_type": req.brand_type,
@@ -766,7 +838,7 @@ def audit_project(name: str, req: ProjectAuditRequest):
 
 @app.get("/api/campaigns")
 def list_campaigns():
-    campaigns = load_json_file(CAMPAIGN_FILE, dict)
+    campaigns = load_json_file(CAMPAIGN_FILE(), dict)
     out = {}
     for name, c in campaigns.items():
         diags = ads_api.correlate_stats(
@@ -794,7 +866,7 @@ def save_campaign(req: CampaignSaveRequest):
     name = req.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Nom de la campagne requis.")
-    campaigns = load_json_file(CAMPAIGN_FILE, dict)
+    campaigns = load_json_file(CAMPAIGN_FILE(), dict)
     history = _load_history()
 
     lrs_score = None
@@ -816,15 +888,15 @@ def save_campaign(req: CampaignSaveRequest):
         "notes": req.notes, "linked_url": req.linked_url, "lrs_score": lrs_score,
         "updated": ts, "history_snaps": hist_snaps,
     }
-    save_json_file(CAMPAIGN_FILE, campaigns)
+    save_json_file(CAMPAIGN_FILE(), campaigns)
     return {"campaigns": campaigns}
 
 
 @app.delete("/api/campaigns/{name}")
 def delete_campaign(name: str):
-    campaigns = load_json_file(CAMPAIGN_FILE, dict)
+    campaigns = load_json_file(CAMPAIGN_FILE(), dict)
     campaigns.pop(name, None)
-    save_json_file(CAMPAIGN_FILE, campaigns)
+    save_json_file(CAMPAIGN_FILE(), campaigns)
     return {"ok": True}
 
 
@@ -834,7 +906,7 @@ def delete_campaign(name: str):
 
 @app.get("/api/ads-connector/creds")
 def get_ads_creds():
-    creds = load_json_file(ADS_CREDS_FILE, dict)
+    creds = load_json_file(ADS_CREDS_FILE(), dict)
     return {
         "meta_configured": bool(creds.get("meta_token") and creds.get("meta_acc_id")),
         "tt_configured": bool(creds.get("tt_token") and creds.get("tt_adv_id")),
@@ -851,7 +923,7 @@ class AdsCredsRequest(BaseModel):
 
 @app.post("/api/ads-connector/creds")
 def save_ads_creds_endpoint(req: AdsCredsRequest):
-    creds = load_json_file(ADS_CREDS_FILE, dict)
+    creds = load_json_file(ADS_CREDS_FILE(), dict)
     if req.platform == "meta":
         creds["meta_token"] = req.token.strip()
         creds["meta_acc_id"] = req.account_id.strip()
@@ -860,7 +932,7 @@ def save_ads_creds_endpoint(req: AdsCredsRequest):
         creds["tt_adv_id"] = req.account_id.strip()
     else:
         raise HTTPException(status_code=400, detail="Plateforme inconnue.")
-    save_json_file(ADS_CREDS_FILE, creds)
+    save_json_file(ADS_CREDS_FILE(), creds)
     return {"ok": True}
 
 
@@ -871,7 +943,7 @@ class AdsImportRequest(BaseModel):
 
 @app.post("/api/ads-connector/import")
 def import_ads_campaigns(req: AdsImportRequest):
-    creds = load_json_file(ADS_CREDS_FILE, dict)
+    creds = load_json_file(ADS_CREDS_FILE(), dict)
     try:
         if req.platform == "meta":
             token, acc_id = creds.get("meta_token", ""), creds.get("meta_acc_id", "")
@@ -939,7 +1011,7 @@ def get_benchmark_pdf():
 
 @app.get("/api/swipefiles")
 def get_swipefiles():
-    return load_json_file(SWIPE_FILE, _default_swipes)
+    return load_json_file(SWIPE_FILE(), _default_swipes)
 
 
 class SwipeAddRequest(BaseModel):
@@ -956,23 +1028,23 @@ def add_swipefile(req: SwipeAddRequest):
         raise HTTPException(status_code=400, detail="Catégorie inconnue.")
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Le texte est vide.")
-    swipes = load_json_file(SWIPE_FILE, _default_swipes)
+    swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     swipes.setdefault(req.category, []).insert(0, {
         "text": req.text.strip(), "platform": req.platform, "offer": req.offer,
         "notes": req.notes, "ts": datetime.datetime.now().strftime("%d/%m/%Y"),
         "score_at_save": 0, "manual": True,
     })
-    save_json_file(SWIPE_FILE, swipes)
+    save_json_file(SWIPE_FILE(), swipes)
     return swipes
 
 
 @app.delete("/api/swipefiles/{category}/{index}")
 def delete_swipefile(category: str, index: int):
-    swipes = load_json_file(SWIPE_FILE, _default_swipes)
+    swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     items = swipes.get(category, [])
     if 0 <= index < len(items):
         items.pop(index)
-        save_json_file(SWIPE_FILE, swipes)
+        save_json_file(SWIPE_FILE(), swipes)
     return swipes
 
 
@@ -1053,20 +1125,16 @@ def integrations_status():
     }
 
 
-PLAN_LIMITS = {
-    "free": {"label": "Free", "audits_per_month": 3, "price": "Gratuit",
-             "features": ["Funnel Only", "Historique", "Checklist"]},
-    "starter": {"label": "Starter", "audits_per_month": 20, "price": "19€/mois",
-                "features": ["Funnel Only", "Monitoring & alertes", "Emails automatiques"]},
-    "pro": {"label": "Pro", "audits_per_month": 999, "price": "49€/mois",
-            "features": ["Tous les modes", "Bulk audit", "Ads Library", "Intégrations", "API Pub"]},
-    "agency": {"label": "Agency", "audits_per_month": 999, "price": "99€/mois",
-               "features": ["Tout Pro", "White label", "Multi-clients"]},
-}
+# Pas de palier "Free" : LRS est en bêta payante, accès uniquement via
+# abonnement Stripe actif (ou APP_PASSWORD pour l'exploitant). Un seul
+# plan, audits illimites — voir _require_auth ci-dessus pour le gate reel.
+BETA_PLAN = {"label": "Bêta", "audits_per_month": None, "price": "50€/mois",
+             "features": ["Tous les modes", "Historique", "Monitoring & alertes",
+                          "Intégrations", "API Pub"]}
 
 
 @app.get("/api/plans")
-def get_plans():
+def get_plans(request: Request):
     history = _load_history()
     now = datetime.date.today()
     this_month = 0
@@ -1077,7 +1145,13 @@ def get_plans():
                 this_month += 1
         except Exception:
             pass
-    return {"plans": PLAN_LIMITS, "usage_this_month": this_month}
+    subscriber_email = _active_subscriber_email(request)
+    return {
+        "plan": BETA_PLAN,
+        "usage_this_month": this_month,
+        "subscriber_email": subscriber_email,
+        "admin_access": bool(request.session.get("authenticated")),
+    }
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1215,14 +1289,12 @@ def logout(request: Request):
 
 # ══════════════════════════════════════════════════════════════
 # ── Abonnement LRS (lien magique Stripe) ────────────────────────
-# Portage de app.py::check_subscription_access() — meme user_accounts.py,
-# meme logique de consommation/renvoi de lien. Ajoute la capacite au
-# pilote sans changer le comportement d'acces actuel : ces endpoints ne
-# sont PAS branches sur _require_auth ci-dessus (qui reste uniquement le
-# mot de passe partage). Un frontend qui veut l'appliquer doit appeler
-# /api/auth/subscription-status et agir en consequence lui-meme — activer
-# un blocage global cote pilote est une decision produit separee (voir
-# LRS_APP_URL, qui pointe aujourd'hui vers l'app Streamlit).
+# Portage de l'ancien app.py::check_subscription_access() — meme
+# user_accounts.py, meme logique de consommation/renvoi de lien. Ces
+# endpoints ALIMENTENT le gate reel : _require_auth ci-dessus accorde
+# l'acces si la session a soit APP_PASSWORD (admin), soit un
+# subscriber_email dont l'abonnement Stripe est actif (revalide a chaque
+# requete via user_accounts.get_user()).
 # ══════════════════════════════════════════════════════════════
 
 class ConsumeMagicLinkRequest(BaseModel):
@@ -1277,12 +1349,12 @@ def request_magic_link(req: RequestMagicLinkRequest):
 
 @app.get("/api/onboarding/status")
 def onboarding_status():
-    return {"onboarded": os.path.exists(ONBOARDING_FILE)}
+    return {"onboarded": os.path.exists(ONBOARDING_FILE())}
 
 
 @app.post("/api/onboarding/complete")
 def onboarding_complete():
-    save_json_file(ONBOARDING_FILE, {"done": True, "date": datetime.datetime.now().strftime("%d/%m/%Y")})
+    save_json_file(ONBOARDING_FILE(), {"done": True, "date": datetime.datetime.now().strftime("%d/%m/%Y")})
     return {"ok": True}
 
 
@@ -1295,7 +1367,7 @@ def onboarding_complete():
 
 @app.get("/api/monitoring/schedule")
 def list_schedule():
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     now = datetime.datetime.now()
     out = {}
     for sid, sched in schedule.items():
@@ -1330,7 +1402,7 @@ def create_schedule(req: ScheduleCreateRequest):
     url = req.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="URL requise.")
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     sid = "sc_" + str(int(datetime.datetime.now().timestamp()))
     schedule[sid] = {
         "url": url, "freq_days": req.freq_days, "mode": req.mode,
@@ -1339,25 +1411,25 @@ def create_schedule(req: ScheduleCreateRequest):
         "alert_email": req.alert_email.strip(),
         "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
-    save_json_file(SCHEDULE_FILE, schedule)
+    save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
 
 
 @app.post("/api/monitoring/schedule/{sid}/toggle")
 def toggle_schedule(sid: str):
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     if sid not in schedule:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
     schedule[sid]["enabled"] = not schedule[sid].get("enabled", True)
-    save_json_file(SCHEDULE_FILE, schedule)
+    save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
 
 
 @app.delete("/api/monitoring/schedule/{sid}")
 def delete_schedule(sid: str):
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     schedule.pop(sid, None)
-    save_json_file(SCHEDULE_FILE, schedule)
+    save_json_file(SCHEDULE_FILE(), schedule)
     return {"ok": True}
 
 
@@ -1416,12 +1488,12 @@ def _run_one_scheduled_audit(sid, sched, schedule):
 
 @app.post("/api/monitoring/schedule/{sid}/run")
 def run_schedule_now(sid: str):
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     sched = schedule.get(sid)
     if not sched:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
     _run_one_scheduled_audit(sid, sched, schedule)
-    save_json_file(SCHEDULE_FILE, schedule)
+    save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
 
 
@@ -1429,7 +1501,7 @@ def run_schedule_now(sid: str):
 def check_due_schedules():
     """Vérifie les audits planifiés en retard et les exécute — équivalent de
     app.py::run_scheduled_audits(), appelé une fois par le frontend à l'ouverture."""
-    schedule = load_json_file(SCHEDULE_FILE, dict)
+    schedule = load_json_file(SCHEDULE_FILE(), dict)
     if not schedule:
         return {"ran": 0}
     now = datetime.datetime.now()
@@ -1450,7 +1522,7 @@ def check_due_schedules():
             ran += 1
 
     if ran:
-        save_json_file(SCHEDULE_FILE, schedule)
+        save_json_file(SCHEDULE_FILE(), schedule)
         digest_email = os.getenv("LRS_DIGEST_EMAIL", "")
         if digest_email and schedule:
             digest_entries = [
