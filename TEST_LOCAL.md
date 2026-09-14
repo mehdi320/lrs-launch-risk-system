@@ -113,4 +113,4 @@ Voici le système exact — lien en bio.
 
 ## Une fois satisfait du test → Déploiement en ligne
 
-Suis le guide `DEPLOIEMENT.md` pour mettre LRS accessible en ligne via Streamlit Cloud.
+Suis le guide `DEPLOYMENT.md` (Docker, pilote FastAPI) pour mettre LRS accessible en ligne.
