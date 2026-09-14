@@ -14,6 +14,7 @@ import os
 import re
 import socket
 import time
+import unicodedata
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -210,12 +211,18 @@ def extract_page(url):
     return html[:2000], "Extraction faible.", True
 
 
+def _strip_accents(s: str) -> str:
+    """Enleve les accents (é→e, à→a...) pour que les signaux FR ci-dessous
+    (ecrits sans accent) matchent le contenu reel des pages, qui en a."""
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+
 # ── DÉTECTION TYPE DE PAGE ──────────────────────────────────────
 def detect_page_type(content: str, url: str = "") -> str:
     if not content:
         return "Type inconnu (page vide)"
 
-    text = content.lower()
+    text = _strip_accents(content.lower())
     url_l = url.lower()
 
     product_page_patterns = [
@@ -254,6 +261,7 @@ def detect_page_type(content: str, url: str = "") -> str:
         "Page d'accueil / Homepage": 0,
         "Blog / Article": 0,
         "Page Lead Gen (capture email)": 0,
+        "Advertorial (article qui redirige vers une page de vente)": 0,
     }
 
     product_signals = ["ajouter au panier", "add to cart", "taille", "couleur", "size",
@@ -295,6 +303,27 @@ def detect_page_type(content: str, url: str = "") -> str:
                        "masterclass", "challenge", "liste d'attente", "waitlist",
                        "acces immediat", "immediate access"]
     scores["Page Lead Gen (capture email)"] += sum(2 for s in leadgen_signals if s in text)
+
+    # Advertorial : article/recit au format editorial dont le seul but est de
+    # faire cliquer vers UNE AUTRE page (la vraie page de vente) — pas de
+    # pricing/panier/formulaire ici, normalement. Signaux : ouverture narrative
+    # a la premiere personne + CTA de type "continuer a lire" plutot que
+    # "acheter". Sans cette categorie, ces pages tombaient dans Sales Page ou
+    # SaaS et se faisaient noter (a tort) sur l'absence d'offre/prix/garantie
+    # qu'elles n'ont jamais eu vocation a contenir.
+    advertorial_signals = [
+        "il etait", "c'etait", "je me souviens", "cette nuit-la", "ce jour-la",
+        "laissez-moi vous raconter", "voici mon histoire", "j'etais sceptique",
+        "tout a change quand", "je n'aurais jamais pense", "je n'aurais jamais cru",
+        "cliquez ici pour decouvrir", "cliquez ici pour en savoir plus",
+        "decouvrez comment j'ai", "voici ce qui s'est passe", "continuez la lecture",
+        "i remember", "that night", "let me tell you", "here's my story",
+        "here's what happened", "i was skeptical", "everything changed when",
+        "i never thought", "click here to discover", "click here to find out",
+        "find out how i", "keep reading", "true story", "this is my story",
+    ]
+    scores["Advertorial (article qui redirige vers une page de vente)"] += \
+        sum(2 for s in advertorial_signals if s in text)
 
     best_type = max(scores, key=lambda k: scores[k])
     best_score = scores[best_type]
