@@ -2805,6 +2805,8 @@ function renderHistoryRowExtra(data, container) {
       <button class="cta-secondary" data-export-pdf style="width:auto;padding:8px 14px;font-size:12.5px">📄 PDF</button>
       <button class="cta-secondary" data-copy-share style="width:auto;padding:8px 14px;font-size:12.5px">🔗 Copier le résumé</button>
       <button class="cta-secondary" data-send-slack style="width:auto;padding:8px 14px;font-size:12.5px">📤 Slack</button>
+      <button class="cta-secondary" data-send-sheets style="width:auto;padding:8px 14px;font-size:12.5px">📊 Sheets</button>
+      <button class="cta-secondary" data-send-notion style="width:auto;padding:8px 14px;font-size:12.5px">📝 Notion</button>
     </div>
     <div class="error-box" data-hist-extra-error style="margin-top:10px"></div>
   `;
@@ -2877,6 +2879,42 @@ function renderHistoryRowExtra(data, container) {
       if (!res.ok) throw new Error(d.detail || 'Erreur Slack');
       e.target.textContent = '✓ Envoyé !';
       setTimeout(() => { e.target.textContent = '📤 Slack'; }, 1800);
+    } catch (err) {
+      showErr(err.message);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  container.querySelector('[data-send-sheets]').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⏳...';
+    try {
+      const res = await fetch('/api/integrations/sheets', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result, meta }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Erreur Google Sheets');
+      e.target.textContent = '✓ Exporté !';
+      setTimeout(() => { e.target.textContent = '📊 Sheets'; }, 1800);
+    } catch (err) {
+      showErr(err.message);
+    } finally {
+      e.target.disabled = false;
+    }
+  });
+
+  container.querySelector('[data-send-notion]').addEventListener('click', async (e) => {
+    e.target.disabled = true; e.target.textContent = '⏳...';
+    try {
+      const res = await fetch('/api/integrations/notion', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ result, meta }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.detail || 'Erreur Notion');
+      e.target.textContent = '✓ Exporté !';
+      setTimeout(() => { e.target.textContent = '📝 Notion'; }, 1800);
     } catch (err) {
       showErr(err.message);
     } finally {
