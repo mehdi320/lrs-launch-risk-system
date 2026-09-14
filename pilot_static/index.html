@@ -1652,7 +1652,46 @@ function renderFunnelResults(data) {
       <div class="vs-mid"><div class="vs-mid-label">→</div></div>
       ${renderFunnelStepCard(data.step2, '💳 PAIEMENT', 'var(--warning)', !weakest1)}
     </div>
+    <div class="fade-up" style="text-align:center;margin-top:16px">
+      <button class="cta-secondary" id="funnelPdfBtn" style="width:auto;padding:8px 14px;font-size:12.5px">📄 Exporter les 2 PDF (étape 1 + étape 2)</button>
+    </div>
   `;
+  $('#funnelPdfBtn').addEventListener('click', (e) => downloadFunnelPdfs(data, e.target));
+}
+
+async function downloadOneFunnelPdf(step, label) {
+  const meta = {
+    mode: 'Funnel Only', platform: getSegVal('funnelPlatformSeg'), offer_type: getSegVal('funnelOfferSeg'),
+    url: step.url, timestamp: new Date().toLocaleString('fr-FR'), brand_type: 'Nouveau lancement',
+    page_type: step.page_type, ad_text: '', model: 'gpt-4o-mini',
+  };
+  const res = await fetch('/api/export/pdf', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ result: step.result, meta }),
+  });
+  if (!res.ok) { const d = await res.json(); throw new Error(`${label} : ${d.detail || 'Erreur PDF'}`); }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `LRS_funnel_${label}.pdf`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function downloadFunnelPdfs(data, btn) {
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    await downloadOneFunnelPdf(data.step1, 'etape1');
+    await downloadOneFunnelPdf(data.step2, 'etape2');
+    btn.textContent = '✓ Téléchargés !';
+    setTimeout(() => { btn.textContent = '📄 Exporter les 2 PDF (étape 1 + étape 2)'; }, 1800);
+  } catch (err) {
+    const errBox = $('#funnelErrorBox');
+    if (errBox) { errBox.textContent = err.message; errBox.style.display = 'block'; }
+    btn.textContent = '📄 Exporter les 2 PDF (étape 1 + étape 2)';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ── A/B Test Tracker ──────────────────────────────────────
