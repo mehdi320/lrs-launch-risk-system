@@ -1221,6 +1221,7 @@ const MULTI_SUBVIEWS = {
     labelA: 'Votre page', labelB: 'Concurrent', tagA: '🔵 VOTRE PAGE', tagB: '🟡 CONCURRENT', btnLabel: '🥊 Lancer la comparaison',
   }) },
   abtest: { label: 'A/B Test', render: renderABTestShell },
+  funnel: { label: 'Funnel 2 étapes', render: renderFunnelShell },
 };
 
 function renderMulti() {
@@ -1515,6 +1516,141 @@ function renderCompareResults(data) {
         <thead><tr><th>Critère</th><th>${escapeHtml(data.a.label)}</th><th>${escapeHtml(data.b.label)}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+    </div>
+  `;
+}
+
+// ── Funnel 2 étapes (advertorial/sales page -> page de paiement) ──
+function renderFunnelShell() {
+  $('#multiSubContent').innerHTML = `
+    <div class="card">
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">🧭 Funnel 2 étapes</h2>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Un advertorial ou une page de vente n'a pas vocation à contenir l'offre — elle est sur la page suivante. LRS audite les deux pages ensemble, avec le bon rôle pour chacune, au lieu de pénaliser à tort l'étape 1 pour l'absence de prix/garantie.</p>
+      <div class="field" style="margin-bottom:16px">
+        <label class="field-label">Type de funnel</label>
+        <div class="segmented" id="funnelTypeSeg">
+          <button class="active" data-val="advertorial_to_payment">Advertorial → Paiement</button>
+          <button data-val="salespage_to_payment">Page de vente → Paiement</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label" style="color:var(--accent)">ÉTAPE 1 — avant le clic</label>
+          <input type="url" id="funnelUrl1" placeholder="https://..." autocomplete="off" />
+        </div>
+        <div class="field">
+          <label class="field-label" style="color:var(--warning)">ÉTAPE 2 — page de paiement</label>
+          <input type="url" id="funnelUrl2" placeholder="https://..." autocomplete="off" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label class="field-label">Plateforme</label>
+          <div class="segmented" id="funnelPlatformSeg">
+            <button class="active" data-val="Meta">Meta</button>
+            <button data-val="TikTok">TikTok</button>
+            <button data-val="Google">Google</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Type d'offre</label>
+          <div class="segmented" id="funnelOfferSeg">
+            <button class="active" data-val="Digital product">Digital</button>
+            <button data-val="Ecom (produit physique)">E-com</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="funnelRunBtn">🧭 Auditer le funnel</button>
+      <div class="error-box" id="funnelErrorBox"></div>
+    </div>
+    <div class="loading" id="funnelLoadingBox" style="display:none">
+      <div class="ring"></div>
+      <div class="stage">Audit des deux pages du funnel en cours…</div>
+    </div>
+    <div id="funnelResults"></div>
+  `;
+  ['funnelTypeSeg', 'funnelPlatformSeg', 'funnelOfferSeg'].forEach(setupSegmented);
+  $('#funnelRunBtn').addEventListener('click', runFunnelAudit);
+}
+
+async function runFunnelAudit() {
+  const url1 = $('#funnelUrl1').value.trim();
+  const url2 = $('#funnelUrl2').value.trim();
+  const errBox = $('#funnelErrorBox');
+  errBox.style.display = 'none';
+  if (!url1 || !url2) {
+    errBox.textContent = 'Les deux URLs du funnel sont requises.';
+    errBox.style.display = 'block';
+    return;
+  }
+  $('#funnelRunBtn').disabled = true;
+  $('#funnelLoadingBox').style.display = 'flex';
+  $('#funnelResults').innerHTML = '';
+
+  try {
+    const res = await fetch('/api/funnel-audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        funnel_type: getSegVal('funnelTypeSeg'),
+        url_step1: url1, url_step2: url2,
+        platform: getSegVal('funnelPlatformSeg'),
+        offer_type: getSegVal('funnelOfferSeg'),
+      }),
+    });
+    const data = await res.json();
+    $('#funnelLoadingBox').style.display = 'none';
+    $('#funnelRunBtn').disabled = false;
+    if (!res.ok) {
+      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.style.display = 'block';
+      return;
+    }
+    renderFunnelResults(data);
+  } catch (err) {
+    $('#funnelLoadingBox').style.display = 'none';
+    $('#funnelRunBtn').disabled = false;
+    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.style.display = 'block';
+  }
+}
+
+function renderFunnelStepCard(step, tag, tagColor, isWeakest) {
+  const c = step.result._c || {};
+  const wts = step.result.why_this_score || {};
+  const topAction = (step.result.fix_plan || {}).top_priority_action;
+  const reasons = (wts.top_3_reasons || []).slice(0, 2);
+  return `
+    <div class="vs-card ${isWeakest ? '' : 'winner'}">
+      <div class="vs-tag" style="color:${tagColor}">${escapeHtml(tag)}</div>
+      <div class="vs-score" style="color:${scoreColor(c.score || 0)}">${c.score || 0}<span class="vs-den">/20</span></div>
+      <div class="vs-decision" style="color:${scoreColor(c.score || 0)}">${escapeHtml(c.decision || '')}</div>
+      ${isWeakest ? '<div class="vs-crown" style="color:var(--danger)">⚠️ MAILLON LE PLUS FAIBLE</div>' : ''}
+      <div style="text-align:left;margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.6">
+        ${reasons.map(r => `• ${escapeHtml(r)}`).join('<br>')}
+      </div>
+      ${topAction ? `
+        <div style="text-align:left;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px">Action prioritaire</div>
+          <div style="font-size:13px;margin-top:4px">${escapeHtml(topAction.what || '')}</div>
+        </div>` : ''}
+    </div>
+  `;
+}
+
+function renderFunnelResults(data) {
+  const s1Label = data.funnel_type === 'advertorial_to_payment' ? '📝 ADVERTORIAL' : '📄 PAGE DE VENTE';
+  const weakest1 = data.weakest_link === 'step1';
+  $('#funnelResults').innerHTML = `
+    <div class="dash-section fade-up" style="text-align:center;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px">Score du funnel (maillon le plus faible pondéré)</div>
+      <div class="vs-score" style="color:${scoreColor(data.funnel_score)};font-size:48px">${data.funnel_score}<span class="vs-den">/20</span></div>
+      <div class="vs-decision" style="color:${scoreColor(data.funnel_score)}">${escapeHtml(data.decision)} · Risque ${escapeHtml(data.risk)}</div>
+    </div>
+    <div class="vs-row fade-up">
+      ${renderFunnelStepCard(data.step1, s1Label, 'var(--accent)', weakest1)}
+      <div class="vs-mid"><div class="vs-mid-label">→</div></div>
+      ${renderFunnelStepCard(data.step2, '💳 PAIEMENT', 'var(--warning)', !weakest1)}
     </div>
   `;
 }

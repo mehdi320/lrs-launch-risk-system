@@ -488,6 +488,20 @@ def _page_type_instructions(page_type):
     if "blog" in pt or "article" in pt:
         return ("ADAPTATION SCORING BLOG : interprete scores dans contexte éditorial. "
                 "Propose amélioration CTAs article.")
+    if "paiement" in pt or "checkout" in pt:
+        return ("ADAPTATION SCORING PAGE DE PAIEMENT / CHECKOUT : le visiteur arrive "
+                "déjà convaincu (venant d'une page de vente ou d'un advertorial) — son "
+                "seul job ici est de finaliser l'achat sans hésiter ni abandonner. HOOK = "
+                "continuité rassurante avec la page précédente (même offre, même promesse, "
+                "pas de rupture de ton qui fait douter). OFFER = ICI l'offre doit être "
+                "totalement explicite : prix, ce qui est inclus, méthodes de paiement — "
+                "pénalise vraiment si flou ou caché. TRUST = signaux de réassurance au "
+                "moment de payer (paiement sécurisé, garantie remboursement, avis, "
+                "politique de retour) — critère décisif à ce stade du funnel. FRICTION = "
+                "longueur du formulaire, nombre de clics jusqu'au paiement, coûts cachés/"
+                "surprises de dernière minute, upsells qui ralentissent — c'est LE critère "
+                "le plus important ici, pénalise fortement tout ce qui ralentit ou fait "
+                "hésiter juste avant l'achat.")
     return "Applique le scoring standard landing page de conversion paid traffic."
 
 
@@ -736,6 +750,77 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
                                   brand_type=brand_type, page_type=page_type, page_lang=page_lang)
     return _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, market_context, model,
                               brand_type=brand_type, page_type=page_type, page_lang=page_lang)
+
+
+# ── AUDIT FUNNEL 2 ÉTAPES (advertorial/sales page -> page de paiement) ──
+FUNNEL_TYPES = {
+    "advertorial_to_payment": "Advertorial (article qui redirige vers une page de vente)",
+    "salespage_to_payment": "Sales Page / Landing Page (offre unique)",
+}
+
+
+def run_funnel_audit(funnel_type, platform, offer_type, url_step1, url_step2, market_context, model,
+                      brand_type="Nouveau lancement"):
+    """
+    Audite un funnel en 2 pages comme UN SEUL parcours plutot que deux
+    pages isolees : advertorial (ou sales page) qui redirige vers une page
+    de paiement separee. Chaque page est notee avec le bon role (impose,
+    pas auto-detecte — le funnel_type le dit deja) : l'etape 1 n'est pas
+    penalisee pour l'absence d'offre/prix (normal, c'est sur l'etape 2),
+    l'etape 2 est notee strictement sur l'offre/le prix/la friction de
+    paiement.
+
+    funnel_type : "advertorial_to_payment" ou "salespage_to_payment".
+    """
+    if funnel_type not in FUNNEL_TYPES:
+        raise ValueError(
+            "funnel_type invalide : attendu 'advertorial_to_payment' ou 'salespage_to_payment'."
+        )
+
+    step1_page_type = FUNNEL_TYPES[funnel_type] + " (type impose par le mode funnel)"
+    step2_page_type = "Page de paiement / Checkout (type impose par le mode funnel)"
+
+    content_1, status_1, is_js_1 = extract_page(url_step1)
+    if not content_1:
+        raise ValueError(f"Impossible d'extraire le contenu de l'etape 1 ({url_step1}) : {status_1}")
+    content_2, status_2, is_js_2 = extract_page(url_step2)
+    if not content_2:
+        raise ValueError(f"Impossible d'extraire le contenu de l'etape 2 ({url_step2}) : {status_2}")
+
+    lang_1 = detect_language(content_1)
+    lang_2 = detect_language(content_2)
+
+    result_1 = run_audit("Funnel Only", platform, offer_type, content_1, "", market_context, model,
+                          brand_type=brand_type, page_type=step1_page_type, page_lang=lang_1)
+    result_2 = run_audit("Funnel Only", platform, offer_type, content_2, "", market_context, model,
+                          brand_type=brand_type, page_type=step2_page_type, page_lang=lang_2)
+
+    score_1 = result_1.get("_c", {}).get("score", 0)
+    score_2 = result_2.get("_c", {}).get("score", 0)
+    # Le maillon le plus faible tire le funnel vers le bas : un excellent
+    # advertorial ne sert a rien si le checkout perd le client, et un bon
+    # checkout ne rattrape pas un advertorial qui ne donne pas envie de
+    # cliquer. Score funnel = 70% le plus bas des deux + 30% la moyenne,
+    # pour que l'autre etape compte quand meme un peu.
+    funnel_score = round(min(score_1, score_2) * 0.7 + ((score_1 + score_2) / 2) * 0.3)
+    decision, risk = get_decision(funnel_score)
+    weakest_link = "step1" if score_1 <= score_2 else "step2"
+
+    return {
+        "funnel_type": funnel_type,
+        "funnel_score": funnel_score,
+        "decision": decision,
+        "risk": risk,
+        "weakest_link": weakest_link,
+        "step1": {
+            "url": url_step1, "page_type": step1_page_type, "extraction_status": status_1,
+            "is_js_page": is_js_1, "page_lang": lang_1, "result": result_1,
+        },
+        "step2": {
+            "url": url_step2, "page_type": step2_page_type, "extraction_status": status_2,
+            "is_js_page": is_js_2, "page_lang": lang_2, "result": result_2,
+        },
+    }
 
 
 # ── GÉNÉRATION D'ANGLES CRÉATIFS (à partir d'une offre, sans landing page) ──

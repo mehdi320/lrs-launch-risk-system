@@ -274,6 +274,47 @@ class AuditRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
+class FunnelAuditRequest(BaseModel):
+    funnel_type: str = "advertorial_to_payment"
+    url_step1: str = ""
+    url_step2: str = ""
+    platform: str = "Meta"
+    offer_type: str = "Digital product"
+    brand_type: str = "Nouveau lancement"
+    model: str = "gpt-4o-mini"
+
+
+@app.post("/api/funnel-audit")
+def run_funnel_audit_endpoint(req: FunnelAuditRequest):
+    url_step1 = req.url_step1.strip()
+    url_step2 = req.url_step2.strip()
+    if not url_step1 or not url_step2:
+        raise HTTPException(status_code=400, detail="Les deux URLs du funnel sont requises.")
+    if req.funnel_type not in audit_engine.FUNNEL_TYPES:
+        raise HTTPException(status_code=400, detail="funnel_type invalide.")
+
+    try:
+        result = audit_engine.run_funnel_audit(
+            funnel_type=req.funnel_type,
+            platform=req.platform,
+            offer_type=req.offer_type,
+            url_step1=url_step1,
+            url_step2=url_step2,
+            market_context="",
+            model=req.model,
+            brand_type=req.brand_type,
+        )
+    except ValueError as e:
+        # Extraction de page (URL injoignable/vide) = erreur cliente (422) ;
+        # tout le reste (cle API invalide/expiree, etc., leve par
+        # run_audit() en aval) = erreur serveur/upstream (502), meme
+        # distinction que /api/audit.
+        status = 422 if str(e).startswith("Impossible d'extraire") else 502
+        raise HTTPException(status_code=status, detail=str(e))
+
+    return result
+
+
 BULK_MAX_URLS = 20
 
 
