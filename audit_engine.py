@@ -170,16 +170,18 @@ def extract_page(url):
     extracted = trafilatura.extract(html, include_links=False, include_images=False, no_fallback=False)
     is_js = check_js_heavy(html, extracted or "")
 
-    if extracted and len(extracted.strip()) > 200:
-        full = extracted.strip()
-        above_fold = full[:2000]
-        rest = full[2000:]
-        prioritized = (
-            "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
-            ("\n\n=== SUITE DE LA PAGE ===\n" + rest if rest else "")
-        )
-        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)", is_js
-
+    # Extraction de secours (parseur HTML permissif) calculee inconditionnellement
+    # et non seulement en repli : sur les pages "page builder" (Systeme.io,
+    # ClickFunnels...) qui melangent un gros bloc de texte plat (ex. des
+    # temoignages) et plein de widgets structures (prix, formulaire, CTA),
+    # trafilatura peut se convaincre a tort que le bloc de texte plat EST
+    # toute la page et jeter le reste comme "boilerplate" — silencieusement,
+    # sans jamais franchir un statut d'erreur. Un extrait de 343 caracteres
+    # qui ignore le prix/l'offre/le formulaire passait quand meme la barre
+    # "> 200 caracteres" ci-dessous et produisait un audit base sur une
+    # fraction de la page sans avertissement. On calcule donc les deux et on
+    # garde la plus complete plutot que de faire confiance a trafilatura des
+    # qu'il depasse un seuil bas.
     class HP(HTMLParser):
         def __init__(self):
             super().__init__()
@@ -199,14 +201,33 @@ def extract_page(url):
             if not self.skip and len(t) > 20:
                 self.parts.append(t)
 
+    fallback = ""
     try:
         p = HP()
         p.feed(html)
-        fb = "\n".join(p.parts)
-        if len(fb) > 100:
-            return clamp(fb), f"Extraction partielle ({len(fb[:MAX_PAGE_CHARS])} caracteres)", is_js
+        fallback = "\n".join(p.parts)
     except Exception:
         pass
+
+    trafilatura_text = (extracted or "").strip()
+    # Le fallback capture aussi menus/liens repetes etc. (plus bruyant), donc
+    # on ne le prefere a trafilatura que s'il apporte significativement plus
+    # de contenu (pas juste quelques caracteres de plus) — sinon on garde le
+    # texte plus propre de trafilatura quand les deux se valent a peu pres.
+    use_fallback = len(fallback) > max(200, len(trafilatura_text) * 1.5)
+
+    if trafilatura_text and len(trafilatura_text) > 200 and not use_fallback:
+        full = trafilatura_text
+        above_fold = full[:2000]
+        rest = full[2000:]
+        prioritized = (
+            "=== CONTENU ABOVE THE FOLD (prioritaire) ===\n" + above_fold +
+            ("\n\n=== SUITE DE LA PAGE ===\n" + rest if rest else "")
+        )
+        return clamp(prioritized), f"Contenu extrait ({len(full[:MAX_PAGE_CHARS])} caracteres)", is_js
+
+    if len(fallback) > 100:
+        return clamp(fallback), f"Extraction partielle ({len(fallback[:MAX_PAGE_CHARS])} caracteres)", is_js
 
     return html[:2000], "Extraction faible.", True
 
