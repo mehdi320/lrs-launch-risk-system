@@ -6,27 +6,29 @@ déploiement réel (voir checklist en bas).
 
 ## Fichiers
 
-- `Dockerfile` — image unique pour les trois surfaces web (pilote FastAPI
-  `pilot_server.py` sur le port 8600, app Streamlit `app.py` sur le port
-  8501, service de diffusion/webhook Stripe
+- `Dockerfile` — image unique pour les deux surfaces web (pilote FastAPI
+  `pilot_server.py` sur le port 8600 — seule interface produit, Streamlit
+  `app.py` n'est plus déployé — et service de diffusion/webhook Stripe
   `creative_studio.serving.app` sur le port 8000), qui partagent le même
   code et les mêmes dépendances (`requirements.txt`). Le service lancé
   dépend de la commande (CMD par défaut : le pilote).
-- `docker-compose.yml` — orchestration locale/VPS des trois services à
+- `docker-compose.yml` — orchestration locale/VPS des deux services à
   partir de la même image, plus un service `caddy` qui termine le TLS
   public (voir section TLS ci-dessous). Pensé pour un VPS simple (bind
   mount, voir limitation de persistance ci-dessous) — pas pour un PaaS à
   filesystem éphémère (Fly.io, Render...).
 - `Caddyfile` — configuration du reverse proxy : route
-  `app.<LRS_DOMAIN>` → Streamlit, `pilot.<LRS_DOMAIN>` → pilote FastAPI,
-  `api.<LRS_DOMAIN>` → service de diffusion/webhook Stripe. Certificats
-  Let's Encrypt obtenus et renouvelés automatiquement par Caddy.
+  `app.<LRS_DOMAIN>` et `pilot.<LRS_DOMAIN>` → pilote FastAPI (les deux
+  sous-domaines pointent vers le même service, gardés pour compatibilité
+  avec un `LRS_APP_URL` déjà distribué), `api.<LRS_DOMAIN>` → service de
+  diffusion/webhook Stripe. Certificats Let's Encrypt obtenus et
+  renouvelés automatiquement par Caddy.
 - `.dockerignore` — exclut secrets locaux (`.env`), état runtime
   (`.lrs_*.json`, `.lrs_*.db`) et caches de l'image.
 
 ## TLS / reverse proxy
 
-Les 3 services applicatifs ne terminent pas le TLS eux-mêmes (voir
+Les 2 services applicatifs ne terminent pas le TLS eux-mêmes (voir
 checklist) — c'est le rôle du service `caddy` dans `docker-compose.yml`.
 Étapes pour l'activer :
 
@@ -42,12 +44,12 @@ checklist) — c'est le rôle du service `caddy` dans `docker-compose.yml`.
 5. `LRS_APP_URL=https://app.<domaine>` et l'URL du webhook Stripe
    (Dashboard) = `https://api.<domaine>/webhook/stripe`.
 
-Les ports 8501/8600/8000 restent liés à `127.0.0.1` sur l'hôte (debug via
+Les ports 8600/8000 restent liés à `127.0.0.1` sur l'hôte (debug via
 tunnel SSH uniquement, jamais exposés directement).
 
 ## Persistance des données — limitation connue
 
-`app.py` et `pilot_server.py` écrivent leur état (historique, projets,
+`pilot_server.py` écrit son état (historique, projets,
 planification, etc. — voir `PILOT_UI.md`) dans des fichiers `.lrs_*.json`
 situés **à côté du code**, pas dans un répertoire de données dédié. Le
 Creative Studio ajoute `.lrs_creative_studio.db` (SQLite, funnels/tests
@@ -65,19 +67,18 @@ survit pas aux redéploiements.
 Avant un vrai déploiement sur une telle plateforme, il faudra :
 1. Ajouter un `LRS_DATA_DIR` (env var, défaut = répertoire actuel pour ne
    rien casser en local) et faire pointer chaque `*_FILE = os.path.join(...)`
-   dessus dans `app.py`, `pilot_server.py`, `jsonstore.py` et
+   dessus dans `pilot_server.py`, `jsonstore.py` et
    `creative_studio/storage/db.py`.
 2. Monter un volume persistant de la plateforme sur ce répertoire.
 
-Non fait ici : changement transverse (10+ fichiers d'état, deux modules
-Streamlit/FastAPI) trop risqué pour un squelette non testé — à traiter une
-fois la plateforme cible choisie.
+Non fait ici : changement transverse (10+ fichiers d'état) trop risqué
+pour un squelette non testé — à traiter une fois la plateforme cible
+choisie.
 
 ## Checklist avant déploiement réel
 
-- [ ] Choisir une plateforme (VPS Docker, Fly.io, Render, Streamlit Cloud
-      pour `app.py` seul...) — conditionne si la limitation ci-dessus doit
-      être résolue d'abord.
+- [ ] Choisir une plateforme (VPS Docker, Fly.io, Render...) —
+      conditionne si la limitation ci-dessus doit être résolue d'abord.
 - [ ] `docker build .` et `docker compose up` validés localement (non fait
       ici, pas de démon Docker disponible pendant l'écriture de ce
       squelette).
@@ -107,8 +108,9 @@ fois la plateforme cible choisie.
       (`creative_studio.serving.app`, port 8000) doit vérifier des
       événements réels. Sert désormais à deux choses sur le même endpoint
       `/webhook/stripe` : confirmation d'achat funnel Creative Studio, et
-      activation/mise à jour de l'abonnement LRS (voir
-      `check_subscription_access()` dans `app.py`). Dans le Dashboard
+      activation/mise à jour de l'abonnement LRS (voir la logique portée
+      de `app.py::check_subscription_access()` dans `pilot_server.py`,
+      autour de `consume_magic_link`/`request_magic_link`). Dans le Dashboard
       Stripe, l'endpoint doit écouter `checkout.session.completed`,
       `customer.subscription.updated` et `customer.subscription.deleted`.
 - [ ] `STRIPE_BETA_PRICE_ID`, `LRS_APP_URL`, `LRS_SALES_PAGE_URL` —

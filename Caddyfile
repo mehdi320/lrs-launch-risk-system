@@ -1,13 +1,17 @@
-# Reverse proxy + TLS automatique (Let's Encrypt) devant les 3 services —
-# aucun des trois ne termine le TLS lui-même (voir DEPLOYMENT.md). Caddy
+# Reverse proxy + TLS automatique (Let's Encrypt) devant les 2 services —
+# aucun des deux ne termine le TLS lui-même (voir DEPLOYMENT.md). Caddy
 # obtient/renouvelle les certificats tout seul dès que les enregistrements
 # DNS pointent vers ce serveur et que les ports 80/443 sont ouverts.
 #
 # Remplacer LRS_DOMAIN par le vrai domaine (ex. lrs-app.com) — soit ici en
 # dur, soit via la variable d'env LRS_DOMAIN si le domaine change souvent.
+#
+# app. et pilote. pointent tous les deux vers le pilote (seule interface
+# produit — Streamlit/app.py n'est plus déployé). Les deux sous-domaines
+# sont gardés pour ne pas casser un lien LRS_APP_URL déjà distribué.
 
 app.{$LRS_DOMAIN} {
-	reverse_proxy streamlit:8501
+	reverse_proxy pilot:8600
 }
 
 pilot.{$LRS_DOMAIN} {

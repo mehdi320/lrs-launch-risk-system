@@ -1,12 +1,13 @@
 # Squelette d'orchestration générique — pas encore lié à une plateforme de
-# déploiement précise (VPS, Fly.io, Render...). Sert à faire tourner les
-# deux surfaces web localement ou sur un serveur simple avant de choisir.
+# déploiement précise (VPS, Fly.io, Render...). Sert à faire tourner le
+# pilote (seule interface produit — Streamlit/app.py n'est plus déployé)
+# localement ou sur un serveur simple avant de choisir.
 #
 # TLS : le service `caddy` termine le HTTPS (certificats Let's Encrypt
-# automatiques via Caddyfile) devant les 3 services applicatifs, qui restent
+# automatiques via Caddyfile) devant les 2 services applicatifs, qui restent
 # en HTTP interne sur le réseau Docker — voir DEPLOYMENT.md.
 #
-# Persistance : les deux services montent le dépôt (bind mount `.:/app`)
+# Persistance : les services montent le dépôt (bind mount `.:/app`)
 # par-dessus le code copié dans l'image, donc l'état (.lrs_*.json,
 # .lrs_creative_studio.db, écrits à côté du code — voir PILOT_UI.md)
 # persiste directement dans le dépôt, comme en local sans Docker. C'est
@@ -32,17 +33,6 @@ services:
       - .:/app
     restart: unless-stopped
 
-  streamlit:
-    build: .
-    command: ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501", "--server.headless=true"]
-    ports:
-      - "127.0.0.1:8501:8501"
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-    restart: unless-stopped
-
   # Reçoit le webhook Stripe (achats funnel Creative Studio + activation
   # d'abonnement LRS, voir creative_studio/serving/app.py) et sert
   # /checkout/beta. Doit être exposé publiquement (via `caddy`) pour que
@@ -58,7 +48,7 @@ services:
       - .:/app
     restart: unless-stopped
 
-  # Termine le TLS public (Let's Encrypt automatique) et route vers les 3
+  # Termine le TLS public (Let's Encrypt automatique) et route vers les 2
   # services ci-dessus par sous-domaine — voir Caddyfile.
   caddy:
     image: caddy:2-alpine
@@ -73,7 +63,6 @@ services:
       - caddy_config:/config
     depends_on:
       - pilot
-      - streamlit
       - serving
     restart: unless-stopped
 
