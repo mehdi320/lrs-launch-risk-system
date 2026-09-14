@@ -3,6 +3,7 @@ openai>=1.14.0
 requests>=2.31.0
 trafilatura>=1.8.0
 python-dotenv>=1.0.0
+cryptography>=42.0.0
 
 # Creative Studio (génération de copy, A/B testing, séquences email)
 anthropic>=0.122.0
