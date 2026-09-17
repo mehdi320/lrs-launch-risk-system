@@ -3809,6 +3809,10 @@ function renderResults(data) {
             <span class="bar-val">${val}/5</span>
           </div>
           <div class="bar-track"><div class="bar-fill" data-w="${(val/5*100)}" style="background:${scoreColor(val <= 2 ? 9 : val === 3 ? 12 : 20)}"></div></div>
+          ${label === 'Offer' && (c.offer_hormozi != null || c.offer_schwartz != null) ? `
+          <div class="bar-sub" style="margin-top:4px;font-size:12px;color:var(--text-secondary)">
+            Hormozi (Value Equation) ${c.offer_hormozi ?? '–'}/5 · Schwartz (Awareness Level) ${c.offer_schwartz ?? '–'}/5
+          </div>` : ''}
         </div>
       `).join('')}
     </div>
@@ -3929,6 +3933,7 @@ $('#demoLink').addEventListener('click', (e) => {
 const DEMO_RESULT = {
   "_c": {
     "score": 11, "hook": 2, "offer": 3, "trust": 2, "friction": 2,
+    "offer_hormozi": 3, "offer_schwartz": 2,
     "decision": "Test small budget", "risk": "Moderate",
     "cvr_cur": "0.8-1.5%", "cvr_fix": "1.5-2.5%", "cvr_up": "+0.5 a +1.5 pts"
   },

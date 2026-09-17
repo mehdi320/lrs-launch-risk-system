@@ -444,17 +444,57 @@ SYSTEM_PROMPT_BASE = (
     "METHODOLOGIE DE REFERENCE :\n"
     "METHODOLOGY_PLACEHOLDER\n"
     "\n"
-    "SCORING STRICT - note uniquement ce qui est PRESENT sur la page :\n"
-    "HOOK /5 : 5=hook visceral+specifique+tension | 4=hook clair sans tension | 3=generique | 2=confus | 1=pas de hook | 0=aucun\n"
-    "OFFER /5 : 5=stack+prix ancre+garantie near CTA+urgence | 4=offre claire sans stack | 3=offre basique | 2=confuse | 1=incomprehensible | 0=aucune\n"
-    "TRUST /5 (adapte selon contexte marque ci-dessus) :\n"
-    "  - Marque etablie : 5=notoriete forte+preuves visibles | 4=notoriete reconnue OU preuves solides | 3=marque connue sans proof page | 2=peu de preuve + marque peu connue | 1=rien | 0=rien\n"
-    "  - Nouveau lancement : 5=50+ reviews+photos+garantie near CTA | 4=reviews sans photos | 3=reviews generiques | 2=peu de proof | 1=aucune review | 0=rien\n"
-    "FRICTION /5 : 5=zero friction+CTA repete+message coherent | 4=legere friction | 3=friction moderee | 2=friction forte | 1=mismatch evident | 0=impossible\n"
+    "SCORING STRICT - chaque axe est ancre sur un framework de copywriting nomme, pas sur une "
+    "impression libre. Note uniquement ce qui est PRESENT sur la page, et cite le texte exact "
+    "source pour chaque critere dans why_this_score :\n"
+    "\n"
+    "HOOK /5 - framework PAS (Problem / Agitate / Solution). Verifie ces 3 criteres :\n"
+    "  1. PROBLEM : un probleme/pain specifique est nomme (pas generique)\n"
+    "  2. AGITATE : les consequences concretes de l'inaction sont exprimees (temps perdu, argent perdu, risque)\n"
+    "  3. SOLUTION : un resultat precis et mesurable est promis (chiffre ET delai)\n"
+    "  Score : 3/3 avec Solution chiffree+delai = 5 | 3/3 mais Solution sans chiffre/delai = 4 | "
+    "2/3 = 3 | 1/3 = 2 | probleme vague sans Agitate ni Solution = 1 | 0/3 = 0\n"
+    "\n"
+    "OFFER - DEUX notes distinctes /5, NE LES FUSIONNE JAMAIS toi-meme (le score final Offer est "
+    "recalcule cote serveur a partir des deux) :\n"
+    "  OFFER_HORMOZI /5 (Value Equation - Dream Outcome / Perceived Likelihood / Time Delay / "
+    "Effort&Sacrifice) : verifie si l'offre maximise le resultat desirable exprime (Dream Outcome) "
+    "et la preuve que ca va marcher (garantie, demo, temoignages = Perceived Likelihood), et "
+    "minimise le delai annonce (Time Delay) et l'effort demande (Effort & Sacrifice).\n"
+    "  Score : 4/4 elements presents = 5 | 3/4 = 4 | 2/4 = 3 | 1/4 = 2 | offre citee sans aucun "
+    "ancrage de valeur = 1 | aucune offre identifiable = 0\n"
+    "  OFFER_SCHWARTZ /5 (Awareness Level - Unaware / Problem Aware / Solution Aware / Product "
+    "Aware / Most Aware) : le message est-il calibre au niveau de conscience probable du trafic "
+    "froid vise (ne saute pas direct au prix/features si le prospect ne connait pas encore le "
+    "probleme) ?\n"
+    "  Score : 5=structure du message adaptee precisement au niveau de conscience probable | "
+    "4=globalement adapte, decalage mineur | 3=message generique qui suppose Product Aware sans le "
+    "justifier | 2=decalage net (prix/features assenes a un prospect qui ignore le probleme) | "
+    "1=aucune adaptation, jargon interne | 0=incomprehensible\n"
+    "\n"
+    "TRUST /5 - principes de Cialdini presents sur la page (Social Proof, Authority, "
+    "Scarcity/Urgency legitimee, Reciprocite via garantie). Adapte selon le contexte marque "
+    "ci-dessus :\n"
+    "  - Marque etablie : 5=Authority forte (notoriete etablie) ET un autre principe present | "
+    "4=Authority reconnue seule OU Social Proof solide seule | 3=marque connue sans principe "
+    "explicite sur la page | 2=peu de signaux + marque peu connue | 1=rien | 0=rien\n"
+    "  - Nouveau lancement : 5=Social Proof fort (10+ avis chiffres/photos) ET garantie pres du CTA "
+    "(Reciprocite) | 4=Social Proof present sans photos/chiffres | 3=Social Proof generique sans "
+    "preuve | 2=peu de proof | 1=aucune preuve | 0=rien\n"
+    "\n"
+    "FRICTION /5 - modele Fogg (B=MAP : la Motivation est deja couverte par Hook/Offer, reste "
+    "Ability x Prompt). ABILITY = l'action demandee est-elle facile (CTA unique, parcours court, "
+    "zero distraction) ? PROMPT = le CTA est-il visible, repete, sans ambiguite avec le message ?\n"
+    "  Score : 5=Ability haute (CTA unique, <3 clics, zero distraction) + Prompt fort (repete 3+ "
+    "fois, coherent avec le message) | 4=Ability haute mais Prompt repete 1-2 fois seulement | "
+    "3=friction moderee (menu distrayant OU parcours >3 clics) | 2=plusieurs frictions cumulees | "
+    "1=mismatch evident entre promesse et CTA | 0=parcours impossible a suivre\n"
     "\n"
     "DECISION : 0-9=Do NOT launch+High | 10-14=Test small budget+Moderate | 15-20=Ready to scale+Low\n"
     "\n"
-    "IMPORTANT : Cite des elements REELS et PRECIS du contenu analyse. Ne jamais laisser de valeurs generiques.\n"
+    "IMPORTANT : Cite des elements REELS et PRECIS du contenu analyse. Ne jamais laisser de valeurs "
+    "generiques. Dans why_this_score, nomme explicitement le framework mobilise (PAS, Hormozi, "
+    "Schwartz, Cialdini ou Fogg) et le(s) critere(s) rempli(s) ou manquant(s) pour chaque axe.\n"
     "\n"
     "Pour chaque action dans fix_plan, tu DOIS fournir :\n"
     "- 'how_exactly' : les instructions concretes etape par etape\n"
@@ -463,7 +503,7 @@ SYSTEM_PROMPT_BASE = (
     "\n"
     "Retourne UNIQUEMENT ce JSON valide, rien d'autre :\n"
     "{\n"
-    '  "lrs": {"mode":"X","platform":"X","offer_type":"X","brand_type":"X","page_type":"X","score_breakdown_5":{"hook":0,"offer":0,"trust":0,"friction_message_match":0}},\n'
+    '  "lrs": {"mode":"X","platform":"X","offer_type":"X","brand_type":"X","page_type":"X","score_breakdown_5":{"hook":0,"offer_hormozi":0,"offer_schwartz":0,"trust":0,"friction_message_match":0}},\n'
     '  "message_match": {"status":"N/A","score_explication":"X","mismatches":[],"fix":[]},\n'
     '  "why_this_score": {"hook_detail":"X","offer_detail":"X","trust_detail":"X","friction_detail":"X","top_3_reasons":["X","X","X"],"critical_gaps":["X"]},\n'
     '  "fix_plan": {\n'
@@ -608,7 +648,8 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
             raise _AuditJSONParseError("JSON illisible")
         result = {
             "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
-                    "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
+                    "score_breakdown_5": {"hook": 0, "offer_hormozi": 0, "offer_schwartz": 0,
+                                          "trust": 0, "friction_message_match": 0}},
             "message_match": {"status": "N/A", "score_explication": "Analyse incomplete - relance l'audit", "mismatches": [], "fix": []},
             "why_this_score": {
                 "hook_detail": "Analyse incomplete - relance l'audit",
@@ -624,12 +665,18 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
             "ads": {"angles": [], "hooks": [], "variants": [], "script_ugc_20s": ""}
         }
 
-    bd       = result.get("lrs", {}).get("score_breakdown_5", {})
-    hook     = max(0, min(5, int(bd.get("hook", 0))))
-    offer    = max(0, min(5, int(bd.get("offer", 0))))
-    trust    = max(0, min(5, int(bd.get("trust", 0))))
-    friction = max(0, min(5, int(bd.get("friction_message_match", 0))))
-    score    = hook + offer + trust + friction
+    bd             = result.get("lrs", {}).get("score_breakdown_5", {})
+    hook           = max(0, min(5, int(bd.get("hook", 0))))
+    offer_hormozi  = max(0, min(5, int(bd.get("offer_hormozi", 0))))
+    offer_schwartz = max(0, min(5, int(bd.get("offer_schwartz", 0))))
+    # Offer = moyenne des deux frameworks (Hormozi = construction de l'offre,
+    # Schwartz = calibrage au niveau de conscience) recalculee cote serveur —
+    # jamais fusionnee par le LLM lui-meme, pour que le detail des deux notes
+    # reste fiable et affichable independamment du score final.
+    offer          = round((offer_hormozi + offer_schwartz) / 2)
+    trust          = max(0, min(5, int(bd.get("trust", 0))))
+    friction       = max(0, min(5, int(bd.get("friction_message_match", 0))))
+    score          = hook + offer + trust + friction
 
     decision, risk = get_decision(score)
     tier            = get_tier(score)
@@ -638,6 +685,7 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
 
     result["_c"] = {
         "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
+        "offer_hormozi": offer_hormozi, "offer_schwartz": offer_schwartz,
         "decision": decision, "risk": risk,
         "cvr_cur": cvr_cur, "cvr_fix": cvr_fix, "cvr_up": cvr_up,
     }
