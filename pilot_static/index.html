@@ -847,6 +847,7 @@
         <button class="nav-tab" data-view="historique">🕓 Historique</button>
         <button class="nav-tab" data-view="ressources">📚 Ressources</button>
         <button class="nav-tab" data-view="creative">🎨 Creative Studio</button>
+        <button class="nav-tab" data-view="funnels">🧱 Funnel Builder</button>
         <button class="nav-tab" data-view="integrations">🔗 Intégrations</button>
       </div>
     </nav>
@@ -859,6 +860,7 @@
     <div id="historiqueView" style="display:none"></div>
     <div id="ressourcesView" style="display:none"></div>
     <div id="creativeView" style="display:none"></div>
+    <div id="funnelsView" style="display:none"></div>
     <div id="integrationsView" style="display:none"></div>
 
     <div id="auditView" style="display:none">
@@ -1032,6 +1034,7 @@ const VIEW_IDS = {
   historique: 'historiqueView',
   ressources: 'ressourcesView',
   creative: 'creativeView',
+  funnels: 'funnelsView',
   integrations: 'integrationsView',
 };
 
@@ -1043,6 +1046,7 @@ const VIEW_TITLES = {
   historique: 'Historique',
   ressources: 'Ressources',
   creative: 'Creative Studio',
+  funnels: 'Funnel Builder',
   integrations: 'Intégrations',
 };
 
@@ -1064,6 +1068,7 @@ function setupNavTabs() {
     if (view === 'historique') loadHistorique();
     if (view === 'ressources') renderRessources();
     if (view === 'creative') renderCreative();
+    if (view === 'funnels') loadFunnels();
     if (view === 'integrations') loadIntegrations();
   });
 }
@@ -3572,6 +3577,315 @@ function renderCreativeStudioResults(data) {
       <div class="rewrite-field"><div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(data.cta)}</div></div>
     </div>
   `;
+}
+
+// ══════════════════════════════════════════════════════════
+// ── Funnel Builder (squelette) ───────────────────────────────
+// ══════════════════════════════════════════════════════════
+// Une page de funnel = une liste de blocs (headline/subheadline/media/
+// bullets/proof/offer_stack/guarantee/cta/faq), créée vierge ou
+// pré-remplie depuis le `rewrite` d'un audit LRS déjà passé — le pont
+// direct entre le diagnostic et une page prête à recevoir des visuels.
+// Pas encore couvert : rendu public/hébergement, thèmes, arrangement
+// drag-and-drop, étapes de funnel conditionnelles, paiement intégré.
+
+let _funnelDetailCache = null;
+
+async function loadFunnels() {
+  $('#funnelsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/funnels');
+    const data = await res.json();
+    renderFunnelsList(data.funnels || []);
+  } catch (err) {
+    $('#funnelsView').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les funnels : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderFunnelsList(funnels) {
+  const rows = funnels.map(f => `
+    <div class="list-row" data-funnel-id="${escapeHtml(f.id)}" style="cursor:pointer">
+      <div class="lr-body">
+        <div class="lr-title">${escapeHtml(f.name)}</div>
+        <div class="lr-meta">${f.page_count} page${f.page_count > 1 ? 's' : ''} · maj ${escapeHtml(f.updated)}</div>
+      </div>
+      <button class="cta-secondary" data-delete-funnel="${escapeHtml(f.id)}" style="width:auto;padding:6px 10px;font-size:12px">🗑</button>
+    </div>
+  `).join('');
+
+  $('#funnelsView').innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 12px">
+        Un funnel regroupe des pages générées depuis un audit LRS (le rewrite corrigé devient la page) ou créées vierges.
+        Squelette en construction : pas encore d'hébergement public ni d'arrangement drag-and-drop des blocs.
+      </p>
+      <div class="field">
+        <label class="field-label" for="newFunnelName">Nouveau funnel</label>
+        <input type="text" id="newFunnelName" placeholder="Ex : Formation Bourse — Q4" autocomplete="off" />
+      </div>
+      <button class="cta" id="createFunnelBtn">Créer le funnel</button>
+      <div class="error-box" id="funnelErrorBox"></div>
+    </div>
+    ${funnels.length ? `<div class="card">${rows}</div>` : `
+      <div class="empty-dash fade-up">
+        <div class="emoji">🧱</div>
+        <div class="title">Aucun funnel pour l'instant</div>
+        <div class="sub">Créez-en un ci-dessus, ou générez-le depuis un audit déjà passé.</div>
+      </div>
+    `}
+  `;
+
+  $('#createFunnelBtn').addEventListener('click', async () => {
+    const name = $('#newFunnelName').value.trim();
+    const errBox = $('#funnelErrorBox');
+    errBox.style.display = 'none';
+    if (!name) { errBox.textContent = 'Nom du funnel requis.'; errBox.style.display = 'block'; return; }
+    try {
+      const res = await fetch('/api/funnels', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Erreur');
+      loadFunnelDetail(data.id);
+    } catch (err) {
+      errBox.textContent = err.message; errBox.style.display = 'block';
+    }
+  });
+
+  $$('[data-funnel-id]', $('#funnelsView')).forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('[data-delete-funnel]')) return;
+      loadFunnelDetail(row.dataset.funnelId);
+    });
+  });
+  $$('[data-delete-funnel]', $('#funnelsView')).forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Supprimer ce funnel ?')) return;
+      await fetch('/api/funnels/' + btn.dataset.deleteFunnel, { method: 'DELETE' });
+      loadFunnels();
+    });
+  });
+}
+
+async function loadFunnelDetail(funnelId) {
+  $('#funnelsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  try {
+    const res = await fetch('/api/funnels/' + funnelId);
+    if (!res.ok) throw new Error('introuvable');
+    const funnel = await res.json();
+    _funnelDetailCache = funnel;
+    renderFunnelDetail(funnel);
+  } catch (err) {
+    $('#funnelsView').innerHTML = `<div class="error-box" style="display:block">Impossible de charger le funnel : ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderFunnelDetail(funnel) {
+  const pages = Object.values(funnel.pages || {});
+  const rows = pages.map(p => `
+    <div class="list-row" data-page-id="${escapeHtml(p.id)}" style="cursor:pointer">
+      <div class="lr-body">
+        <div class="lr-title">${escapeHtml(p.name)}</div>
+        <div class="lr-meta">${p.source ? `Depuis l'audit ${escapeHtml(p.source.url)} (${p.source.score}/20)` : 'Page vierge'} · ${(p.blocks || []).length} blocs</div>
+      </div>
+      <button class="cta-secondary" data-delete-page="${escapeHtml(p.id)}" style="width:auto;padding:6px 10px;font-size:12px">🗑</button>
+    </div>
+  `).join('');
+
+  $('#funnelsView').innerHTML = `
+    <button class="restart-link" id="backToFunnels" style="margin-bottom:12px">← Tous les funnels</button>
+    <h2 style="margin:0 0 12px">${escapeHtml(funnel.name)}</h2>
+    <div class="card" style="margin-bottom:16px">
+      <div class="field-label" style="margin-bottom:8px">Ajouter une page</div>
+      <button class="cta-secondary" id="addBlankPageBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-right:8px">📄 Page vierge</button>
+      <button class="cta-secondary" id="addFromAuditBtn" style="width:auto;padding:8px 14px;font-size:13px">🔍 Depuis un audit</button>
+      <div id="fromAuditPicker" style="display:none;margin-top:12px"></div>
+      <div class="error-box" id="pageErrorBox"></div>
+    </div>
+    ${pages.length ? `<div class="card">${rows}</div>` : `
+      <div class="empty-dash fade-up">
+        <div class="emoji">📄</div>
+        <div class="title">Aucune page dans ce funnel</div>
+        <div class="sub">Ajoutez une page vierge, ou générez-la depuis un audit déjà passé.</div>
+      </div>
+    `}
+  `;
+
+  $('#backToFunnels').addEventListener('click', loadFunnels);
+  $('#addBlankPageBtn').addEventListener('click', () => createFunnelPage(funnel.id, {}));
+  $('#addFromAuditBtn').addEventListener('click', () => toggleAuditPicker(funnel.id));
+  $$('[data-page-id]', $('#funnelsView')).forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('[data-delete-page]')) return;
+      openFunnelPageEditor(funnel.id, row.dataset.pageId);
+    });
+  });
+  $$('[data-delete-page]', $('#funnelsView')).forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm('Supprimer cette page ?')) return;
+      await fetch(`/api/funnels/${funnel.id}/pages/${btn.dataset.deletePage}`, { method: 'DELETE' });
+      loadFunnelDetail(funnel.id);
+    });
+  });
+}
+
+async function toggleAuditPicker(funnelId) {
+  const box = $('#fromAuditPicker');
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted)">Chargement de l'historique…</div>`;
+  try {
+    const res = await fetch('/api/history?' + new URLSearchParams({ q: '', risk: 'Tous', platform: 'Toutes' }));
+    const data = await res.json();
+    const entries = (data.entries || []).slice(0, 20);
+    if (!entries.length) {
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted)">Aucun audit dans l'historique pour l'instant.</div>`;
+      return;
+    }
+    box.innerHTML = entries.map(e => `
+      <div class="list-row" data-pick-url="${escapeHtml(e.url)}" data-pick-ts="${escapeHtml(e.timestamp)}" style="cursor:pointer">
+        <div class="lr-body">
+          <div class="lr-title">${escapeHtml(e.url)}</div>
+          <div class="lr-meta">${e.score}/20 · ${escapeHtml(e.timestamp)}</div>
+        </div>
+      </div>
+    `).join('');
+    $$('[data-pick-url]', box).forEach(row => {
+      row.addEventListener('click', () => createFunnelPage(funnelId, {
+        source_url: row.dataset.pickUrl, source_timestamp: row.dataset.pickTs,
+      }));
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="error-box" style="display:block">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function createFunnelPage(funnelId, opts) {
+  const errBox = $('#pageErrorBox');
+  errBox.style.display = 'none';
+  try {
+    const res = await fetch(`/api/funnels/${funnelId}/pages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Nouvelle page', ...opts }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erreur');
+    loadFunnelDetail(funnelId);
+  } catch (err) {
+    errBox.textContent = err.message; errBox.style.display = 'block';
+  }
+}
+
+const FUNNEL_BLOCK_LABELS = {
+  headline: 'Headline', subheadline: 'Sous-titre', media: 'Image / Vidéo',
+  bullets: 'Bullet points', proof: 'Preuve sociale', offer_stack: "Stack de l'offre",
+  guarantee: 'Garantie', cta: 'CTA', faq: 'FAQ / Objections', text: 'Texte libre',
+};
+
+function openFunnelPageEditor(funnelId, pageId) {
+  const page = _funnelDetailCache.pages[pageId];
+  renderFunnelPageEditor(funnelId, page);
+}
+
+function renderFunnelPageEditor(funnelId, page) {
+  const blocksHtml = (page.blocks || []).map((b, i) => renderFunnelBlockEditor(b, i)).join('');
+
+  $('#funnelsView').innerHTML = `
+    <button class="restart-link" id="backToFunnelDetail" style="margin-bottom:12px">← ${escapeHtml(_funnelDetailCache.name)}</button>
+    <div class="field" style="margin-bottom:16px">
+      <label class="field-label" for="pageNameInput">Nom de la page</label>
+      <input type="text" id="pageNameInput" value="${escapeHtml(page.name)}" autocomplete="off" />
+    </div>
+    ${page.source ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px">
+      Générée depuis l'audit <strong>${escapeHtml(page.source.url)}</strong> (${page.source.score}/20) — les blocs reprennent le rewrite corrigé.
+    </p>` : ''}
+    <div id="funnelBlocksList">${blocksHtml}</div>
+    <button class="cta-secondary" id="savePageBtn" style="width:auto;padding:10px 18px;margin-top:12px">💾 Enregistrer</button>
+    <div class="error-box" id="editorErrorBox"></div>
+  `;
+
+  $('#backToFunnelDetail').addEventListener('click', () => loadFunnelDetail(funnelId));
+  bindFunnelBlockEvents(funnelId, page);
+  $('#savePageBtn').addEventListener('click', () => saveFunnelPage(funnelId, page));
+}
+
+function renderFunnelBlockEditor(block, i) {
+  const label = FUNNEL_BLOCK_LABELS[block.type] || block.type;
+  let inner = '';
+  if (block.type === 'media') {
+    inner = `
+      ${block.url ? (block.media_type === 'video'
+        ? `<video src="${escapeHtml(block.url)}" controls style="max-width:100%;border-radius:8px;margin-bottom:8px"></video>`
+        : `<img src="${escapeHtml(block.url)}" style="max-width:100%;border-radius:8px;margin-bottom:8px" />`)
+        : `<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">Aucun média — ajoutez une image ou une vidéo.</div>`}
+      <input type="file" accept="image/*,video/*" data-block-media="${i}" />
+    `;
+  } else if (block.type === 'bullets' || block.type === 'offer_stack' || block.type === 'faq') {
+    inner = `<textarea data-block-items="${i}" style="min-height:90px" placeholder="Une ligne par élément">${escapeHtml((block.items || []).join('\n'))}</textarea>`;
+  } else {
+    inner = `<textarea data-block-text="${i}" style="min-height:70px">${escapeHtml(block.text || '')}</textarea>`;
+  }
+  return `
+    <div class="card" style="margin-bottom:10px" data-block-card="${i}">
+      <div class="field-label" style="margin-bottom:8px">${escapeHtml(label)}</div>
+      ${inner}
+    </div>
+  `;
+}
+
+function bindFunnelBlockEvents(funnelId, page) {
+  $$('[data-block-media]', $('#funnelBlocksList')).forEach(input => {
+    input.addEventListener('change', (e) => {
+      const idx = Number(input.dataset.blockMedia);
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await fetch(`/api/funnels/${funnelId}/pages/${page.id}/media`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, data_url: reader.result }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Erreur upload');
+          page.blocks[idx].url = data.url;
+          page.blocks[idx].media_type = data.media_type;
+          renderFunnelPageEditor(funnelId, page);
+        } catch (err) {
+          const box = $('#editorErrorBox');
+          box.textContent = err.message; box.style.display = 'block';
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+}
+
+async function saveFunnelPage(funnelId, page) {
+  page.name = $('#pageNameInput').value.trim() || page.name;
+  $$('[data-block-text]', $('#funnelBlocksList')).forEach(ta => {
+    page.blocks[Number(ta.dataset.blockText)].text = ta.value;
+  });
+  $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
+    page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+  });
+
+  const errBox = $('#editorErrorBox');
+  errBox.style.display = 'none';
+  try {
+    const res = await fetch(`/api/funnels/${funnelId}/pages/${page.id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: page.name, blocks: page.blocks }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Erreur');
+    loadFunnelDetail(funnelId);
+  } catch (err) {
+    errBox.textContent = err.message; errBox.style.display = 'block';
+  }
 }
 
 // ══════════════════════════════════════════════════════════

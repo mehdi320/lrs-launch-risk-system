@@ -6,12 +6,16 @@
 #
 # Lancer : uvicorn pilot_server:app --port 8600 --reload
 
+import base64
 import contextvars
 import datetime
+import mimetypes
 import os
+import re
 import secrets as _secrets
 import sys
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -1586,6 +1590,247 @@ def check_due_schedules():
             except Exception:
                 pass
     return {"ran": ran, "schedule": schedule}
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Funnel Builder (squelette) ───────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+# Premiere brique du "Funnel Builder" : une page de funnel est une liste
+# de blocs (headline/subheadline/media/bullets/proof/offer_stack/
+# guarantee/cta/faq) qu'on peut soit creer vide, soit pre-remplir depuis
+# le `rewrite` d'un audit LRS deja passe — le pont le plus direct entre
+# ce que LRS sait deja diagnostiquer/corriger et une page prete a etre
+# alimentee en visuels. Etat partage avec le reste du pilote (meme
+# namespace utilisateur que .lrs_history.json etc.).
+#
+# Pas encore couvert par ce squelette (volontairement, a construire en
+# temps voulu) : rendu public/hebergement de la page generee, themes ou
+# design personnalisable, arrangement drag-and-drop des blocs, etapes de
+# funnel avec logique conditionnelle, paiement integre sur la page.
+
+def FUNNELS_FILE(): return _user_file(".lrs_funnels.json")
+
+
+def _funnel_media_dir(funnel_id):
+    return os.path.join(USER_DATA_ROOT, _current_user_ns(), "funnel_media", funnel_id)
+
+
+def _new_block(type_, **kw):
+    return {"id": str(uuid.uuid4()), "type": type_, **kw}
+
+
+def _default_funnel_blocks():
+    return [
+        _new_block("headline", text=""),
+        _new_block("subheadline", text=""),
+        _new_block("media", media_type="image", url="", caption=""),
+        _new_block("bullets", items=[]),
+        _new_block("proof", text=""),
+        _new_block("offer_stack", items=[]),
+        _new_block("guarantee", text=""),
+        _new_block("cta", text=""),
+        _new_block("faq", items=[]),
+    ]
+
+
+def _blocks_from_rewrite(rw):
+    """Pre-remplit une page a partir du `rewrite` d'un audit LRS deja passe —
+    le pont direct entre le diagnostic (score) et la generation de page."""
+    blocks = []
+    if rw.get("headline"):      blocks.append(_new_block("headline", text=rw["headline"]))
+    if rw.get("subheadline"):   blocks.append(_new_block("subheadline", text=rw["subheadline"]))
+    blocks.append(_new_block("media", media_type="image", url="", caption="Ajoutez une image ou une video hero"))
+    if rw.get("hero_bullets"):  blocks.append(_new_block("bullets", items=list(rw["hero_bullets"])))
+    if rw.get("proof_block"):   blocks.append(_new_block("proof", text=rw["proof_block"]))
+    if rw.get("offer_stack"):   blocks.append(_new_block("offer_stack", items=list(rw["offer_stack"])))
+    if rw.get("guarantee"):     blocks.append(_new_block("guarantee", text=rw["guarantee"]))
+    blocks.append(_new_block("cta", text=rw.get("cta_primary") or ""))
+    if rw.get("faq_objections"): blocks.append(_new_block("faq", items=list(rw["faq_objections"])))
+    return blocks or _default_funnel_blocks()
+
+
+def _funnel_summary(f):
+    return {
+        "id": f["id"], "name": f.get("name", ""), "created": f.get("created", ""),
+        "updated": f.get("updated", ""), "page_count": len(f.get("pages", {})),
+    }
+
+
+@app.get("/api/funnels")
+def list_funnels():
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    items = sorted(funnels.values(), key=lambda f: f.get("updated", ""), reverse=True)
+    return {"funnels": [_funnel_summary(f) for f in items]}
+
+
+class FunnelCreateRequest(BaseModel):
+    name: str = ""
+
+
+@app.post("/api/funnels")
+def create_funnel(req: FunnelCreateRequest):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nom du funnel requis.")
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    fid = str(uuid.uuid4())
+    ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    funnels[fid] = {"id": fid, "name": name, "created": ts, "updated": ts, "pages": {}}
+    save_json_file(FUNNELS_FILE(), funnels)
+    return funnels[fid]
+
+
+@app.get("/api/funnels/{funnel_id}")
+def get_funnel(funnel_id: str):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funnel introuvable.")
+    return funnel
+
+
+class FunnelRenameRequest(BaseModel):
+    name: str = ""
+
+
+@app.put("/api/funnels/{funnel_id}")
+def rename_funnel(funnel_id: str, req: FunnelRenameRequest):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Nom du funnel requis.")
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funnel introuvable.")
+    funnel["name"] = name
+    funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    save_json_file(FUNNELS_FILE(), funnels)
+    return funnel
+
+
+@app.delete("/api/funnels/{funnel_id}")
+def delete_funnel(funnel_id: str):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnels.pop(funnel_id, None)
+    save_json_file(FUNNELS_FILE(), funnels)
+    return {"ok": True}
+
+
+class FunnelPageCreateRequest(BaseModel):
+    name: str = "Nouvelle page"
+    source_url: str = ""
+    source_timestamp: str = ""
+
+
+@app.post("/api/funnels/{funnel_id}/pages")
+def create_funnel_page(funnel_id: str, req: FunnelPageCreateRequest):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funnel introuvable.")
+
+    source = None
+    blocks = _default_funnel_blocks()
+    if req.source_url and req.source_timestamp:
+        history = _load_history()
+        entry = next((e for e in history if e.get("url") == req.source_url
+                      and e.get("timestamp") == req.source_timestamp), None)
+        if not entry:
+            raise HTTPException(status_code=404, detail="Audit source introuvable dans l'historique.")
+        rw = entry.get("result", {}).get("rewrite", {})
+        blocks = _blocks_from_rewrite(rw)
+        source = {"url": req.source_url, "timestamp": req.source_timestamp, "score": entry.get("score", 0)}
+
+    pid = str(uuid.uuid4())
+    page = {"id": pid, "name": req.name.strip() or "Nouvelle page", "source": source, "blocks": blocks}
+    funnel.setdefault("pages", {})[pid] = page
+    funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    save_json_file(FUNNELS_FILE(), funnels)
+    return page
+
+
+class FunnelPageUpdateRequest(BaseModel):
+    name: str = ""
+    blocks: list = Field(default_factory=list)
+
+
+@app.put("/api/funnels/{funnel_id}/pages/{page_id}")
+def update_funnel_page(funnel_id: str, page_id: str, req: FunnelPageUpdateRequest):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    page = (funnel or {}).get("pages", {}).get(page_id)
+    if not funnel or not page:
+        raise HTTPException(status_code=404, detail="Page introuvable.")
+    if req.name.strip():
+        page["name"] = req.name.strip()
+    if req.blocks:
+        page["blocks"] = req.blocks
+    funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    save_json_file(FUNNELS_FILE(), funnels)
+    return page
+
+
+@app.delete("/api/funnels/{funnel_id}/pages/{page_id}")
+def delete_funnel_page(funnel_id: str, page_id: str):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if funnel:
+        funnel.get("pages", {}).pop(page_id, None)
+        funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        save_json_file(FUNNELS_FILE(), funnels)
+    return {"ok": True}
+
+
+ALLOWED_FUNNEL_MEDIA_TYPES = {
+    "image/png", "image/jpeg", "image/webp", "image/gif",
+    "video/mp4", "video/webm", "video/quicktime",
+}
+MAX_FUNNEL_MEDIA_BYTES = 15 * 1024 * 1024  # 15 Mo — limite volontairement basse pour ce squelette
+
+
+class FunnelMediaRequest(BaseModel):
+    filename: str = "upload"
+    data_url: str = ""
+
+
+@app.post("/api/funnels/{funnel_id}/pages/{page_id}/media")
+def upload_funnel_media(funnel_id: str, page_id: str, req: FunnelMediaRequest):
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel or page_id not in funnel.get("pages", {}):
+        raise HTTPException(status_code=404, detail="Page introuvable.")
+
+    m = re.match(r"^data:([\w.+-]+/[\w.+-]+);base64,(.+)$", req.data_url, re.DOTALL)
+    if not m:
+        raise HTTPException(status_code=400, detail="Fichier invalide (data URL attendue).")
+    mime, b64 = m.group(1), m.group(2)
+    if mime not in ALLOWED_FUNNEL_MEDIA_TYPES:
+        raise HTTPException(status_code=400, detail=f"Type de fichier non autorisé : {mime}")
+    try:
+        raw = base64.b64decode(b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Fichier illisible.")
+    if len(raw) > MAX_FUNNEL_MEDIA_BYTES:
+        raise HTTPException(status_code=413, detail="Fichier trop volumineux (15 Mo max pour ce squelette).")
+
+    ext = mimetypes.guess_extension(mime) or os.path.splitext(req.filename)[1] or ""
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    media_dir = _funnel_media_dir(funnel_id)
+    os.makedirs(media_dir, exist_ok=True)
+    with open(os.path.join(media_dir, safe_name), "wb") as f:
+        f.write(raw)
+
+    media_type = "video" if mime.startswith("video/") else "image"
+    return {"url": f"/api/funnels/media/{funnel_id}/{safe_name}", "media_type": media_type}
+
+
+@app.get("/api/funnels/media/{funnel_id}/{filename}")
+def get_funnel_media(funnel_id: str, filename: str):
+    safe_filename = os.path.basename(filename)
+    path = os.path.join(_funnel_media_dir(funnel_id), safe_filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Media introuvable.")
+    return FileResponse(path)
 
 
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
