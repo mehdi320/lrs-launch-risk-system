@@ -196,9 +196,12 @@
     margin-bottom: 8px;
     border-radius: 10px;
     padding: 10px 12px;
-    transition: background 0.12s;
+    transition: background 0.12s, opacity 0.12s;
   }
   .fb-block:hover, .fb-block:focus-within { background: rgba(0,122,255,0.045); }
+  .fb-block.fb-dragging { opacity: 0.35; }
+  .fb-block.fb-drag-over-top { box-shadow: inset 0 3px 0 0 var(--accent); }
+  .fb-block.fb-drag-over-bottom { box-shadow: inset 0 -3px 0 0 var(--accent); }
   .fb-block-controls {
     position: absolute;
     top: -12px; right: 8px;
@@ -212,6 +215,13 @@
   .fb-block:hover .fb-block-controls, .fb-block:focus-within .fb-block-controls {
     opacity: 1; transform: translateY(0); pointer-events: auto;
   }
+  .fb-block-handle {
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    border: 1px solid var(--border-strong); background: #fff; color: var(--text-muted);
+    font-size: 12px; line-height: 1; cursor: grab; user-select: none;
+  }
+  .fb-block-handle:active { cursor: grabbing; }
   .fb-block-tag {
     font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
     background: var(--text); color: #fff; border-radius: 6px; padding: 3px 8px;
@@ -221,6 +231,30 @@
     border-radius: 6px; width: 22px; height: 22px; font-size: 11px; cursor: pointer;
   }
   .fb-block-controls button:hover { color: var(--danger); border-color: var(--danger); }
+  .fb-block-controls button.fb-duplicate-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Barre d'insertion entre deux blocs : une simple ligne au repos, qui */
+  /* revele un mini add-bar au survol — permet d'inserer un bloc a une */
+  /* position precise plutot que toujours en fin de page. */
+  .fb-insert-bar { position: relative; height: 2px; margin: 6px 0; }
+  .fb-insert-line {
+    position: absolute; left: 0; right: 0; top: 0; height: 2px;
+    background: transparent; border-radius: 2px; transition: background 0.12s;
+  }
+  .fb-insert-bar:hover .fb-insert-line { background: var(--accent-soft); }
+  .fb-insert-menu {
+    position: absolute; left: 0; right: 0; top: 6px;
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    max-height: 0; opacity: 0; overflow: hidden; pointer-events: none;
+    transition: opacity 0.12s, max-height 0.12s;
+    z-index: 5;
+  }
+  .fb-insert-bar:hover .fb-insert-menu { max-height: 70px; opacity: 1; pointer-events: auto; }
+  .fb-insert-menu button {
+    border: 1px solid var(--border-strong); background: #fff; color: var(--text);
+    border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .fb-insert-menu button:hover { border-color: var(--accent); color: var(--accent); }
 
   .fb-edit-chrome {
     max-height: 0;
@@ -4188,11 +4222,33 @@ function openFunnelPageEditor(funnelId, pageId) {
   renderFunnelPageEditor(funnelId, page);
 }
 
+function newFunnelBlockFromType(type) {
+  const cfg = FUNNEL_ADDABLE_BLOCKS.find(b => b.type === type);
+  return { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2), type: cfg.type, ...cfg.defaults() };
+}
+
+// Barre d'insertion entre deux blocs (et avant le premier / apres le
+// dernier) : une simple ligne au repos qui revele un mini add-bar au
+// survol, pour inserer un bloc a une position precise plutot que
+// toujours en fin de page.
+function renderInsertBar(atIndex) {
+  const btns = FUNNEL_ADDABLE_BLOCKS.map(b =>
+    `<button type="button" data-insert-block="${b.type}" data-insert-at="${atIndex}">+ ${escapeHtml(b.label)}</button>`
+  ).join('');
+  return `
+    <div class="fb-insert-bar" data-insert-bar="${atIndex}">
+      <div class="fb-insert-line"></div>
+      <div class="fb-insert-menu">${btns}</div>
+    </div>
+  `;
+}
+
 function renderFunnelPageEditor(funnelId, page) {
   _funnelEditorCtx = { funnelId, page };
   if (!page.font) page.font = FUNNEL_DEFAULT_FONT;
   ensureGoogleFontLoaded(page.font);
-  const blocksHtml = (page.blocks || []).map((b, i) => renderFunnelBlockEditor(b, i)).join('');
+  const blocksArr = page.blocks || [];
+  const blocksHtml = blocksArr.map((b, i) => renderInsertBar(i) + renderFunnelBlockEditor(b, i)).join('') + renderInsertBar(blocksArr.length);
   const addBlockButtons = FUNNEL_ADDABLE_BLOCKS.map(b =>
     `<button type="button" data-add-block="${b.type}">+ ${escapeHtml(b.label)}</button>`
   ).join('');
@@ -4229,8 +4285,16 @@ function renderFunnelPageEditor(funnelId, page) {
   $$('[data-add-block]', $('#funnelsView')).forEach(btn => {
     btn.addEventListener('click', () => {
       syncFunnelBlocksFromDOM(page);
-      const cfg = FUNNEL_ADDABLE_BLOCKS.find(b => b.type === btn.dataset.addBlock);
-      page.blocks.push({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2), type: cfg.type, ...cfg.defaults() });
+      page.blocks.push(newFunnelBlockFromType(btn.dataset.addBlock));
+      renderFunnelPageEditor(funnelId, page);
+    });
+  });
+
+  $$('[data-insert-block]', $('#funnelsView')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      syncFunnelBlocksFromDOM(page);
+      const at = Number(btn.dataset.insertAt);
+      page.blocks.splice(at, 0, newFunnelBlockFromType(btn.dataset.insertBlock));
       renderFunnelPageEditor(funnelId, page);
     });
   });
@@ -4379,7 +4443,9 @@ function renderFunnelBlockEditor(block, i) {
   return `
     <div class="fb-block fb-block-${block.type}" data-block-card="${i}">
       <div class="fb-block-controls">
+        <span class="fb-block-handle" draggable="true" data-drag-handle="${i}" title="Glisser pour réordonner">⠿</span>
         <span class="fb-block-tag">${escapeHtml(label)}</span>
+        <button type="button" class="fb-duplicate-btn" data-duplicate-block="${i}" title="Dupliquer ce bloc">⧉</button>
         <button type="button" data-remove-block="${i}" title="Supprimer ce bloc">🗑</button>
       </div>
       ${inner}
@@ -4475,6 +4541,76 @@ function bindFunnelBlockEvents(funnelId, page) {
     btn.addEventListener('click', () => {
       syncFunnelBlocksFromDOM(page);
       page.blocks.splice(Number(btn.dataset.removeBlock), 1);
+      renderFunnelPageEditor(funnelId, page);
+    });
+  });
+
+  $$('[data-duplicate-block]', $('#funnelBlocksList')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      syncFunnelBlocksFromDOM(page);
+      const idx = Number(btn.dataset.duplicateBlock);
+      const clone = JSON.parse(JSON.stringify(page.blocks[idx]));
+      clone.id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+      page.blocks.splice(idx + 1, 0, clone);
+      renderFunnelPageEditor(funnelId, page);
+    });
+  });
+
+  // Reordonnancement par glisser-deposer. La zone "draggable" est une
+  // poignee dediee (⠿), jamais le bloc entier ni le contenu editable :
+  // sinon impossible de selectionner du texte a la souris sans declencher
+  // un drag. On deplace le bloc dans page.blocks a la depose puis on
+  // re-rend, plutot que de manipuler le DOM directement (source de verite
+  // unique, comme partout ailleurs dans cet editeur).
+  let dragSrcIndex = null;
+  const blocksList = $('#funnelBlocksList');
+
+  $$('[data-drag-handle]', blocksList).forEach(handle => {
+    handle.addEventListener('dragstart', (e) => {
+      dragSrcIndex = Number(handle.dataset.dragHandle);
+      const blockEl = handle.closest('.fb-block');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(dragSrcIndex));
+      if (blockEl) {
+        blockEl.classList.add('fb-dragging');
+        try { e.dataTransfer.setDragImage(blockEl, 20, 20); } catch (err) { /* non supporte, tant pis pour l'apercu */ }
+      }
+    });
+    handle.addEventListener('dragend', () => {
+      $$('.fb-block', blocksList).forEach(el => el.classList.remove('fb-dragging', 'fb-drag-over-top', 'fb-drag-over-bottom'));
+      dragSrcIndex = null;
+    });
+  });
+
+  $$('.fb-block', blocksList).forEach(blockEl => {
+    blockEl.addEventListener('dragover', (e) => {
+      if (dragSrcIndex === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const rect = blockEl.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      blockEl.classList.toggle('fb-drag-over-top', before);
+      blockEl.classList.toggle('fb-drag-over-bottom', !before);
+    });
+    blockEl.addEventListener('dragleave', () => {
+      blockEl.classList.remove('fb-drag-over-top', 'fb-drag-over-bottom');
+    });
+    blockEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const before = blockEl.classList.contains('fb-drag-over-top');
+      blockEl.classList.remove('fb-drag-over-top', 'fb-drag-over-bottom');
+      if (dragSrcIndex === null) return;
+      const targetIndex = Number(blockEl.dataset.blockCard);
+      if (targetIndex === dragSrcIndex) { dragSrcIndex = null; return; }
+      syncFunnelBlocksFromDOM(page);
+      const moved = page.blocks[dragSrcIndex];
+      page.blocks.splice(dragSrcIndex, 1);
+      let destIndex = targetIndex;
+      if (dragSrcIndex < targetIndex) destIndex -= 1;
+      if (!before) destIndex += 1;
+      page.blocks.splice(destIndex, 0, moved);
+      dragSrcIndex = null;
       renderFunnelPageEditor(funnelId, page);
     });
   });
