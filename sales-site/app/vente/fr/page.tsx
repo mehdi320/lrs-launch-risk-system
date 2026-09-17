@@ -506,6 +506,19 @@ export default function VentePageFr() {
           </p>
         </div>
       </section>
+
+      {/* ============================== FOOTER ============================== */}
+      <footer className="px-6 pb-10 text-center">
+        <p className="text-xs text-[#86868b]">
+          <a href="/vente/fr/privacy" className="hover:text-[#1d1d1f]">
+            Politique de confidentialité
+          </a>
+          {" · "}
+          <a href="/vente/fr/terms" className="hover:text-[#1d1d1f]">
+            Conditions d&apos;utilisation
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }

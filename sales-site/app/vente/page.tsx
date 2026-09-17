@@ -492,6 +492,19 @@ export default function VentePage() {
           </p>
         </div>
       </section>
+
+      {/* ============================== FOOTER ============================== */}
+      <footer className="px-6 pb-10 text-center">
+        <p className="text-xs text-[#86868b]">
+          <a href="/vente/privacy" className="hover:text-[#1d1d1f]">
+            Privacy Policy
+          </a>
+          {" · "}
+          <a href="/vente/terms" className="hover:text-[#1d1d1f]">
+            Terms of Service
+          </a>
+        </p>
+      </footer>
     </main>
   );
 }
