@@ -899,16 +899,6 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Type d'offre</label>
-          <div class="segmented" id="offerSeg">
-            <button class="active" data-val="Digital product">Digital</button>
-            <button data-val="Ecom (produit physique)">E-com</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field">
           <label class="field-label">Marque</label>
           <div class="segmented" id="brandSeg">
             <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
@@ -1023,7 +1013,7 @@ function setupSegmented(id) {
     btn.classList.add('active');
   });
 }
-['modeSeg', 'platformSeg', 'offerSeg', 'brandSeg'].forEach(setupSegmented);
+['modeSeg', 'platformSeg', 'brandSeg'].forEach(setupSegmented);
 
 // ── Navigation entre onglets ──────────────────────────
 const VIEW_IDS = {
@@ -1273,13 +1263,6 @@ function renderMultiBulkShell() {
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label">Type d'offre</label>
-          <div class="segmented" id="bulkOfferSeg">
-            <button class="active" data-val="Digital product">Digital</button>
-            <button data-val="Ecom (produit physique)">E-com</button>
-          </div>
-        </div>
-        <div class="field">
           <label class="field-label">Marque</label>
           <div class="segmented" id="bulkBrandSeg">
             <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
@@ -1296,7 +1279,7 @@ function renderMultiBulkShell() {
     </div>
     <div id="bulkResults"></div>
   `;
-  ['bulkModeSeg', 'bulkPlatformSeg', 'bulkOfferSeg', 'bulkBrandSeg'].forEach(setupSegmented);
+  ['bulkModeSeg', 'bulkPlatformSeg', 'bulkBrandSeg'].forEach(setupSegmented);
   $('#bulkRunBtn').addEventListener('click', runBulkAudit);
 }
 
@@ -1321,7 +1304,7 @@ async function runBulkAudit() {
         urls,
         mode: getSegVal('bulkModeSeg'),
         platform: getSegVal('bulkPlatformSeg'),
-        offer_type: getSegVal('bulkOfferSeg'),
+        offer_type: 'Digital product',
         brand_type: getSegVal('bulkBrandSeg'),
       }),
     });
@@ -1557,13 +1540,6 @@ function renderFunnelShell() {
             <button data-val="Google">Google</button>
           </div>
         </div>
-        <div class="field">
-          <label class="field-label">Type d'offre</label>
-          <div class="segmented" id="funnelOfferSeg">
-            <button class="active" data-val="Digital product">Digital</button>
-            <button data-val="Ecom (produit physique)">E-com</button>
-          </div>
-        </div>
       </div>
       <button class="cta" id="funnelRunBtn">🧭 Auditer le funnel</button>
       <div class="error-box" id="funnelErrorBox"></div>
@@ -1574,7 +1550,7 @@ function renderFunnelShell() {
     </div>
     <div id="funnelResults"></div>
   `;
-  ['funnelTypeSeg', 'funnelPlatformSeg', 'funnelOfferSeg'].forEach(setupSegmented);
+  ['funnelTypeSeg', 'funnelPlatformSeg'].forEach(setupSegmented);
   $('#funnelRunBtn').addEventListener('click', runFunnelAudit);
 }
 
@@ -1600,7 +1576,7 @@ async function runFunnelAudit() {
         funnel_type: getSegVal('funnelTypeSeg'),
         url_step1: url1, url_step2: url2,
         platform: getSegVal('funnelPlatformSeg'),
-        offer_type: getSegVal('funnelOfferSeg'),
+        offer_type: 'Digital product',
       }),
     });
     const data = await res.json();
@@ -1666,7 +1642,7 @@ function renderFunnelResults(data) {
 
 async function downloadOneFunnelPdf(step, label) {
   const meta = {
-    mode: 'Funnel Only', platform: getSegVal('funnelPlatformSeg'), offer_type: getSegVal('funnelOfferSeg'),
+    mode: 'Funnel Only', platform: getSegVal('funnelPlatformSeg'), offer_type: 'Digital product',
     url: step.url, timestamp: new Date().toLocaleString('fr-FR'), brand_type: 'Nouveau lancement',
     page_type: step.page_type, ad_text: '', model: 'gpt-4o-mini',
   };
@@ -2074,13 +2050,6 @@ function renderSuiviMonitoring(selectedUrl) {
             <option value="Google">Google</option>
           </select>
         </div>
-        <div class="field">
-          <label class="field-label" for="schOffer">Offre</label>
-          <select id="schOffer" style="${SEL_STYLE}">
-            <option value="Digital product">Digital product</option>
-            <option value="Ecom (produit physique)">Ecom (produit physique)</option>
-          </select>
-        </div>
       </div>
       <div class="field" style="margin-top:14px">
         <label class="field-label">Marque</label>
@@ -2164,7 +2133,7 @@ function renderSuiviMonitoring(selectedUrl) {
           freq_days: parseInt($('#schFreq').value, 10),
           mode: $('#schMode').value,
           platform: $('#schPlat').value,
-          offer_type: $('#schOffer').value,
+          offer_type: 'Digital product',
           brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
           alert_email: $('#schAlertEmail').value.trim(),
         }),
@@ -3441,21 +3410,12 @@ function renderCreativeAnglesForm() {
         <label class="field-label" for="creativeOffer">Décrivez votre offre</label>
         <textarea id="creativeOffer" placeholder="Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…" style="min-height:120px"></textarea>
       </div>
-      <div class="row">
-        <div class="field">
-          <label class="field-label">Plateforme</label>
-          <div class="segmented" id="creativePlatformSeg">
-            <button class="active" data-val="Meta">Meta</button>
-            <button data-val="TikTok">TikTok</button>
-            <button data-val="Google">Google</button>
-          </div>
-        </div>
-        <div class="field">
-          <label class="field-label">Type d'offre</label>
-          <div class="segmented" id="creativeOfferSeg">
-            <button class="active" data-val="Digital product">Digital</button>
-            <button data-val="Ecom (produit physique)">E-com</button>
-          </div>
+      <div class="field">
+        <label class="field-label">Plateforme</label>
+        <div class="segmented" id="creativePlatformSeg">
+          <button class="active" data-val="Meta">Meta</button>
+          <button data-val="TikTok">TikTok</button>
+          <button data-val="Google">Google</button>
         </div>
       </div>
       <button class="cta" id="creativeRunBtn">Générer des angles créatifs</button>
@@ -3467,7 +3427,7 @@ function renderCreativeAnglesForm() {
     </div>
     <div id="creativeResults"></div>
   `;
-  ['creativePlatformSeg', 'creativeOfferSeg'].forEach(setupSegmented);
+  ['creativePlatformSeg'].forEach(setupSegmented);
   $('#creativeRunBtn').addEventListener('click', runCreativeAngles);
 }
 
@@ -3795,20 +3755,11 @@ function toggleDocPicker(funnelId) {
         </div>
       </div>
     </div>
-    <div class="row">
-      <div class="field">
-        <label class="field-label">Type d'offre</label>
-        <div class="segmented" id="docOfferSeg">
-          <button class="active" data-val="Digital product">Digital</button>
-          <button data-val="Ecom (produit physique)">E-com</button>
-        </div>
-      </div>
-      <div class="field">
-        <label class="field-label">Marque</label>
-        <div class="segmented" id="docBrandSeg">
-          <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
-          <button data-val="Marque etablie">Marque établie</button>
-        </div>
+    <div class="field">
+      <label class="field-label">Marque</label>
+      <div class="segmented" id="docBrandSeg">
+        <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
+        <button data-val="Marque etablie">Marque établie</button>
       </div>
     </div>
     <div id="docDropzone" style="margin-top:12px;border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;color:var(--text-secondary);font-size:13px;transition:border-color .15s">
@@ -3818,7 +3769,7 @@ function toggleDocPicker(funnelId) {
     <div id="docLoadingMsg" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text-muted)">⏳ Analyse du document en cours… (peut prendre ~15 secondes)</div>
     <div class="error-box" id="docErrorBox"></div>
   `;
-  ['docTypeSeg', 'docPlatformSeg', 'docOfferSeg', 'docBrandSeg'].forEach(setupSegmented);
+  ['docTypeSeg', 'docPlatformSeg', 'docBrandSeg'].forEach(setupSegmented);
 
   const dropzone = $('#docDropzone');
   const fileInput = $('#docFileInput');
@@ -3857,7 +3808,7 @@ async function importFunnelDocument(funnelId, file) {
           data_url: reader.result,
           doc_type: getSegVal('docTypeSeg'),
           platform: getSegVal('docPlatformSeg'),
-          offer_type: getSegVal('docOfferSeg'),
+          offer_type: 'Digital product',
           brand_type: getSegVal('docBrandSeg'),
         }),
       });
@@ -3951,6 +3902,21 @@ function renderFunnelBlockEditor(block, i) {
   `;
 }
 
+function syncFunnelBlocksFromDOM(page) {
+  // Recopie l'etat actuel des champs dans `page` avant tout re-rendu ou
+  // sauvegarde — sans ca, un re-rendu (ex. apres upload media) regenere le
+  // formulaire depuis les donnees JS et efface tout texte tape mais pas
+  // encore synchronise.
+  const nameInput = $('#pageNameInput');
+  if (nameInput) page.name = nameInput.value.trim() || page.name;
+  $$('[data-block-text]', $('#funnelBlocksList')).forEach(ta => {
+    page.blocks[Number(ta.dataset.blockText)].text = ta.value;
+  });
+  $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
+    page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+  });
+}
+
 function bindFunnelBlockEvents(funnelId, page) {
   $$('[data-block-media]', $('#funnelBlocksList')).forEach(input => {
     input.addEventListener('change', (e) => {
@@ -3966,6 +3932,7 @@ function bindFunnelBlockEvents(funnelId, page) {
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || 'Erreur upload');
+          syncFunnelBlocksFromDOM(page);
           page.blocks[idx].url = data.url;
           page.blocks[idx].media_type = data.media_type;
           renderFunnelPageEditor(funnelId, page);
@@ -3980,13 +3947,7 @@ function bindFunnelBlockEvents(funnelId, page) {
 }
 
 async function saveFunnelPage(funnelId, page) {
-  page.name = $('#pageNameInput').value.trim() || page.name;
-  $$('[data-block-text]', $('#funnelBlocksList')).forEach(ta => {
-    page.blocks[Number(ta.dataset.blockText)].text = ta.value;
-  });
-  $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
-    page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-  });
+  syncFunnelBlocksFromDOM(page);
 
   const errBox = $('#editorErrorBox');
   errBox.style.display = 'none';
@@ -4064,7 +4025,7 @@ async function runCreativeAngles() {
       body: JSON.stringify({
         offer_description: offerDescription,
         platform: getSegVal('creativePlatformSeg'),
-        offer_type: getSegVal('creativeOfferSeg'),
+        offer_type: 'Digital product',
       }),
     });
     const data = await res.json();
@@ -4325,7 +4286,7 @@ async function runAudit() {
         url,
         ad_text: adText,
         platform: getSegVal('platformSeg'),
-        offer_type: getSegVal('offerSeg'),
+        offer_type: 'Digital product',
         brand_type: getSegVal('brandSeg'),
       }),
     });
