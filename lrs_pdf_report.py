@@ -3,6 +3,8 @@
 # Utilise reportlab — fond sombre, branding LRS
 
 import io
+from xml.sax.saxutils import escape as _xml_escape
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
@@ -37,6 +39,16 @@ def _score_color(v, mx=5):
 def _bar(v, mx=5, n=10):
     f = round(v / mx * n)
     return "█" * f + "░" * (n - f)
+
+def _x(v):
+    """Echappe le texte libre (LLM) avant injection dans un Paragraph reportlab.
+    reportlab interprete son contenu comme du XML/HTML minimal (<b>, <font>...) et
+    plante (ValueError) sur la moindre balise mal formee que le LLM peut generer —
+    un '<b>' non ferme, un fragment HTML recopie depuis la page auditee, un '<'
+    isole suivi d'une lettre. Ne PAS appeler sur les balises qu'on ajoute nous-memes."""
+    if v is None:
+        return ""
+    return _xml_escape(str(v))
 
 def _s(name, **kw):
     """Crée un ParagraphStyle rapide."""
@@ -116,7 +128,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     report_mode  = meta.get("report_mode", "")
     if client_name and report_mode == "client":
         title_str = "<b>🚦 LRS™</b> — Rapport d'Audit Confidentiel"
-        sub_str   = f"Préparé pour : <b>{client_name}</b>"
+        sub_str   = f"Préparé pour : <b>{_x(client_name)}</b>"
     else:
         title_str = "<b>🚦 LRS™</b> — Launch Risk System"
         sub_str   = ""
@@ -209,7 +221,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     ]
     t_meta = Table(
         [[Paragraph(f"<b>{r}</b>", _s("mk", fontSize=8, textColor=C_GRAY)),
-          Paragraph(str(v),        _s("mv", fontSize=8, textColor=C_LIGHT))]
+          Paragraph(_x(v),         _s("mv", fontSize=8, textColor=C_LIGHT))]
          for r,v in meta_rows],
         colWidths=[W*0.28, W*0.72]
     )
@@ -242,7 +254,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
                 [Paragraph(f"<font color='{hx}'><b>{label} — {val}/5</b></font>  "
                            f"<font color='#444444'>{_bar(val)}</font>",
                            _s(f"sh{label}", fontSize=11, fontName="Helvetica-Bold"))],
-                [Paragraph(detail, _s(f"sd{label}", fontSize=9, textColor=C_LIGHT, leading=13))],
+                [Paragraph(_x(detail), _s(f"sd{label}", fontSize=9, textColor=C_LIGHT, leading=13))],
             ], left_border_color=colors.HexColor(hx), bg=colors.HexColor("#13131f")),
             Spacer(1, 0.25*cm),
         ]))
@@ -251,8 +263,8 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     top3 = why.get("top_3_reasons", [])
     gaps = why.get("critical_gaps", [])
     if top3 or gaps:
-        top3_txt = "<br/>".join([f"• {r}" for r in top3])
-        gaps_txt = "<br/>".join([f"⚠ {g}" for g in gaps])
+        top3_txt = "<br/>".join([f"• {_x(r)}" for r in top3])
+        gaps_txt = "<br/>".join([f"⚠ {_x(g)}" for g in gaps])
         t_2col = Table([[
             Paragraph(f"<b><font color='#FF8C00'>Top 3 Raisons</font></b><br/><br/>"
                       f"<font color='#cccccc'>{top3_txt}</font>",
@@ -285,12 +297,12 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
             _card([
                 [Paragraph("🎯  ACTION PRIORITAIRE #1",
                            _s("tph", fontSize=11, fontName="Helvetica-Bold", textColor=C_RED))],
-                [Paragraph(f"<b>{tp.get('what','')}</b>",
+                [Paragraph(f"<b>{_x(tp.get('what',''))}</b>",
                            _s("tpw", fontSize=10, textColor=C_WHITE))],
-                [Paragraph(f"<b>Comment exactement :</b> {tp.get('how_exactly','')}",
+                [Paragraph(f"<b>Comment exactement :</b> {_x(tp.get('how_exactly',''))}",
                            _s("tph2", fontSize=9, textColor=C_LIGHT, leading=13))],
-                [Paragraph(f"<b>Impact :</b> {tp.get('expected_impact','')}   "
-                           f"<b>Temps :</b> {tp.get('time_estimate','')}",
+                [Paragraph(f"<b>Impact :</b> {_x(tp.get('expected_impact',''))}   "
+                           f"<b>Temps :</b> {_x(tp.get('time_estimate',''))}",
                            _s("tpt", fontSize=8, textColor=C_GRAY))],
             ], left_border_color=C_RED, bg=colors.HexColor("#1f0808")),
             Spacer(1, 0.35*cm),
@@ -304,11 +316,11 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         for qw in qws:
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>{qw.get('what','')}</b>",
+                    [Paragraph(f"<b>{_x(qw.get('what',''))}</b>",
                                _s("qwt", fontSize=10, textColor=C_GREEN))],
-                    [Paragraph(qw.get("how_exactly",""),
+                    [Paragraph(_x(qw.get("how_exactly","")),
                                _s("qwb", fontSize=9, textColor=C_LIGHT, leading=13))],
-                    [Paragraph(f"Impact : {qw.get('expected_impact','')}  |  Temps : {qw.get('time_estimate','<1h')}",
+                    [Paragraph(f"Impact : {_x(qw.get('expected_impact',''))}  |  Temps : {_x(qw.get('time_estimate','<1h'))}",
                                _s("qwm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_GREEN, bg=colors.HexColor("#0a1f0a")),
                 Spacer(1, 0.2*cm),
@@ -323,11 +335,11 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         for lt in lts:
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>{lt.get('what','')}</b>",
+                    [Paragraph(f"<b>{_x(lt.get('what',''))}</b>",
                                _s("ltt", fontSize=10, textColor=C_ORANGE))],
-                    [Paragraph(lt.get("how_exactly",""),
+                    [Paragraph(_x(lt.get("how_exactly","")),
                                _s("ltb", fontSize=9, textColor=C_LIGHT, leading=13))],
-                    [Paragraph(f"Impact : {lt.get('expected_impact','')}  |  Temps : {lt.get('time_estimate','')}",
+                    [Paragraph(f"Impact : {_x(lt.get('expected_impact',''))}  |  Temps : {_x(lt.get('time_estimate',''))}",
                                _s("ltm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_ORANGE, bg=colors.HexColor("#1f1000")),
                 Spacer(1, 0.2*cm),
@@ -341,18 +353,18 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
                             _s("abh2", fontSize=12, fontName="Helvetica-Bold", textColor=C_ACCENT, spaceAfter=5))]
         for ab in abt:
             ab_inner = Table([[
-                Paragraph(f"<b>A :</b> {ab.get('variant_a','')}",
+                Paragraph(f"<b>A :</b> {_x(ab.get('variant_a',''))}",
                           _s("aba", fontSize=9, textColor=C_LIGHT, leading=12)),
-                Paragraph(f"<b>B :</b> {ab.get('variant_b','')}",
+                Paragraph(f"<b>B :</b> {_x(ab.get('variant_b',''))}",
                           _s("abb", fontSize=9, textColor=C_LIGHT, leading=12)),
             ]], colWidths=[W/2-1.5*cm, W/2-1.5*cm])
             ab_inner.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4)]))
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>Hypothèse :</b> {ab.get('hypothesis','')}",
+                    [Paragraph(f"<b>Hypothèse :</b> {_x(ab.get('hypothesis',''))}",
                                _s("abhy", fontSize=9, textColor=C_WHITE))],
                     [ab_inner],
-                    [Paragraph(f"Métrique : {ab.get('success_metric','')}",
+                    [Paragraph(f"Métrique : {_x(ab.get('success_metric',''))}",
                                _s("abm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_ACCENT),
                 Spacer(1, 0.2*cm),
@@ -380,7 +392,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         if not val: continue
         t_row = Table([[
             Paragraph(f"<b>{label}</b>", _s(f"rl{label}", fontSize=8, textColor=C_GRAY)),
-            Paragraph(str(val),          _s(f"rv{label}", fontSize=9, textColor=C_WHITE)),
+            Paragraph(_x(val),           _s(f"rv{label}", fontSize=9, textColor=C_WHITE)),
         ]], colWidths=[W*0.22, W*0.78])
         t_row.setStyle(TableStyle([
             ("ROWBACKGROUNDS",(0,0),(-1,-1), [C_SURFACE, C_SURFACE2]),
@@ -394,13 +406,13 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     if bullets:
         story += [Spacer(1,0.2*cm), Paragraph("<b>Hero Bullets</b>", _s("bh", fontSize=9, textColor=C_GRAY))]
         for b in bullets:
-            story.append(Paragraph(f"→ {b}", _s("bi", fontSize=9, textColor=C_LIGHT, leftIndent=12, leading=13)))
+            story.append(Paragraph(f"→ {_x(b)}", _s("bi", fontSize=9, textColor=C_LIGHT, leftIndent=12, leading=13)))
 
     stack = rw.get("offer_stack", [])
     if stack:
         story += [Spacer(1,0.2*cm), Paragraph("<b>Offer Stack</b>", _s("osh", fontSize=9, textColor=C_GRAY))]
         for o in stack:
-            story.append(Paragraph(f"✓ {o}", _s("osi", fontSize=9, textColor=C_GREEN, leftIndent=12)))
+            story.append(Paragraph(f"✓ {_x(o)}", _s("osi", fontSize=9, textColor=C_GREEN, leftIndent=12)))
 
     # ADS
     story += [
@@ -415,7 +427,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         for a2 in angles:
             if isinstance(a2, dict):
                 story.append(Paragraph(
-                    f"<b>{a2.get('angle','')}</b> — {a2.get('rationale','')}",
+                    f"<b>{_x(a2.get('angle',''))}</b> — {_x(a2.get('rationale',''))}",
                     _s("angi", fontSize=9, textColor=C_LIGHT, leftIndent=10, leading=13)
                 ))
 
@@ -425,7 +437,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         for h in hooks:
             if isinstance(h, dict):
                 story.append(Paragraph(
-                    f"[{h.get('platform','')}/{h.get('type','')}]  {h.get('hook','')}",
+                    f"[{_x(h.get('platform',''))}/{_x(h.get('type',''))}]  {_x(h.get('hook',''))}",
                     _s("hki", fontSize=9, fontName="Courier", textColor=C_LIGHT, leftIndent=10)
                 ))
 
@@ -435,11 +447,11 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         for i, v in enumerate(variants, 1):
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>Variante {i} — {v.get('platform','')}</b>",
+                    [Paragraph(f"<b>Variante {i} — {_x(v.get('platform',''))}</b>",
                                _s(f"vh{i}", fontSize=9, fontName="Helvetica-Bold", textColor=C_ACCENT))],
-                    [Paragraph(f"<b>Headline :</b> {v.get('headline','')}",   _s(f"vhl{i}", fontSize=9, textColor=C_WHITE))],
-                    [Paragraph(f"<b>Text :</b> {v.get('primary_text','')}",   _s(f"vpt{i}", fontSize=9, textColor=C_LIGHT, leading=12))],
-                    [Paragraph(f"<b>CTA :</b> {v.get('cta','')}",             _s(f"vca{i}", fontSize=9, textColor=C_GREEN))],
+                    [Paragraph(f"<b>Headline :</b> {_x(v.get('headline',''))}",   _s(f"vhl{i}", fontSize=9, textColor=C_WHITE))],
+                    [Paragraph(f"<b>Text :</b> {_x(v.get('primary_text',''))}",   _s(f"vpt{i}", fontSize=9, textColor=C_LIGHT, leading=12))],
+                    [Paragraph(f"<b>CTA :</b> {_x(v.get('cta',''))}",             _s(f"vca{i}", fontSize=9, textColor=C_GREEN))],
                 ], left_border_color=C_ACCENT),
                 Spacer(1, 0.2*cm),
             ]))
@@ -449,7 +461,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         story += [
             Spacer(1,0.2*cm),
             Paragraph("<b>Script UGC 20-30s</b>", _s("ugch", fontSize=10, textColor=C_GRAY)),
-            _card([[Paragraph(ugc, _s("ugcb", fontSize=9, fontName="Courier", textColor=C_LIGHT, leading=13))]],
+            _card([[Paragraph(_x(ugc), _s("ugcb", fontSize=9, fontName="Courier", textColor=C_LIGHT, leading=13))]],
                   left_border_color=C_ACCENT, bg=colors.HexColor("#0f0f1a")),
         ]
 

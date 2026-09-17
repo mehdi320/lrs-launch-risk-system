@@ -244,7 +244,17 @@ def _reconstruct_c(entry):
     decision, risk = audit_engine.get_decision(score)
     bd = entry.get("result", {}).get("lrs", {}).get("score_breakdown_5", {})
     hook = max(0, min(5, int(bd.get("hook", 0))))
-    offer = max(0, min(5, int(bd.get("offer", 0))))
+    # Entrees post-refonte scoring (Hormozi + Schwartz separes) : recalcule
+    # l'Offer comme audit_engine._parse_audit_json. Anciennes entrees (avant
+    # la refonte, qui n'ont qu'un "offer" libre) : fallback sur ce champ pour
+    # ne pas casser l'historique deja persiste.
+    if "offer_hormozi" in bd or "offer_schwartz" in bd:
+        offer_hormozi = max(0, min(5, int(bd.get("offer_hormozi", 0))))
+        offer_schwartz = max(0, min(5, int(bd.get("offer_schwartz", 0))))
+        offer = round((offer_hormozi + offer_schwartz) / 2)
+    else:
+        offer_hormozi = offer_schwartz = None
+        offer = max(0, min(5, int(bd.get("offer", 0))))
     trust = max(0, min(5, int(bd.get("trust", 0))))
     friction = max(0, min(5, int(bd.get("friction_message_match", 0))))
     tier = audit_engine.get_tier(score)
@@ -253,6 +263,7 @@ def _reconstruct_c(entry):
     cvr_cur, cvr_fix, cvr_up = bench[tier]
     return {
         "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
+        "offer_hormozi": offer_hormozi, "offer_schwartz": offer_schwartz,
         "decision": decision, "risk": risk,
         "cvr_cur": cvr_cur, "cvr_fix": cvr_fix, "cvr_up": cvr_up,
     }
