@@ -75,8 +75,8 @@ pip install -r requirements.txt   # fastapi/uvicorn déjà dedans
 uvicorn pilot_server:app --port 8600 --reload
 ```
 
-Ouvrir http://localhost:8600 — indépendant de l'app Streamlit (`streamlit
-run app.py`), les deux peuvent tourner en parallèle sur des ports différents.
+Ouvrir http://localhost:8600 — c'est l'unique interface produit (l'ancienne
+app Streamlit, `app.py`, a été retirée du produit).
 
 Nécessite `OPENAI_API_KEY` dans `.env` pour l'Audit/Multi-Audit/Creative
 Studio (angles rapides). Le Studio avancé (Claude) nécessite en plus
