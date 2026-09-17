@@ -9,6 +9,7 @@
 import base64
 import contextvars
 import datetime
+import io
 import mimetypes
 import os
 import re
@@ -16,6 +17,8 @@ import secrets as _secrets
 import sys
 import time
 import uuid
+import xml.etree.ElementTree as ET
+import zipfile
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -1779,6 +1782,115 @@ def delete_funnel_page(funnel_id: str, page_id: str):
         funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
         save_json_file(FUNNELS_FILE(), funnels)
     return {"ok": True}
+
+
+_DOCX_WORD_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _extract_docx_text(raw: bytes) -> str:
+    """Extrait le texte brut d'un .docx (export Word ou Google Docs) sans
+    dependance externe : un .docx est une archive zip contenant du XML
+    OOXML, on lit directement word/document.xml plutot que d'ajouter
+    python-docx pour ce seul besoin."""
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        xml_bytes = z.read("word/document.xml")
+    root = ET.fromstring(xml_bytes)
+    paragraphs = []
+    for p in root.iter(f"{_DOCX_WORD_NS}p"):
+        line = "".join(node.text or "" for node in p.iter(f"{_DOCX_WORD_NS}t")).strip()
+        if line:
+            paragraphs.append(line)
+    return "\n\n".join(paragraphs)
+
+
+class FunnelDocumentImportRequest(BaseModel):
+    name: str = "Nouvelle page"
+    filename: str = "document.docx"
+    data_url: str = ""
+    doc_type: str = "sales_page"  # "sales_page" | "advertorial"
+    platform: str = "Meta"
+    offer_type: str = "Digital product"
+    brand_type: str = "Nouveau lancement"
+    model: str = "gpt-4o-mini"
+
+
+@app.post("/api/funnels/{funnel_id}/pages/from-document")
+def create_funnel_page_from_document(funnel_id: str, req: FunnelDocumentImportRequest):
+    """Importe un brouillon de page (Google Doc exporté en .docx, ou .txt)
+    et en fait directement une page de funnel : le document est audité
+    comme une vraie landing page/advertorial (meme moteur que /api/audit),
+    et la page est generee a partir du rewrite corrige — pas juste une
+    copie brute du document colle tel quel."""
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funnel introuvable.")
+
+    m = re.match(r"^data:([\w.+-]+/[\w.+-]+);base64,(.+)$", req.data_url, re.DOTALL)
+    if not m:
+        raise HTTPException(status_code=400, detail="Fichier invalide (data URL attendue).")
+    try:
+        raw = base64.b64decode(m.group(2))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Fichier illisible.")
+    if len(raw) > MAX_FUNNEL_MEDIA_BYTES:
+        raise HTTPException(status_code=413, detail="Document trop volumineux (15 Mo max).")
+
+    ext = os.path.splitext(req.filename)[1].lower()
+    if ext == ".docx":
+        try:
+            content = _extract_docx_text(raw)
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Impossible de lire ce .docx — vérifiez qu'il s'agit bien d'un export Word/Google Docs.",
+            )
+    elif ext in (".txt", ".md"):
+        content = raw.decode("utf-8", errors="ignore")
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Format non supporté — exportez votre Google Doc en .docx (Fichier > Télécharger > Word), ou en .txt.",
+        )
+
+    if not content.strip():
+        raise HTTPException(status_code=422, detail="Le document semble vide une fois le texte extrait.")
+
+    is_advertorial = req.doc_type == "advertorial"
+    page_type = ("Advertorial (article qui redirige vers une page de vente)" if is_advertorial
+                 else "Sales Page / Landing Page (offre unique)")
+    page_lang = audit_engine.detect_language(content)
+
+    try:
+        result = audit_engine.run_audit(
+            mode="Funnel Only", platform=req.platform, offer_type=req.offer_type,
+            landing_content=content, ad_text="", market_context="",
+            model=req.model, brand_type=req.brand_type,
+            page_type=page_type, page_lang=page_lang,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    source_label = f"document:{req.filename}"
+    meta = {
+        "mode": "Funnel Only", "platform": req.platform, "offer_type": req.offer_type,
+        "url": source_label, "timestamp": ts, "brand_type": req.brand_type,
+        "page_type": page_type, "ad_text": "", "model": req.model,
+    }
+    _save_history_entry(result, meta)
+
+    blocks = _blocks_from_rewrite(result.get("rewrite", {}))
+    pid = str(uuid.uuid4())
+    page = {
+        "id": pid, "name": req.name.strip() or "Nouvelle page",
+        "source": {"url": source_label, "timestamp": ts, "score": result.get("_c", {}).get("score", 0)},
+        "blocks": blocks,
+    }
+    funnel.setdefault("pages", {})[pid] = page
+    funnel["updated"] = ts
+    save_json_file(FUNNELS_FILE(), funnels)
+    return page
 
 
 ALLOWED_FUNNEL_MEDIA_TYPES = {

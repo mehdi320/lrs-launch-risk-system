@@ -3700,8 +3700,10 @@ function renderFunnelDetail(funnel) {
     <div class="card" style="margin-bottom:16px">
       <div class="field-label" style="margin-bottom:8px">Ajouter une page</div>
       <button class="cta-secondary" id="addBlankPageBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-right:8px">📄 Page vierge</button>
-      <button class="cta-secondary" id="addFromAuditBtn" style="width:auto;padding:8px 14px;font-size:13px">🔍 Depuis un audit</button>
+      <button class="cta-secondary" id="addFromAuditBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-right:8px">🔍 Depuis un audit</button>
+      <button class="cta-secondary" id="addFromDocBtn" style="width:auto;padding:8px 14px;font-size:13px">📎 Depuis un document (Google Doc / Word)</button>
       <div id="fromAuditPicker" style="display:none;margin-top:12px"></div>
+      <div id="fromDocPicker" style="display:none;margin-top:12px"></div>
       <div class="error-box" id="pageErrorBox"></div>
     </div>
     ${pages.length ? `<div class="card">${rows}</div>` : `
@@ -3716,6 +3718,7 @@ function renderFunnelDetail(funnel) {
   $('#backToFunnels').addEventListener('click', loadFunnels);
   $('#addBlankPageBtn').addEventListener('click', () => createFunnelPage(funnel.id, {}));
   $('#addFromAuditBtn').addEventListener('click', () => toggleAuditPicker(funnel.id));
+  $('#addFromDocBtn').addEventListener('click', () => toggleDocPicker(funnel.id));
   $$('[data-page-id]', $('#funnelsView')).forEach(row => {
     row.addEventListener('click', (e) => {
       if (e.target.closest('[data-delete-page]')) return;
@@ -3735,6 +3738,7 @@ function renderFunnelDetail(funnel) {
 async function toggleAuditPicker(funnelId) {
   const box = $('#fromAuditPicker');
   if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  $('#fromDocPicker').style.display = 'none';
   box.style.display = 'block';
   box.innerHTML = `<div style="font-size:12.5px;color:var(--text-muted)">Chargement de l'historique…</div>`;
   try {
@@ -3761,6 +3765,117 @@ async function toggleAuditPicker(funnelId) {
   } catch (err) {
     box.innerHTML = `<div class="error-box" style="display:block">${escapeHtml(err.message)}</div>`;
   }
+}
+
+function toggleDocPicker(funnelId) {
+  const box = $('#fromDocPicker');
+  if (box.style.display === 'block') { box.style.display = 'none'; return; }
+  $('#fromAuditPicker').style.display = 'none';
+  box.style.display = 'block';
+  box.innerHTML = `
+    <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">
+      Exportez votre Google Doc en <strong>.docx</strong> (Fichier → Télécharger → Microsoft Word),
+      ou en <strong>.txt</strong>. Le document est audité comme une vraie page (même moteur que
+      l'onglet Audit) et la page générée reprend le rewrite corrigé — pas une copie brute du texte.
+    </p>
+    <div class="row">
+      <div class="field">
+        <label class="field-label">Type de document</label>
+        <div class="segmented" id="docTypeSeg">
+          <button class="active" data-val="sales_page">Page de vente</button>
+          <button data-val="advertorial">Advertorial</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Plateforme</label>
+        <div class="segmented" id="docPlatformSeg">
+          <button class="active" data-val="Meta">Meta</button>
+          <button data-val="TikTok">TikTok</button>
+          <button data-val="Google">Google</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label class="field-label">Type d'offre</label>
+        <div class="segmented" id="docOfferSeg">
+          <button class="active" data-val="Digital product">Digital</button>
+          <button data-val="Ecom (produit physique)">E-com</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Marque</label>
+        <div class="segmented" id="docBrandSeg">
+          <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
+          <button data-val="Marque etablie">Marque établie</button>
+        </div>
+      </div>
+    </div>
+    <div id="docDropzone" style="margin-top:12px;border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;color:var(--text-secondary);font-size:13px;transition:border-color .15s">
+      📎 Glissez votre .docx ici, ou cliquez pour choisir un fichier
+      <input type="file" id="docFileInput" accept=".docx,.txt,.md" style="display:none" />
+    </div>
+    <div id="docLoadingMsg" style="display:none;margin-top:10px;font-size:12.5px;color:var(--text-muted)">⏳ Analyse du document en cours… (peut prendre ~15 secondes)</div>
+    <div class="error-box" id="docErrorBox"></div>
+  `;
+  ['docTypeSeg', 'docPlatformSeg', 'docOfferSeg', 'docBrandSeg'].forEach(setupSegmented);
+
+  const dropzone = $('#docDropzone');
+  const fileInput = $('#docFileInput');
+  dropzone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) importFunnelDocument(funnelId, e.target.files[0]);
+  });
+  dropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--accent)';
+  });
+  dropzone.addEventListener('dragleave', () => { dropzone.style.borderColor = 'var(--border)'; });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropzone.style.borderColor = 'var(--border)';
+    const file = e.dataTransfer.files[0];
+    if (file) importFunnelDocument(funnelId, file);
+  });
+}
+
+async function importFunnelDocument(funnelId, file) {
+  const errBox = $('#docErrorBox');
+  errBox.style.display = 'none';
+  $('#docLoadingMsg').style.display = 'block';
+  $('#docDropzone').style.pointerEvents = 'none';
+  $('#docDropzone').style.opacity = '0.5';
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const res = await fetch(`/api/funnels/${funnelId}/pages/from-document`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name.replace(/\.[^.]+$/, ''),
+          filename: file.name,
+          data_url: reader.result,
+          doc_type: getSegVal('docTypeSeg'),
+          platform: getSegVal('docPlatformSeg'),
+          offer_type: getSegVal('docOfferSeg'),
+          brand_type: getSegVal('docBrandSeg'),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Erreur import');
+      loadFunnelDetail(funnelId);
+    } catch (err) {
+      $('#docLoadingMsg').style.display = 'none';
+      $('#docDropzone').style.pointerEvents = 'auto';
+      $('#docDropzone').style.opacity = '1';
+      errBox.textContent = err.message; errBox.style.display = 'block';
+    }
+  };
+  reader.onerror = () => {
+    $('#docLoadingMsg').style.display = 'none';
+    errBox.textContent = 'Impossible de lire ce fichier.'; errBox.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
 }
 
 async function createFunnelPage(funnelId, opts) {
