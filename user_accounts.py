@@ -7,8 +7,9 @@
 # - creative_studio/serving/app.py (webhook Stripe) pour activer/mettre à
 #   jour un compte à réception d'un événement checkout.session.completed
 #   ou customer.subscription.updated/.deleted ;
-# - app.py (check_subscription_access) pour lire le statut et gérer les
-#   liens magiques de connexion.
+# - pilot_server.py (_require_auth / _active_subscriber_email) pour lire
+#   le statut et gérer les liens magiques de connexion — app.py (Streamlit)
+#   a été retiré du produit, le pilote FastAPI est l'unique interface.
 #
 # Aucune donnée de carte bancaire ici — uniquement l'identifiant Stripe
 # (customer/subscription) et un statut, toute la partie paiement reste
@@ -227,24 +228,29 @@ def create_magic_link(email: str, *, rate_limit: bool = True) -> str | None:
 
 def consume_magic_link(token: str) -> str | None:
     """Valide et consomme un token (usage unique). Retourne l'email associé,
-    ou None si le token est invalide, expiré, ou déjà utilisé."""
+    ou None si le token est invalide, expiré, ou déjà utilisé.
+
+    Le check (used_at/expiration) et le marquage used_at sont faits en une
+    seule requête UPDATE ... WHERE used_at IS NULL AND expires_at > now, pour
+    que deux requêtes concurrentes sur le même token (ex : scanner
+    anti-phishing d'un client mail qui pré-charge le lien avant le clic réel
+    de l'utilisateur, ou un double-clic) ne puissent pas toutes les deux
+    "gagner" le token : seule une transaction peut faire passer used_at de
+    NULL à une valeur, rowcount départage les autres."""
     init_db()
+    now = _now_iso()
     with db_session() as conn:
-        row = conn.execute(
-            "SELECT email, expires_at, used_at FROM magic_links WHERE token = ?", (token,)
-        ).fetchone()
-        if row is None or row["used_at"] is not None:
-            return None
-        try:
-            expires_at = datetime.fromisoformat(row["expires_at"])
-        except ValueError:
-            return None
-        if datetime.now(timezone.utc) > expires_at:
-            return None
-        conn.execute(
-            "UPDATE magic_links SET used_at = ? WHERE token = ?", (_now_iso(), token)
+        cur = conn.execute(
+            "UPDATE magic_links SET used_at = ? "
+            "WHERE token = ? AND used_at IS NULL AND expires_at > ?",
+            (now, token, now),
         )
-        return row["email"]
+        if cur.rowcount != 1:
+            return None
+        row = conn.execute(
+            "SELECT email FROM magic_links WHERE token = ?", (token,)
+        ).fetchone()
+        return row["email"] if row else None
 
 
 def claim_stripe_event(event_id: str) -> bool:
