@@ -3629,30 +3629,76 @@ document.addEventListener('keydown', (e) => {
   saveFunnelPage(_funnelEditorCtx.funnelId, _funnelEditorCtx.page);
 });
 
+const FUNNEL_PAGE_TYPE_LABELS = {
+  landing: '🎯 Landing Page', payment: '💳 Page de paiement', thankyou: '🙏 Page de remerciement',
+};
+
 async function loadFunnels() {
   _funnelEditorCtx = null;
   $('#funnelsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
   try {
-    const res = await fetch('/api/funnels');
-    const data = await res.json();
-    renderFunnelsList(data.funnels || []);
+    const [listRes, statsRes] = await Promise.all([fetch('/api/funnels'), fetch('/api/funnels/stats')]);
+    const data = await listRes.json();
+    const stats = await statsRes.json();
+    renderFunnelsList(data.funnels || [], stats);
   } catch (err) {
     $('#funnelsView').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les funnels : ${escapeHtml(err.message)}</div>`;
   }
 }
 
-function renderFunnelsList(funnels) {
+function renderFunnelsKpis(stats) {
+  if (!stats.total_funnels) return '';
+  const kpis = [
+    ['Funnels', stats.total_funnels, '', 'var(--text)'],
+    ['Pages', stats.total_pages, '', 'var(--text)'],
+    ['Landing Pages', stats.by_type.landing || 0, '', 'var(--text)'],
+    ['Pages de paiement', stats.by_type.payment || 0, '', 'var(--text)'],
+    ['Pages de remerciement', stats.by_type.thankyou || 0, '', 'var(--text)'],
+    ['Score moyen des sources', stats.avg_source_score != null ? stats.avg_source_score + '/20' : '—', 'pages générées depuis un audit', stats.avg_source_score != null ? scoreColor(stats.avg_source_score) : 'var(--text)'],
+  ];
+  const kpiHtml = kpis.map(([label, val, sub, color]) => `
+    <div class="kpi-card">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-val" style="color:${color}">${val}</div>
+      <div class="kpi-sub">${sub}</div>
+    </div>
+  `).join('');
+
+  const sourceLine = `Origine des pages : ${stats.by_source.audit} depuis un audit · ${stats.by_source.document} depuis un document · ${stats.by_source.blank} créées vierges.`;
+
+  const incompleteHtml = stats.incomplete_funnels.length ? `
+    <div class="dash-section fade-up">
+      <h2>⚠️ Funnels incomplets (${stats.incomplete_funnels.length})</h2>
+      ${stats.incomplete_funnels.map(f => `
+        <div class="list-row" data-funnel-id="${escapeHtml(f.id)}" style="cursor:pointer">
+          <div class="lr-body">
+            <div class="lr-title">${escapeHtml(f.name)}</div>
+            <div class="lr-meta">Manque : ${f.missing.map(t => FUNNEL_PAGE_TYPE_LABELS[t]).join(', ')}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  return `
+    <div class="kpi-grid fade-up" style="margin-bottom:12px">${kpiHtml}</div>
+    <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 16px">${sourceLine}</p>
+    ${incompleteHtml}
+  `;
+}
+
+function renderFunnelsList(funnels, stats) {
   const rows = funnels.map(f => `
     <div class="list-row" data-funnel-id="${escapeHtml(f.id)}" style="cursor:pointer">
       <div class="lr-body">
         <div class="lr-title">${escapeHtml(f.name)}</div>
-        <div class="lr-meta">${f.page_count} page${f.page_count > 1 ? 's' : ''} · maj ${escapeHtml(f.updated)}</div>
+        <div class="lr-meta">${f.page_count} page${f.page_count > 1 ? 's' : ''} · maj ${escapeHtml(f.updated)}${f.missing_types.length ? ` · <span style="color:var(--warning)">manque ${f.missing_types.map(t => FUNNEL_PAGE_TYPE_LABELS[t]).join(', ')}</span>` : ''}</div>
       </div>
       <button class="cta-secondary" data-delete-funnel="${escapeHtml(f.id)}" style="width:auto;padding:6px 10px;font-size:12px">🗑</button>
     </div>
   `).join('');
 
   $('#funnelsView').innerHTML = `
+    ${stats ? renderFunnelsKpis(stats) : ''}
     <div class="card" style="margin-bottom:16px">
       <p style="color:var(--text-secondary);font-size:13px;margin:0 0 12px">
         Un funnel regroupe des pages générées depuis un audit LRS (le rewrite corrigé devient la page) ou créées vierges.
@@ -3722,12 +3768,15 @@ async function loadFunnelDetail(funnelId) {
   }
 }
 
+const FUNNEL_PAGE_TYPE_ORDER = ['landing', 'payment', 'thankyou'];
+
 function renderFunnelDetail(funnel) {
-  const pages = Object.values(funnel.pages || {});
+  const pages = Object.values(funnel.pages || {}).sort((a, b) =>
+    FUNNEL_PAGE_TYPE_ORDER.indexOf(a.page_type || 'landing') - FUNNEL_PAGE_TYPE_ORDER.indexOf(b.page_type || 'landing'));
   const rows = pages.map(p => `
     <div class="list-row" data-page-id="${escapeHtml(p.id)}" style="cursor:pointer">
       <div class="lr-body">
-        <div class="lr-title">${escapeHtml(p.name)}</div>
+        <div class="lr-title">${FUNNEL_PAGE_TYPE_LABELS[p.page_type || 'landing']} — ${escapeHtml(p.name)}</div>
         <div class="lr-meta">${p.source ? `Depuis l'audit ${escapeHtml(p.source.url)} (${p.source.score}/20)` : 'Page vierge'} · ${(p.blocks || []).length} blocs</div>
       </div>
       <button class="cta-secondary" data-delete-page="${escapeHtml(p.id)}" style="width:auto;padding:6px 10px;font-size:12px">🗑</button>
@@ -3738,10 +3787,17 @@ function renderFunnelDetail(funnel) {
     <button class="restart-link" id="backToFunnels" style="margin-bottom:12px">← Tous les funnels</button>
     <h2 style="margin:0 0 12px">${escapeHtml(funnel.name)}</h2>
     <div class="card" style="margin-bottom:16px">
+      <div class="field-label" style="margin-bottom:8px">Type de la prochaine page vierge</div>
+      <div class="segmented" id="newPageTypeSeg" style="width:auto;display:inline-flex;margin-bottom:12px">
+        <button class="active" data-val="landing">🎯 Landing Page</button>
+        <button data-val="payment">💳 Paiement</button>
+        <button data-val="thankyou">🙏 Remerciement</button>
+      </div>
       <div class="field-label" style="margin-bottom:8px">Ajouter une page</div>
       <button class="cta-secondary" id="addBlankPageBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-right:8px">📄 Page vierge</button>
       <button class="cta-secondary" id="addFromAuditBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-right:8px">🔍 Depuis un audit</button>
       <button class="cta-secondary" id="addFromDocBtn" style="width:auto;padding:8px 14px;font-size:13px">📎 Depuis un document (Google Doc / Word)</button>
+      <p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">"Depuis un audit"/"Depuis un document" génèrent toujours une Landing Page — un audit LRS ne note que ce type de page pour l'instant.</p>
       <div id="fromAuditPicker" style="display:none;margin-top:12px"></div>
       <div id="fromDocPicker" style="display:none;margin-top:12px"></div>
       <div class="error-box" id="pageErrorBox"></div>
@@ -3755,8 +3811,9 @@ function renderFunnelDetail(funnel) {
     `}
   `;
 
+  setupSegmented('newPageTypeSeg');
   $('#backToFunnels').addEventListener('click', loadFunnels);
-  $('#addBlankPageBtn').addEventListener('click', () => createFunnelPage(funnel.id, {}));
+  $('#addBlankPageBtn').addEventListener('click', () => createFunnelPage(funnel.id, { page_type: getSegVal('newPageTypeSeg') }));
   $('#addFromAuditBtn').addEventListener('click', () => toggleAuditPicker(funnel.id));
   $('#addFromDocBtn').addEventListener('click', () => toggleDocPicker(funnel.id));
   $$('[data-page-id]', $('#funnelsView')).forEach(row => {

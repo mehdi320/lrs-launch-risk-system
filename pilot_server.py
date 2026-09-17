@@ -1625,12 +1625,35 @@ def _new_block(type_, **kw):
 FUNNEL_DEFAULT_FONT = "Inter"
 
 
+FUNNEL_PAGE_TYPES = ("landing", "payment", "thankyou")
+
+
 def _default_funnel_blocks():
     # Une page vierge part d'un seul bloc (un titre) — le reste s'ajoute
     # ensuite bloc par bloc depuis l'editeur, plutot que d'imposer d'emblee
     # le squelette complet (utilise uniquement quand la page est generee
     # depuis un audit/document, ou ce squelette a une vraie valeur).
     return [_new_block("heading", text="", size="h1")]
+
+
+def _default_blocks_for_type(page_type):
+    if page_type == "payment":
+        # Reprend les criteres deja utilises par audit_engine pour noter une
+        # page de paiement : offre explicite (prix/inclus), reassurance au
+        # moment de payer, CTA de finalisation.
+        return [
+            _new_block("heading", text="", size="h2"),
+            _new_block("offer_stack", items=[]),
+            _new_block("proof", text=""),
+            _new_block("cta", text=""),
+        ]
+    if page_type == "thankyou":
+        return [
+            _new_block("heading", text="", size="h1"),
+            _new_block("text", text=""),
+            _new_block("cta", text=""),
+        ]
+    return _default_funnel_blocks()
 
 
 def _blocks_from_rewrite(rw):
@@ -1650,9 +1673,12 @@ def _blocks_from_rewrite(rw):
 
 
 def _funnel_summary(f):
+    pages = f.get("pages", {})
+    types_present = {p.get("page_type", "landing") for p in pages.values()}
     return {
         "id": f["id"], "name": f.get("name", ""), "created": f.get("created", ""),
-        "updated": f.get("updated", ""), "page_count": len(f.get("pages", {})),
+        "updated": f.get("updated", ""), "page_count": len(pages),
+        "missing_types": [t for t in FUNNEL_PAGE_TYPES if t not in types_present] if pages else [],
     }
 
 
@@ -1661,6 +1687,51 @@ def list_funnels():
     funnels = load_json_file(FUNNELS_FILE(), dict)
     items = sorted(funnels.values(), key=lambda f: f.get("updated", ""), reverse=True)
     return {"funnels": [_funnel_summary(f) for f in items]}
+
+
+@app.get("/api/funnels/stats")
+def get_funnels_stats():
+    """KPIs de construction du Funnel Builder — pas de trafic reel a mesurer
+    tant que les pages ne sont pas hebergees publiquement (cf. limites du
+    squelette), donc ce dashboard porte sur ce qui est reellement mesurable
+    aujourd'hui : ce qui est construit, comment, et ce qu'il manque."""
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    by_type = {t: 0 for t in FUNNEL_PAGE_TYPES}
+    by_source = {"audit": 0, "document": 0, "blank": 0}
+    scores = []
+    total_pages = 0
+    incomplete = []
+
+    for f in funnels.values():
+        pages = f.get("pages", {})
+        total_pages += len(pages)
+        types_present = set()
+        for p in pages.values():
+            pt = p.get("page_type", "landing")
+            by_type[pt] = by_type.get(pt, 0) + 1
+            types_present.add(pt)
+            source = p.get("source")
+            if not source:
+                by_source["blank"] += 1
+            elif str(source.get("url", "")).startswith("document:"):
+                by_source["document"] += 1
+            else:
+                by_source["audit"] += 1
+                if source.get("score") is not None:
+                    scores.append(source["score"])
+        if pages:
+            missing = [t for t in FUNNEL_PAGE_TYPES if t not in types_present]
+            if missing:
+                incomplete.append({"id": f["id"], "name": f.get("name", ""), "missing": missing})
+
+    return {
+        "total_funnels": len(funnels),
+        "total_pages": total_pages,
+        "by_type": by_type,
+        "by_source": by_source,
+        "avg_source_score": round(sum(scores) / len(scores), 1) if scores else None,
+        "incomplete_funnels": incomplete[:10],
+    }
 
 
 class FunnelCreateRequest(BaseModel):
@@ -1718,6 +1789,7 @@ def delete_funnel(funnel_id: str):
 
 class FunnelPageCreateRequest(BaseModel):
     name: str = "Nouvelle page"
+    page_type: str = "landing"
     source_url: str = ""
     source_timestamp: str = ""
 
@@ -1729,8 +1801,9 @@ def create_funnel_page(funnel_id: str, req: FunnelPageCreateRequest):
     if not funnel:
         raise HTTPException(status_code=404, detail="Funnel introuvable.")
 
+    page_type = req.page_type if req.page_type in FUNNEL_PAGE_TYPES else "landing"
     source = None
-    blocks = _default_funnel_blocks()
+    blocks = _default_blocks_for_type(page_type)
     if req.source_url and req.source_timestamp:
         history = _load_history()
         entry = next((e for e in history if e.get("url") == req.source_url
@@ -1740,10 +1813,11 @@ def create_funnel_page(funnel_id: str, req: FunnelPageCreateRequest):
         rw = entry.get("result", {}).get("rewrite", {})
         blocks = _blocks_from_rewrite(rw)
         source = {"url": req.source_url, "timestamp": req.source_timestamp, "score": entry.get("score", 0)}
+        page_type = "landing"  # un audit note une landing page, jamais un checkout/remerciement
 
     pid = str(uuid.uuid4())
-    page = {"id": pid, "name": req.name.strip() or "Nouvelle page", "source": source,
-            "font": FUNNEL_DEFAULT_FONT, "blocks": blocks}
+    page = {"id": pid, "name": req.name.strip() or "Nouvelle page", "page_type": page_type,
+            "source": source, "font": FUNNEL_DEFAULT_FONT, "blocks": blocks}
     funnel.setdefault("pages", {})[pid] = page
     funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     save_json_file(FUNNELS_FILE(), funnels)
@@ -1884,7 +1958,7 @@ def create_funnel_page_from_document(funnel_id: str, req: FunnelDocumentImportRe
     blocks = _blocks_from_rewrite(result.get("rewrite", {}))
     pid = str(uuid.uuid4())
     page = {
-        "id": pid, "name": req.name.strip() or "Nouvelle page",
+        "id": pid, "name": req.name.strip() or "Nouvelle page", "page_type": "landing",
         "source": {"url": source_label, "timestamp": ts, "score": result.get("_c", {}).get("score", 0)},
         "font": FUNNEL_DEFAULT_FONT, "blocks": blocks,
     }
