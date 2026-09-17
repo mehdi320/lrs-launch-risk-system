@@ -172,58 +172,149 @@
     box-shadow: 0 0 0 4px var(--accent-soft);
   }
 
-  /* ── Funnel Builder : editeur de texte enrichi (gras/italique/paragraphe) ── */
-  .richtext-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+  /* ── Funnel Builder : rendu "canvas" (les blocs ressemblent a la page finale, ── */
+  /* pas a un formulaire) — l'edition (barre d'outils, rappel, compteur) ne */
+  /* s'affiche qu'au survol/focus, jamais en permanence. */
+  .funnel-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .funnel-topbar .field { margin: 0; }
+  .funnel-canvas {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 32px 16px;
+  }
+  .funnel-page {
+    max-width: 640px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 56px 44px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.10);
+  }
+  .fb-block {
+    position: relative;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    padding: 10px 12px;
+    transition: background 0.12s;
+  }
+  .fb-block:hover, .fb-block:focus-within { background: rgba(0,122,255,0.045); }
+  .fb-block-controls {
+    position: absolute;
+    top: -12px; right: 8px;
+    display: flex; align-items: center; gap: 6px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.12s, transform 0.12s;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .fb-block:hover .fb-block-controls, .fb-block:focus-within .fb-block-controls {
+    opacity: 1; transform: translateY(0); pointer-events: auto;
+  }
+  .fb-block-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+    background: var(--text); color: #fff; border-radius: 6px; padding: 3px 8px;
+  }
+  .fb-block-controls button {
+    border: 1px solid var(--border-strong); background: #fff; color: var(--text-muted);
+    border-radius: 6px; width: 22px; height: 22px; font-size: 11px; cursor: pointer;
+  }
+  .fb-block-controls button:hover { color: var(--danger); border-color: var(--danger); }
+
+  .fb-edit-chrome {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: opacity 0.12s, max-height 0.12s;
+  }
+  .fb-block:hover .fb-edit-chrome, .fb-block:focus-within .fb-edit-chrome {
+    max-height: 240px; opacity: 1; margin-bottom: 8px;
+  }
+  .fb-edit-chrome:last-child { margin-bottom: 0 !important; margin-top: 6px; }
+
+  .richtext-toolbar { display: flex; gap: 4px; }
   .richtext-toolbar button {
     border: 1px solid var(--border-strong);
     background: var(--surface-2);
     border-radius: 8px;
-    width: 30px; height: 28px;
-    font-size: 13px;
+    width: 28px; height: 26px;
+    font-size: 12px;
     cursor: pointer;
     color: var(--text);
   }
   .richtext-toolbar button:hover { border-color: var(--accent); }
   .richtext-toolbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .richtext-editable {
-    width: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border-strong);
-    border-radius: 14px;
-    padding: 16px 18px;
-    font-size: 16px;
-    line-height: 1.5;
-    color: var(--text);
-    outline: none;
-    min-height: 70px;
-    font-family: inherit;
-    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
-  }
-  .richtext-editable:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-  .richtext-editable p { margin: 0 0 10px; }
-  .richtext-editable p:last-child { margin-bottom: 0; }
-  .richtext-editable ul, .richtext-editable ol { margin: 0 0 10px 22px; padding: 0; }
   .richtext-hint {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--text-muted);
     background: var(--surface-2);
     border-radius: 8px;
     padding: 6px 10px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     line-height: 1.4;
   }
-  .richtext-counter {
-    font-size: 11px;
-    color: var(--text-muted);
-    text-align: right;
-    margin-top: 4px;
+  .richtext-counter { font-size: 11px; color: var(--text-muted); text-align: right; }
+
+  /* Contenu editable : transparent par defaut (se fond dans la page), un */
+  /* leger cadre n'apparait qu'au focus, pour ne jamais ressembler a un champ */
+  /* de formulaire tant qu'on n'est pas en train d'ecrire dedans. */
+  .richtext-editable {
+    outline: none;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 4px 8px;
+    transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
   }
+  .richtext-editable:hover { background: rgba(0,0,0,0.02); }
+  .richtext-editable:focus { background: #fff; border-color: var(--border-strong); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .richtext-editable p { margin: 0 0 10px; }
+  .richtext-editable p:last-child { margin-bottom: 0; }
+  .richtext-editable:empty:before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; }
+
+  /* Habillage par type de bloc — pour que ça ressemble a la vraie page */
+  .fb-content-heading { text-align: center; font-weight: 800; line-height: 1.15; color: #1d1d1f; }
+  .fb-content-subheadline { text-align: center; font-size: 17px; color: var(--text-secondary); max-width: 480px; margin-left: auto; margin-right: auto; }
+  .fb-content-text { font-size: 15px; color: var(--text); line-height: 1.6; }
+  .fb-content-proof { text-align: center; font-style: italic; font-size: 15px; color: var(--text-secondary); max-width: 460px; margin-left: auto; margin-right: auto; }
+  .fb-content-proof:before { content: "“"; font-style: normal; font-size: 28px; color: var(--border-strong); display: block; line-height: 0.6; margin-bottom: 6px; }
+  .fb-content-guarantee { text-align: center; font-size: 14px; font-weight: 700; color: #1a7f37; background: #eafaf0; border: 1px solid #b7ebc6; border-radius: 999px; padding: 10px 22px; display: inline-block; }
+  .fb-content-cta { text-align: center; font-size: 16px; font-weight: 700; color: #fff; background: var(--accent); border-radius: 12px; padding: 16px 34px; display: inline-block; box-shadow: 0 10px 24px rgba(0,122,255,0.28); }
+  .fb-content-cta:empty:before { color: rgba(255,255,255,0.85); }
+  .fb-content-bullets ul, .fb-content-offer_stack ul, .fb-content-faq ul { list-style: none; margin: 0 auto; padding: 0; max-width: 460px; text-align: left; }
+  .fb-content-bullets li, .fb-content-offer_stack li { position: relative; padding-left: 28px; margin-bottom: 10px; font-size: 15px; line-height: 1.4; }
+  .fb-content-bullets li:before, .fb-content-offer_stack li:before {
+    content: "✓"; position: absolute; left: 0; top: 0; color: var(--success); font-weight: 700;
+  }
+  .fb-content-faq li { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .fb-content-faq li:last-child { border-bottom: none; }
+
+  .fb-media-area {
+    display: block; cursor: pointer; text-align: center;
+    border-radius: 12px; overflow: hidden;
+  }
+  .fb-media-placeholder {
+    padding: 40px 20px; background: var(--surface-2); border: 1.5px dashed var(--border-strong);
+    border-radius: 12px; color: var(--text-muted); font-size: 13.5px;
+  }
+  .fb-media-area img, .fb-media-area video { max-width: 100%; border-radius: 12px; display: block; margin: 0 auto; }
+
+  .fb-add-bar {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin-top: 20px; padding-top: 20px; border-top: 1px dashed var(--border-strong);
+  }
+  .fb-add-bar button {
+    border: 1px solid var(--border-strong); background: #fff; color: var(--text);
+    border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .fb-add-bar button:hover { border-color: var(--accent); color: var(--accent); }
+
   .swipe-panel {
     border: 1px solid var(--border-strong);
     border-radius: 10px;
-    background: var(--surface-2);
-    margin-bottom: 8px;
-    max-height: 180px;
+    background: #fff;
+    margin-bottom: 6px;
+    max-height: 160px;
     overflow-y: auto;
   }
   .swipe-panel-item {
@@ -231,6 +322,7 @@
     font-size: 13px;
     cursor: pointer;
     border-bottom: 1px solid var(--border);
+    text-align: left;
   }
   .swipe-panel-item:last-child { border-bottom: none; }
   .swipe-panel-item:hover { background: var(--accent-soft); }
@@ -4051,12 +4143,12 @@ const FUNNEL_BLOCK_LABELS = {
 const FUNNEL_ADDABLE_BLOCKS = [
   { type: 'heading', label: 'Titre', defaults: () => ({ text: '', size: 'h2' }) },
   { type: 'text', label: 'Paragraphe', defaults: () => ({ text: '' }) },
-  { type: 'bullets', label: 'Liste à puces', defaults: () => ({ items: [] }) },
-  { type: 'offer_stack', label: "Stack de l'offre", defaults: () => ({ items: [] }) },
+  { type: 'bullets', label: 'Liste à puces', defaults: () => ({ text: '' }) },
+  { type: 'offer_stack', label: "Stack de l'offre", defaults: () => ({ text: '' }) },
   { type: 'proof', label: 'Preuve sociale', defaults: () => ({ text: '' }) },
   { type: 'guarantee', label: 'Garantie', defaults: () => ({ text: '' }) },
   { type: 'cta', label: 'CTA', defaults: () => ({ text: '' }) },
-  { type: 'faq', label: 'FAQ / Objections', defaults: () => ({ items: [] }) },
+  { type: 'faq', label: 'FAQ / Objections', defaults: () => ({ text: '' }) },
 ];
 
 const FUNNEL_HEADING_SIZES = [
@@ -4102,30 +4194,26 @@ function renderFunnelPageEditor(funnelId, page) {
   ensureGoogleFontLoaded(page.font);
   const blocksHtml = (page.blocks || []).map((b, i) => renderFunnelBlockEditor(b, i)).join('');
   const addBlockButtons = FUNNEL_ADDABLE_BLOCKS.map(b =>
-    `<button type="button" class="cta-secondary" data-add-block="${b.type}" style="width:auto;padding:6px 12px;font-size:12.5px;margin:0 6px 6px 0">${escapeHtml(b.label)}</button>`
+    `<button type="button" data-add-block="${b.type}">+ ${escapeHtml(b.label)}</button>`
   ).join('');
 
   $('#funnelsView').innerHTML = `
     <button class="restart-link" id="backToFunnelDetail" style="margin-bottom:12px">← ${escapeHtml(_funnelDetailCache.name)}</button>
-    <div class="row">
-      <div class="field">
-        <label class="field-label" for="pageNameInput">Nom de la page</label>
-        <input type="text" id="pageNameInput" value="${escapeHtml(page.name)}" autocomplete="off" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="pageFontSelect">Police</label>
-        <select id="pageFontSelect" style="width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:14px;padding:14px 16px;font-size:15px;color:var(--text)">
-          ${FUNNEL_FONTS.map(f => `<option value="${escapeHtml(f.value)}" ${f.value === page.font ? 'selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
-        </select>
-      </div>
+    <div class="funnel-topbar">
+      <input type="text" id="pageNameInput" value="${escapeHtml(page.name)}" autocomplete="off" style="width:auto;flex:1;min-width:180px" />
+      <select id="pageFontSelect" style="background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:10px 14px;font-size:13.5px;color:var(--text)">
+        ${FUNNEL_FONTS.map(f => `<option value="${escapeHtml(f.value)}" ${f.value === page.font ? 'selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
+      </select>
+      <button class="cta-secondary" id="savePageBtn" style="width:auto;padding:10px 18px;font-size:13.5px">💾 Enregistrer</button>
     </div>
-    ${page.source ? `<p style="font-size:12.5px;color:var(--text-muted);margin:16px 0 0">
+    ${page.source ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px">
       Générée depuis l'audit <strong>${escapeHtml(page.source.url)}</strong> (${page.source.score}/20) — les blocs reprennent le rewrite corrigé.
     </p>` : ''}
-    <div id="funnelBlocksList" style="margin-top:16px;font-family:${funnelFontByValue(page.font).family}">${blocksHtml}</div>
-    <div style="margin-top:4px">${addBlockButtons}</div>
-    <button class="cta-secondary" id="savePageBtn" style="width:auto;padding:10px 18px;margin-top:10px">💾 Enregistrer</button>
     <div class="error-box" id="editorErrorBox"></div>
+    <div class="funnel-canvas">
+      <div class="funnel-page" id="funnelBlocksList" style="font-family:${funnelFontByValue(page.font).family}">${blocksHtml}</div>
+      <div class="fb-add-bar">${addBlockButtons}</div>
+    </div>
   `;
 
   $('#backToFunnelDetail').addEventListener('click', () => loadFunnelDetail(funnelId));
@@ -4161,7 +4249,7 @@ function renderFunnelPageEditor(funnelId, page) {
 // donc a la fois a l'affichage ET a la sauvegarde, jamais seulement l'un
 // des deux.
 const RICH_TEXT_ALLOWED_TAGS = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI']);
-const RICH_TEXT_BLOCK_TYPES = new Set(['headline', 'subheadline', 'proof', 'guarantee', 'cta', 'text', 'heading']);
+const RICH_TEXT_BLOCK_TYPES = new Set(['headline', 'subheadline', 'proof', 'guarantee', 'cta', 'text', 'heading', 'bullets', 'offer_stack', 'faq']);
 
 function sanitizeRichHtml(html) {
   const template = document.createElement('template');
@@ -4212,6 +4300,20 @@ const FUNNEL_BLOCK_HINTS = {
 // bloc — evite de re-taper un hook/headline/CTA qui a deja fait ses preuves.
 const FUNNEL_BLOCK_SWIPE_CATEGORY = { heading: 'headlines', subheadline: 'headlines', cta: 'ctas' };
 
+// Texte d'invite affiche (via CSS) tant que le bloc contenteditable est
+// vide — ne fait pas partie du contenu sauvegarde.
+const FUNNEL_BLOCK_PLACEHOLDERS = {
+  heading: 'Votre titre principal…',
+  subheadline: 'Un sous-titre qui appuie la promesse…',
+  proof: '« Un témoignage chiffré, avec un prénom… »',
+  guarantee: 'Ex : Remboursé sous 30 jours si non satisfait',
+  cta: 'Texte du bouton',
+  bullets: 'Tapez un bénéfice, Entrée pour le suivant…',
+  offer_stack: 'Ce qui est inclus dans l’offre…',
+  faq: 'Question ? Réponse.',
+  text: 'Écrivez votre paragraphe…',
+};
+
 function renderRichTextEditor(i, block) {
   const toolbar = RICH_TEXT_TOOLBAR_BUTTONS.map(b =>
     `<button type="button" data-rt-cmd="${b.cmd}" data-rt-target="${i}" title="${escapeHtml(b.title)}">${b.label}</button>`
@@ -4226,7 +4328,7 @@ function renderRichTextEditor(i, block) {
     // basculait vers un <span style="font-weight:normal"> a la place).
     sizeStyle = `font-size:${current.fontSize}`;
     sizeSeg = `
-      <div class="segmented" data-heading-size="${i}" style="margin-bottom:8px;width:auto;display:inline-flex">
+      <div class="segmented" data-heading-size="${i}" style="width:auto;display:inline-flex">
         ${FUNNEL_HEADING_SIZES.map(s => `<button class="${s.val === current.val ? 'active' : ''}" data-val="${s.val}">${s.label}</button>`).join('')}
       </div>
     `;
@@ -4236,17 +4338,21 @@ function renderRichTextEditor(i, block) {
   const swipeCategory = FUNNEL_BLOCK_SWIPE_CATEGORY[block.type];
   const text = sanitizeRichHtml(block.text || '');
   const plainLen = text.replace(/<[^>]+>/g, '').length;
+  const placeholder = FUNNEL_BLOCK_PLACEHOLDERS[block.type] || '';
 
   return `
-    ${sizeSeg}
-    ${hint ? `<div class="richtext-hint">💡 ${escapeHtml(hint)}</div>` : ''}
-    <div class="richtext-toolbar">
-      ${toolbar}
-      ${swipeCategory ? `<button type="button" data-swipe-insert="${i}" data-swipe-category="${swipeCategory}" title="Insérer depuis Swipe Files" style="margin-left:auto">📋</button>` : ''}
+    <div class="fb-edit-chrome">
+      ${sizeSeg}
+      ${hint ? `<div class="richtext-hint">💡 ${escapeHtml(hint)}</div>` : ''}
+      <div class="richtext-toolbar">
+        ${toolbar}
+        ${swipeCategory ? `<button type="button" data-swipe-insert="${i}" data-swipe-category="${swipeCategory}" title="Insérer depuis Swipe Files" style="margin-left:auto">📋</button>` : ''}
+      </div>
+      <div id="swipePanel-${i}" class="swipe-panel" style="display:none"></div>
     </div>
-    <div id="swipePanel-${i}" class="swipe-panel" style="display:none"></div>
-    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}" style="${sizeStyle}">${text}</div>
-    <div class="richtext-counter" data-counter-for="${i}">${plainLen} caractère${plainLen === 1 ? '' : 's'}</div>
+    <div class="richtext-editable fb-content fb-content-${block.type}" contenteditable="true"
+         data-block-richtext="${i}" data-placeholder="${escapeHtml(placeholder)}" style="${sizeStyle}">${text}</div>
+    <div class="fb-edit-chrome richtext-counter" data-counter-for="${i}">${plainLen} caractère${plainLen === 1 ? '' : 's'}</div>
   `;
 }
 
@@ -4254,26 +4360,27 @@ function renderFunnelBlockEditor(block, i) {
   const label = FUNNEL_BLOCK_LABELS[block.type] || block.type;
   let inner = '';
   if (block.type === 'media') {
+    const mediaContent = block.url
+      ? (block.media_type === 'video'
+          ? `<video src="${escapeHtml(block.url)}" controls></video>`
+          : `<img src="${escapeHtml(block.url)}" />`)
+      : `<div class="fb-media-placeholder">🖼️ Cliquez pour ajouter une image ou une vidéo</div>`;
     inner = `
-      ${block.url ? (block.media_type === 'video'
-        ? `<video src="${escapeHtml(block.url)}" controls style="max-width:100%;border-radius:8px;margin-bottom:8px"></video>`
-        : `<img src="${escapeHtml(block.url)}" style="max-width:100%;border-radius:8px;margin-bottom:8px" />`)
-        : `<div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px">Aucun média — ajoutez une image ou une vidéo.</div>`}
-      <input type="file" accept="image/*,video/*" data-block-media="${i}" />
+      <label class="fb-media-area">
+        ${mediaContent}
+        <input type="file" accept="image/*,video/*" data-block-media="${i}" style="display:none" />
+      </label>
     `;
-  } else if (block.type === 'bullets' || block.type === 'offer_stack' || block.type === 'faq') {
-    inner = `<textarea data-block-items="${i}" style="min-height:90px" placeholder="Une ligne par élément">${escapeHtml((block.items || []).join('\n'))}</textarea>`;
   } else if (RICH_TEXT_BLOCK_TYPES.has(block.type)) {
     inner = renderRichTextEditor(i, block);
   } else {
     inner = `<textarea data-block-text="${i}" style="min-height:70px">${escapeHtml(block.text || '')}</textarea>`;
   }
   return `
-    <div class="card" style="margin-bottom:10px" data-block-card="${i}">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="field-label" style="margin-bottom:0">${escapeHtml(label)}</div>
-        <button type="button" data-remove-block="${i}" title="Supprimer ce bloc"
-                style="border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px">🗑</button>
+    <div class="fb-block fb-block-${block.type}" data-block-card="${i}">
+      <div class="fb-block-controls">
+        <span class="fb-block-tag">${escapeHtml(label)}</span>
+        <button type="button" data-remove-block="${i}" title="Supprimer ce bloc">🗑</button>
       </div>
       ${inner}
     </div>
@@ -4292,9 +4399,6 @@ function syncFunnelBlocksFromDOM(page) {
   });
   $$('[data-block-richtext]', $('#funnelBlocksList')).forEach(div => {
     page.blocks[Number(div.dataset.blockRichtext)].text = sanitizeRichHtml(div.innerHTML);
-  });
-  $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
-    page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
   });
   $$('[data-heading-size]', $('#funnelBlocksList')).forEach(seg => {
     const active = seg.querySelector('button.active');

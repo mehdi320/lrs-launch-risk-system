@@ -9,6 +9,7 @@
 import base64
 import contextvars
 import datetime
+import html
 import io
 import mimetypes
 import os
@@ -1622,6 +1623,17 @@ def _new_block(type_, **kw):
     return {"id": str(uuid.uuid4()), "type": type_, **kw}
 
 
+def _html_list(items):
+    """Bullets/offer_stack/faq sont des blocs de texte enrichi comme les
+    autres (rendu <ul> reel, avec les puces natives du navigateur, plutot
+    qu'une textarea qui casse le rendu "vraie page") — le contenu vit donc
+    dans `text` (HTML), pas dans un `items` separe."""
+    if not items:
+        return ""
+    lis = "".join(f"<li>{html.escape(str(it))}</li>" for it in items)
+    return f"<ul>{lis}</ul>"
+
+
 FUNNEL_DEFAULT_FONT = "Inter"
 
 
@@ -1643,7 +1655,7 @@ def _default_blocks_for_type(page_type):
         # moment de payer, CTA de finalisation.
         return [
             _new_block("heading", text="", size="h2"),
-            _new_block("offer_stack", items=[]),
+            _new_block("offer_stack", text=""),
             _new_block("proof", text=""),
             _new_block("cta", text=""),
         ]
@@ -1663,12 +1675,12 @@ def _blocks_from_rewrite(rw):
     if rw.get("headline"):      blocks.append(_new_block("headline", text=rw["headline"]))
     if rw.get("subheadline"):   blocks.append(_new_block("subheadline", text=rw["subheadline"]))
     blocks.append(_new_block("media", media_type="image", url="", caption="Ajoutez une image ou une video hero"))
-    if rw.get("hero_bullets"):  blocks.append(_new_block("bullets", items=list(rw["hero_bullets"])))
+    if rw.get("hero_bullets"):  blocks.append(_new_block("bullets", text=_html_list(rw["hero_bullets"])))
     if rw.get("proof_block"):   blocks.append(_new_block("proof", text=rw["proof_block"]))
-    if rw.get("offer_stack"):   blocks.append(_new_block("offer_stack", items=list(rw["offer_stack"])))
+    if rw.get("offer_stack"):   blocks.append(_new_block("offer_stack", text=_html_list(rw["offer_stack"])))
     if rw.get("guarantee"):     blocks.append(_new_block("guarantee", text=rw["guarantee"]))
     blocks.append(_new_block("cta", text=rw.get("cta_primary") or ""))
-    if rw.get("faq_objections"): blocks.append(_new_block("faq", items=list(rw["faq_objections"])))
+    if rw.get("faq_objections"): blocks.append(_new_block("faq", text=_html_list(rw["faq_objections"])))
     return blocks or _default_funnel_blocks()
 
 
