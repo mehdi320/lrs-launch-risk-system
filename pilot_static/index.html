@@ -3648,7 +3648,21 @@ async function loadFunnels() {
 
 function renderFunnelsKpis(stats) {
   if (!stats.total_funnels) return '';
-  const kpis = [
+
+  const resultKpis = [
+    ['Ventes', stats.total_sales, '', 'var(--success)'],
+    ['Inscrits', stats.total_signups, '', 'var(--accent)'],
+    ['Revenu', stats.total_revenue.toLocaleString('fr-FR') + '€', '', 'var(--success)'],
+  ];
+  const resultKpiHtml = resultKpis.map(([label, val, sub, color]) => `
+    <div class="kpi-card">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-val" style="color:${color}">${val}</div>
+      <div class="kpi-sub">${sub}</div>
+    </div>
+  `).join('');
+
+  const buildKpis = [
     ['Funnels', stats.total_funnels, '', 'var(--text)'],
     ['Pages', stats.total_pages, '', 'var(--text)'],
     ['Landing Pages', stats.by_type.landing || 0, '', 'var(--text)'],
@@ -3656,10 +3670,10 @@ function renderFunnelsKpis(stats) {
     ['Pages de remerciement', stats.by_type.thankyou || 0, '', 'var(--text)'],
     ['Score moyen des sources', stats.avg_source_score != null ? stats.avg_source_score + '/20' : '—', 'pages générées depuis un audit', stats.avg_source_score != null ? scoreColor(stats.avg_source_score) : 'var(--text)'],
   ];
-  const kpiHtml = kpis.map(([label, val, sub, color]) => `
+  const buildKpiHtml = buildKpis.map(([label, val, sub, color]) => `
     <div class="kpi-card">
       <div class="kpi-label">${label}</div>
-      <div class="kpi-val" style="color:${color}">${val}</div>
+      <div class="kpi-val" style="color:${color};font-size:18px">${val}</div>
       <div class="kpi-sub">${sub}</div>
     </div>
   `).join('');
@@ -3680,7 +3694,9 @@ function renderFunnelsKpis(stats) {
     </div>` : '';
 
   return `
-    <div class="kpi-grid fade-up" style="margin-bottom:12px">${kpiHtml}</div>
+    <div class="kpi-grid fade-up" style="margin-bottom:8px">${resultKpiHtml}</div>
+    <p style="font-size:11.5px;color:var(--text-muted);margin:0 0 16px">Ventes/inscrits/revenu saisis à la main funnel par funnel (Stripe et vos formulaires ne sont pas encore branchés dessus — pages non hébergées publiquement pour l'instant).</p>
+    <div class="kpi-grid fade-up" style="margin-bottom:8px">${buildKpiHtml}</div>
     <p style="font-size:12.5px;color:var(--text-muted);margin:0 0 16px">${sourceLine}</p>
     ${incompleteHtml}
   `;
@@ -3783,9 +3799,31 @@ function renderFunnelDetail(funnel) {
     </div>
   `).join('');
 
+  const results = funnel.results || { sales: 0, signups: 0, revenue: 0 };
+
   $('#funnelsView').innerHTML = `
     <button class="restart-link" id="backToFunnels" style="margin-bottom:12px">← Tous les funnels</button>
     <h2 style="margin:0 0 12px">${escapeHtml(funnel.name)}</h2>
+    <div class="card" style="margin-bottom:16px">
+      <div class="field-label" style="margin-bottom:8px">📊 Résultats (saisie manuelle — Stripe/vos formulaires ne sont pas branchés)</div>
+      <div class="row" style="margin-top:0">
+        <div class="field">
+          <label class="field-label" for="resultSales">Ventes</label>
+          <input type="number" id="resultSales" min="0" step="1" value="${results.sales}" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="resultSignups">Inscrits</label>
+          <input type="number" id="resultSignups" min="0" step="1" value="${results.signups}" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="resultRevenue">Revenu (€)</label>
+          <input type="number" id="resultRevenue" min="0" step="0.01" value="${results.revenue}" />
+        </div>
+      </div>
+      <button class="cta-secondary" id="saveResultsBtn" style="width:auto;padding:8px 14px;font-size:13px;margin-top:12px">💾 Enregistrer les résultats</button>
+      ${results.updated ? `<span style="font-size:11.5px;color:var(--text-muted);margin-left:10px">maj ${escapeHtml(results.updated)}</span>` : ''}
+      <div class="error-box" id="resultsErrorBox"></div>
+    </div>
     <div class="card" style="margin-bottom:16px">
       <div class="field-label" style="margin-bottom:8px">Type de la prochaine page vierge</div>
       <div class="segmented" id="newPageTypeSeg" style="width:auto;display:inline-flex;margin-bottom:12px">
@@ -3813,6 +3851,25 @@ function renderFunnelDetail(funnel) {
 
   setupSegmented('newPageTypeSeg');
   $('#backToFunnels').addEventListener('click', loadFunnels);
+  $('#saveResultsBtn').addEventListener('click', async () => {
+    const errBox = $('#resultsErrorBox');
+    errBox.style.display = 'none';
+    try {
+      const res = await fetch(`/api/funnels/${funnel.id}/results`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sales: parseInt($('#resultSales').value, 10) || 0,
+          signups: parseInt($('#resultSignups').value, 10) || 0,
+          revenue: parseFloat($('#resultRevenue').value) || 0,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Erreur');
+      loadFunnelDetail(funnel.id);
+    } catch (err) {
+      errBox.textContent = err.message; errBox.style.display = 'block';
+    }
+  });
   $('#addBlankPageBtn').addEventListener('click', () => createFunnelPage(funnel.id, { page_type: getSegVal('newPageTypeSeg') }));
   $('#addFromAuditBtn').addEventListener('click', () => toggleAuditPicker(funnel.id));
   $('#addFromDocBtn').addEventListener('click', () => toggleDocPicker(funnel.id));

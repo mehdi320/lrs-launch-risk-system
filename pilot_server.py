@@ -1672,6 +1672,10 @@ def _blocks_from_rewrite(rw):
     return blocks or _default_funnel_blocks()
 
 
+def _default_funnel_results():
+    return {"sales": 0, "signups": 0, "revenue": 0.0, "updated": ""}
+
+
 def _funnel_summary(f):
     pages = f.get("pages", {})
     types_present = {p.get("page_type", "landing") for p in pages.values()}
@@ -1679,6 +1683,7 @@ def _funnel_summary(f):
         "id": f["id"], "name": f.get("name", ""), "created": f.get("created", ""),
         "updated": f.get("updated", ""), "page_count": len(pages),
         "missing_types": [t for t in FUNNEL_PAGE_TYPES if t not in types_present] if pages else [],
+        "results": f.get("results") or _default_funnel_results(),
     }
 
 
@@ -1691,16 +1696,21 @@ def list_funnels():
 
 @app.get("/api/funnels/stats")
 def get_funnels_stats():
-    """KPIs de construction du Funnel Builder — pas de trafic reel a mesurer
-    tant que les pages ne sont pas hebergees publiquement (cf. limites du
-    squelette), donc ce dashboard porte sur ce qui est reellement mesurable
-    aujourd'hui : ce qui est construit, comment, et ce qu'il manque."""
+    """KPIs du Funnel Builder. Ventes/inscrits/revenu sont les chiffres reels
+    que Baki releve lui-meme (Stripe, boite mail...) et saisit funnel par
+    funnel (cf. /api/funnels/{id}/results) — LRS ne peut pas les mesurer tout
+    seul tant que les pages generees ne sont pas hebergees publiquement avec
+    un vrai paiement/formulaire branche dessus. Le reste (funnels/pages/
+    types/score source) est ce que LRS PEUT mesurer tout seul aujourd'hui :
+    l'etat de construction, pas le trafic."""
     funnels = load_json_file(FUNNELS_FILE(), dict)
     by_type = {t: 0 for t in FUNNEL_PAGE_TYPES}
     by_source = {"audit": 0, "document": 0, "blank": 0}
     scores = []
     total_pages = 0
     incomplete = []
+    total_sales = total_signups = 0
+    total_revenue = 0.0
 
     for f in funnels.values():
         pages = f.get("pages", {})
@@ -1724,7 +1734,15 @@ def get_funnels_stats():
             if missing:
                 incomplete.append({"id": f["id"], "name": f.get("name", ""), "missing": missing})
 
+        results = f.get("results") or {}
+        total_sales += int(results.get("sales", 0) or 0)
+        total_signups += int(results.get("signups", 0) or 0)
+        total_revenue += float(results.get("revenue", 0) or 0)
+
     return {
+        "total_sales": total_sales,
+        "total_signups": total_signups,
+        "total_revenue": round(total_revenue, 2),
         "total_funnels": len(funnels),
         "total_pages": total_pages,
         "by_type": by_type,
@@ -1732,6 +1750,31 @@ def get_funnels_stats():
         "avg_source_score": round(sum(scores) / len(scores), 1) if scores else None,
         "incomplete_funnels": incomplete[:10],
     }
+
+
+class FunnelResultsRequest(BaseModel):
+    sales: int = 0
+    signups: int = 0
+    revenue: float = 0.0
+
+
+@app.put("/api/funnels/{funnel_id}/results")
+def update_funnel_results(funnel_id: str, req: FunnelResultsRequest):
+    """Saisie manuelle des resultats reels d'un funnel — meme logique que
+    les stats de campagne dans Suivi (personne ne peut mesurer un vrai
+    paiement/inscription tant que la page n'est pas hebergee avec un
+    formulaire/paiement branche dessus, donc Baki releve le chiffre lui-meme
+    depuis Stripe/sa boite mail)."""
+    funnels = load_json_file(FUNNELS_FILE(), dict)
+    funnel = funnels.get(funnel_id)
+    if not funnel:
+        raise HTTPException(status_code=404, detail="Funnel introuvable.")
+    funnel["results"] = {
+        "sales": max(0, req.sales), "signups": max(0, req.signups), "revenue": max(0.0, req.revenue),
+        "updated": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+    }
+    save_json_file(FUNNELS_FILE(), funnels)
+    return funnel
 
 
 class FunnelCreateRequest(BaseModel):
@@ -1746,7 +1789,8 @@ def create_funnel(req: FunnelCreateRequest):
     funnels = load_json_file(FUNNELS_FILE(), dict)
     fid = str(uuid.uuid4())
     ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    funnels[fid] = {"id": fid, "name": name, "created": ts, "updated": ts, "pages": {}}
+    funnels[fid] = {"id": fid, "name": name, "created": ts, "updated": ts, "pages": {},
+                     "results": _default_funnel_results()}
     save_json_file(FUNNELS_FILE(), funnels)
     return funnels[fid]
 
