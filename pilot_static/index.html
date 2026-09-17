@@ -3880,8 +3880,54 @@ async function createFunnelPage(funnelId, opts) {
 const FUNNEL_BLOCK_LABELS = {
   headline: 'Headline', subheadline: 'Sous-titre', media: 'Image / Vidéo',
   bullets: 'Bullet points', proof: 'Preuve sociale', offer_stack: "Stack de l'offre",
-  guarantee: 'Garantie', cta: 'CTA', faq: 'FAQ / Objections', text: 'Texte libre',
+  guarantee: 'Garantie', cta: 'CTA', faq: 'FAQ / Objections', text: 'Paragraphe',
+  heading: 'Titre',
 };
+
+// Types de blocs proposables depuis "+ Ajouter un bloc" sur une page vierge.
+// Le media (photo/video) est volontairement laisse de cote pour l'instant.
+const FUNNEL_ADDABLE_BLOCKS = [
+  { type: 'heading', label: 'Titre', defaults: () => ({ text: '', size: 'h2' }) },
+  { type: 'text', label: 'Paragraphe', defaults: () => ({ text: '' }) },
+  { type: 'bullets', label: 'Liste à puces', defaults: () => ({ items: [] }) },
+  { type: 'offer_stack', label: "Stack de l'offre", defaults: () => ({ items: [] }) },
+  { type: 'proof', label: 'Preuve sociale', defaults: () => ({ text: '' }) },
+  { type: 'guarantee', label: 'Garantie', defaults: () => ({ text: '' }) },
+  { type: 'cta', label: 'CTA', defaults: () => ({ text: '' }) },
+  { type: 'faq', label: 'FAQ / Objections', defaults: () => ({ items: [] }) },
+];
+
+const FUNNEL_HEADING_SIZES = [
+  { val: 'h1', label: 'H1 — Grand', fontSize: '32px' },
+  { val: 'h2', label: 'H2 — Moyen', fontSize: '24px' },
+  { val: 'h3', label: 'H3 — Petit', fontSize: '18px' },
+];
+
+const FUNNEL_DEFAULT_FONT = 'Inter';
+const FUNNEL_FONTS = [
+  { value: 'Inter', label: 'Inter (défaut)', family: 'Inter, sans-serif', google: 'Inter:wght@400;600;700' },
+  { value: 'Montserrat', label: 'Montserrat', family: 'Montserrat, sans-serif', google: 'Montserrat:wght@400;600;700' },
+  { value: 'Poppins', label: 'Poppins', family: 'Poppins, sans-serif', google: 'Poppins:wght@400;600;700' },
+  { value: 'Playfair Display', label: 'Playfair Display', family: '"Playfair Display", serif', google: 'Playfair+Display:wght@400;700' },
+  { value: 'Georgia', label: 'Georgia (système)', family: 'Georgia, serif', google: null },
+  { value: 'Arial', label: 'Arial (système)', family: 'Arial, sans-serif', google: null },
+];
+
+function funnelFontByValue(value) {
+  return FUNNEL_FONTS.find(f => f.value === value) || FUNNEL_FONTS[0];
+}
+
+function ensureGoogleFontLoaded(fontValue) {
+  const font = funnelFontByValue(fontValue);
+  if (!font.google) return;
+  const linkId = 'gfont-' + font.google.split(':')[0];
+  if (document.getElementById(linkId)) return;
+  const link = document.createElement('link');
+  link.id = linkId;
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
+  document.head.appendChild(link);
+}
 
 function openFunnelPageEditor(funnelId, pageId) {
   const page = _funnelDetailCache.pages[pageId];
@@ -3889,25 +3935,54 @@ function openFunnelPageEditor(funnelId, pageId) {
 }
 
 function renderFunnelPageEditor(funnelId, page) {
+  if (!page.font) page.font = FUNNEL_DEFAULT_FONT;
+  ensureGoogleFontLoaded(page.font);
   const blocksHtml = (page.blocks || []).map((b, i) => renderFunnelBlockEditor(b, i)).join('');
+  const addBlockButtons = FUNNEL_ADDABLE_BLOCKS.map(b =>
+    `<button type="button" class="cta-secondary" data-add-block="${b.type}" style="width:auto;padding:6px 12px;font-size:12.5px;margin:0 6px 6px 0">${escapeHtml(b.label)}</button>`
+  ).join('');
 
   $('#funnelsView').innerHTML = `
     <button class="restart-link" id="backToFunnelDetail" style="margin-bottom:12px">← ${escapeHtml(_funnelDetailCache.name)}</button>
-    <div class="field" style="margin-bottom:16px">
-      <label class="field-label" for="pageNameInput">Nom de la page</label>
-      <input type="text" id="pageNameInput" value="${escapeHtml(page.name)}" autocomplete="off" />
+    <div class="row">
+      <div class="field">
+        <label class="field-label" for="pageNameInput">Nom de la page</label>
+        <input type="text" id="pageNameInput" value="${escapeHtml(page.name)}" autocomplete="off" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="pageFontSelect">Police</label>
+        <select id="pageFontSelect" style="width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:14px;padding:14px 16px;font-size:15px;color:var(--text)">
+          ${FUNNEL_FONTS.map(f => `<option value="${escapeHtml(f.value)}" ${f.value === page.font ? 'selected' : ''}>${escapeHtml(f.label)}</option>`).join('')}
+        </select>
+      </div>
     </div>
-    ${page.source ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px">
+    ${page.source ? `<p style="font-size:12.5px;color:var(--text-muted);margin:16px 0 0">
       Générée depuis l'audit <strong>${escapeHtml(page.source.url)}</strong> (${page.source.score}/20) — les blocs reprennent le rewrite corrigé.
     </p>` : ''}
-    <div id="funnelBlocksList">${blocksHtml}</div>
-    <button class="cta-secondary" id="savePageBtn" style="width:auto;padding:10px 18px;margin-top:12px">💾 Enregistrer</button>
+    <div id="funnelBlocksList" style="margin-top:16px;font-family:${funnelFontByValue(page.font).family}">${blocksHtml}</div>
+    <div style="margin-top:4px">${addBlockButtons}</div>
+    <button class="cta-secondary" id="savePageBtn" style="width:auto;padding:10px 18px;margin-top:10px">💾 Enregistrer</button>
     <div class="error-box" id="editorErrorBox"></div>
   `;
 
   $('#backToFunnelDetail').addEventListener('click', () => loadFunnelDetail(funnelId));
   bindFunnelBlockEvents(funnelId, page);
   $('#savePageBtn').addEventListener('click', () => saveFunnelPage(funnelId, page));
+
+  $('#pageFontSelect').addEventListener('change', (e) => {
+    page.font = e.target.value;
+    ensureGoogleFontLoaded(page.font);
+    $('#funnelBlocksList').style.fontFamily = funnelFontByValue(page.font).family;
+  });
+
+  $$('[data-add-block]', $('#funnelsView')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      syncFunnelBlocksFromDOM(page);
+      const cfg = FUNNEL_ADDABLE_BLOCKS.find(b => b.type === btn.dataset.addBlock);
+      page.blocks.push({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2), type: cfg.type, ...cfg.defaults() });
+      renderFunnelPageEditor(funnelId, page);
+    });
+  });
 }
 
 // ── Editeur de texte enrichi (gras/italique/souligne/paragraphe/listes) ──
@@ -3923,7 +3998,7 @@ function renderFunnelPageEditor(funnelId, page) {
 // donc a la fois a l'affichage ET a la sauvegarde, jamais seulement l'un
 // des deux.
 const RICH_TEXT_ALLOWED_TAGS = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI']);
-const RICH_TEXT_BLOCK_TYPES = new Set(['headline', 'subheadline', 'proof', 'guarantee', 'cta', 'text']);
+const RICH_TEXT_BLOCK_TYPES = new Set(['headline', 'subheadline', 'proof', 'guarantee', 'cta', 'text', 'heading']);
 
 function sanitizeRichHtml(html) {
   const template = document.createElement('template');
@@ -3960,9 +4035,23 @@ function renderRichTextEditor(i, block) {
   const toolbar = RICH_TEXT_TOOLBAR_BUTTONS.map(b =>
     `<button type="button" data-rt-cmd="${b.cmd}" data-rt-target="${i}" title="${escapeHtml(b.title)}">${b.label}</button>`
   ).join('');
+
+  let sizeSeg = '';
+  let sizeStyle = '';
+  if (block.type === 'heading') {
+    const current = FUNNEL_HEADING_SIZES.find(s => s.val === block.size) || FUNNEL_HEADING_SIZES[1];
+    sizeStyle = `font-weight:700;font-size:${current.fontSize}`;
+    sizeSeg = `
+      <div class="segmented" data-heading-size="${i}" style="margin-bottom:8px;width:auto;display:inline-flex">
+        ${FUNNEL_HEADING_SIZES.map(s => `<button class="${s.val === current.val ? 'active' : ''}" data-val="${s.val}">${s.label}</button>`).join('')}
+      </div>
+    `;
+  }
+
   return `
+    ${sizeSeg}
     <div class="richtext-toolbar">${toolbar}</div>
-    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}">${sanitizeRichHtml(block.text || '')}</div>
+    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}" style="${sizeStyle}">${sanitizeRichHtml(block.text || '')}</div>
   `;
 }
 
@@ -3986,7 +4075,11 @@ function renderFunnelBlockEditor(block, i) {
   }
   return `
     <div class="card" style="margin-bottom:10px" data-block-card="${i}">
-      <div class="field-label" style="margin-bottom:8px">${escapeHtml(label)}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="field-label" style="margin-bottom:0">${escapeHtml(label)}</div>
+        <button type="button" data-remove-block="${i}" title="Supprimer ce bloc"
+                style="border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px;padding:2px 6px">🗑</button>
+      </div>
       ${inner}
     </div>
   `;
@@ -4007,6 +4100,10 @@ function syncFunnelBlocksFromDOM(page) {
   });
   $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
     page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+  });
+  $$('[data-heading-size]', $('#funnelBlocksList')).forEach(seg => {
+    const active = seg.querySelector('button.active');
+    if (active) page.blocks[Number(seg.dataset.headingSize)].size = active.dataset.val;
   });
 }
 
@@ -4034,10 +4131,31 @@ function bindFunnelRichTextEvents() {
       document.execCommand('insertHTML', false, clean);
     });
   });
+
+  $$('[data-heading-size]', $('#funnelBlocksList')).forEach(seg => {
+    seg.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      $$('button', seg).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const editable = $(`[data-block-richtext="${seg.dataset.headingSize}"]`);
+      const sizeCfg = FUNNEL_HEADING_SIZES.find(s => s.val === btn.dataset.val);
+      if (editable && sizeCfg) editable.style.fontSize = sizeCfg.fontSize;
+    });
+  });
 }
 
 function bindFunnelBlockEvents(funnelId, page) {
   bindFunnelRichTextEvents();
+
+  $$('[data-remove-block]', $('#funnelBlocksList')).forEach(btn => {
+    btn.addEventListener('click', () => {
+      syncFunnelBlocksFromDOM(page);
+      page.blocks.splice(Number(btn.dataset.removeBlock), 1);
+      renderFunnelPageEditor(funnelId, page);
+    });
+  });
+
   $$('[data-block-media]', $('#funnelBlocksList')).forEach(input => {
     input.addEventListener('change', (e) => {
       const idx = Number(input.dataset.blockMedia);
@@ -4074,7 +4192,7 @@ async function saveFunnelPage(funnelId, page) {
   try {
     const res = await fetch(`/api/funnels/${funnelId}/pages/${page.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: page.name, blocks: page.blocks }),
+      body: JSON.stringify({ name: page.name, font: page.font, blocks: page.blocks }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Erreur');

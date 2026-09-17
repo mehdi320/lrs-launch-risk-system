@@ -1622,18 +1622,15 @@ def _new_block(type_, **kw):
     return {"id": str(uuid.uuid4()), "type": type_, **kw}
 
 
+FUNNEL_DEFAULT_FONT = "Inter"
+
+
 def _default_funnel_blocks():
-    return [
-        _new_block("headline", text=""),
-        _new_block("subheadline", text=""),
-        _new_block("media", media_type="image", url="", caption=""),
-        _new_block("bullets", items=[]),
-        _new_block("proof", text=""),
-        _new_block("offer_stack", items=[]),
-        _new_block("guarantee", text=""),
-        _new_block("cta", text=""),
-        _new_block("faq", items=[]),
-    ]
+    # Une page vierge part d'un seul bloc (un titre) — le reste s'ajoute
+    # ensuite bloc par bloc depuis l'editeur, plutot que d'imposer d'emblee
+    # le squelette complet (utilise uniquement quand la page est generee
+    # depuis un audit/document, ou ce squelette a une vraie valeur).
+    return [_new_block("heading", text="", size="h1")]
 
 
 def _blocks_from_rewrite(rw):
@@ -1745,7 +1742,8 @@ def create_funnel_page(funnel_id: str, req: FunnelPageCreateRequest):
         source = {"url": req.source_url, "timestamp": req.source_timestamp, "score": entry.get("score", 0)}
 
     pid = str(uuid.uuid4())
-    page = {"id": pid, "name": req.name.strip() or "Nouvelle page", "source": source, "blocks": blocks}
+    page = {"id": pid, "name": req.name.strip() or "Nouvelle page", "source": source,
+            "font": FUNNEL_DEFAULT_FONT, "blocks": blocks}
     funnel.setdefault("pages", {})[pid] = page
     funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     save_json_file(FUNNELS_FILE(), funnels)
@@ -1754,6 +1752,7 @@ def create_funnel_page(funnel_id: str, req: FunnelPageCreateRequest):
 
 class FunnelPageUpdateRequest(BaseModel):
     name: str = ""
+    font: str = ""
     blocks: list = Field(default_factory=list)
 
 
@@ -1766,6 +1765,8 @@ def update_funnel_page(funnel_id: str, page_id: str, req: FunnelPageUpdateReques
         raise HTTPException(status_code=404, detail="Page introuvable.")
     if req.name.strip():
         page["name"] = req.name.strip()
+    if req.font.strip():
+        page["font"] = req.font.strip()
     if req.blocks:
         page["blocks"] = req.blocks
     funnel["updated"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1885,7 +1886,7 @@ def create_funnel_page_from_document(funnel_id: str, req: FunnelDocumentImportRe
     page = {
         "id": pid, "name": req.name.strip() or "Nouvelle page",
         "source": {"url": source_label, "timestamp": ts, "score": result.get("_c", {}).get("score", 0)},
-        "blocks": blocks,
+        "font": FUNNEL_DEFAULT_FONT, "blocks": blocks,
     }
     funnel.setdefault("pages", {})[pid] = page
     funnel["updated"] = ts
