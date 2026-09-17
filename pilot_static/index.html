@@ -172,6 +172,38 @@
     box-shadow: 0 0 0 4px var(--accent-soft);
   }
 
+  /* ── Funnel Builder : editeur de texte enrichi (gras/italique/paragraphe) ── */
+  .richtext-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+  .richtext-toolbar button {
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    border-radius: 8px;
+    width: 30px; height: 28px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .richtext-toolbar button:hover { border-color: var(--accent); }
+  .richtext-toolbar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .richtext-editable {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--text);
+    outline: none;
+    min-height: 70px;
+    font-family: inherit;
+    transition: border-color 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+  .richtext-editable:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .richtext-editable p { margin: 0 0 10px; }
+  .richtext-editable p:last-child { margin-bottom: 0; }
+  .richtext-editable ul, .richtext-editable ol { margin: 0 0 10px 22px; padding: 0; }
+
   .row { display: flex; gap: 12px; margin-top: 20px; }
   .row .field { flex: 1; }
 
@@ -3878,6 +3910,62 @@ function renderFunnelPageEditor(funnelId, page) {
   $('#savePageBtn').addEventListener('click', () => saveFunnelPage(funnelId, page));
 }
 
+// ── Editeur de texte enrichi (gras/italique/souligne/paragraphe/listes) ──
+// Pas de librairie externe (le pilote reste une page auto-suffisante) :
+// contenteditable + execCommand, encore largement supporte par Chromium
+// malgre la depreciation officielle de l'API. Le point sensible n'est
+// pas l'edition (execCommand ne produit que des balises de l'allowlist)
+// mais tout HTML qui peut ARRIVER dans un bloc sans passer par cette UI :
+// le rewrite d'un audit peut citer verbatim un fragment HTML recopie
+// depuis la page auditee (deja vu sur le bug PDF), et un copier-coller
+// dans l'editeur peut apporter du HTML avec des attributs (onerror=...,
+// href="javascript:...") depuis Word/Google Docs ou ailleurs. On assainit
+// donc a la fois a l'affichage ET a la sauvegarde, jamais seulement l'un
+// des deux.
+const RICH_TEXT_ALLOWED_TAGS = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI']);
+const RICH_TEXT_BLOCK_TYPES = new Set(['headline', 'subheadline', 'proof', 'guarantee', 'cta', 'text']);
+
+function sanitizeRichHtml(html) {
+  const template = document.createElement('template');
+  template.innerHTML = html || '';
+  const walk = (node) => {
+    [...node.childNodes].forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        walk(child);
+        if (!RICH_TEXT_ALLOWED_TAGS.has(child.tagName)) {
+          while (child.firstChild) node.insertBefore(child.firstChild, child);
+          node.removeChild(child);
+        } else {
+          [...child.attributes].forEach(attr => child.removeAttribute(attr.name));
+        }
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        node.removeChild(child); // commentaires, etc.
+      }
+    });
+  };
+  walk(template.content);
+  return template.innerHTML;
+}
+
+const RICH_TEXT_TOOLBAR_BUTTONS = [
+  { cmd: 'bold', label: '<b>G</b>', title: 'Gras' },
+  { cmd: 'italic', label: '<i>I</i>', title: 'Italique' },
+  { cmd: 'underline', label: '<u>S</u>', title: 'Souligné' },
+  { cmd: 'formatBlock:p', label: '¶', title: 'Paragraphe' },
+  { cmd: 'insertUnorderedList', label: '•', title: 'Liste à puces' },
+  { cmd: 'insertOrderedList', label: '1.', title: 'Liste numérotée' },
+];
+
+function renderRichTextEditor(i, block) {
+  const toolbar = RICH_TEXT_TOOLBAR_BUTTONS.map(b =>
+    `<button type="button" data-rt-cmd="${b.cmd}" data-rt-target="${i}" title="${escapeHtml(b.title)}">${b.label}</button>`
+  ).join('');
+  return `
+    <div class="richtext-toolbar">${toolbar}</div>
+    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}">${sanitizeRichHtml(block.text || '')}</div>
+  `;
+}
+
 function renderFunnelBlockEditor(block, i) {
   const label = FUNNEL_BLOCK_LABELS[block.type] || block.type;
   let inner = '';
@@ -3891,6 +3979,8 @@ function renderFunnelBlockEditor(block, i) {
     `;
   } else if (block.type === 'bullets' || block.type === 'offer_stack' || block.type === 'faq') {
     inner = `<textarea data-block-items="${i}" style="min-height:90px" placeholder="Une ligne par élément">${escapeHtml((block.items || []).join('\n'))}</textarea>`;
+  } else if (RICH_TEXT_BLOCK_TYPES.has(block.type)) {
+    inner = renderRichTextEditor(i, block);
   } else {
     inner = `<textarea data-block-text="${i}" style="min-height:70px">${escapeHtml(block.text || '')}</textarea>`;
   }
@@ -3912,12 +4002,42 @@ function syncFunnelBlocksFromDOM(page) {
   $$('[data-block-text]', $('#funnelBlocksList')).forEach(ta => {
     page.blocks[Number(ta.dataset.blockText)].text = ta.value;
   });
+  $$('[data-block-richtext]', $('#funnelBlocksList')).forEach(div => {
+    page.blocks[Number(div.dataset.blockRichtext)].text = sanitizeRichHtml(div.innerHTML);
+  });
   $$('[data-block-items]', $('#funnelBlocksList')).forEach(ta => {
     page.blocks[Number(ta.dataset.blockItems)].items = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
   });
 }
 
+function bindFunnelRichTextEvents() {
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { /* no-op si non supporte */ }
+
+  $$('[data-rt-cmd]', $('#funnelBlocksList')).forEach(btn => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault()); // garde la selection dans l'editeur
+    btn.addEventListener('click', () => {
+      const target = $(`[data-block-richtext="${btn.dataset.rtTarget}"]`);
+      if (!target) return;
+      target.focus();
+      const [cmd, arg] = btn.dataset.rtCmd.split(':');
+      document.execCommand(cmd, false, arg || null);
+    });
+  });
+
+  $$('[data-block-richtext]', $('#funnelBlocksList')).forEach(div => {
+    div.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const clip = e.clipboardData;
+      const rawHtml = clip.getData('text/html');
+      const rawText = clip.getData('text/plain');
+      const clean = rawHtml ? sanitizeRichHtml(rawHtml) : escapeHtml(rawText).replace(/\n/g, '<br/>');
+      document.execCommand('insertHTML', false, clean);
+    });
+  });
+}
+
 function bindFunnelBlockEvents(funnelId, page) {
+  bindFunnelRichTextEvents();
   $$('[data-block-media]', $('#funnelBlocksList')).forEach(input => {
     input.addEventListener('change', (e) => {
       const idx = Number(input.dataset.blockMedia);
