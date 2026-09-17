@@ -203,6 +203,37 @@
   .richtext-editable p { margin: 0 0 10px; }
   .richtext-editable p:last-child { margin-bottom: 0; }
   .richtext-editable ul, .richtext-editable ol { margin: 0 0 10px 22px; padding: 0; }
+  .richtext-hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .richtext-counter {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-top: 4px;
+  }
+  .swipe-panel {
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--surface-2);
+    margin-bottom: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .swipe-panel-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .swipe-panel-item:last-child { border-bottom: none; }
+  .swipe-panel-item:hover { background: var(--accent-soft); }
 
   .row { display: flex; gap: 12px; margin-top: 20px; }
   .row .field { flex: 1; }
@@ -3582,8 +3613,24 @@ function renderCreativeStudioResults(data) {
 // drag-and-drop, étapes de funnel conditionnelles, paiement intégré.
 
 let _funnelDetailCache = null;
+let _funnelEditorCtx = null; // { funnelId, page } — pour le raccourci global Ctrl/Cmd+S
+
+// Raccourci copywriting : Ctrl/Cmd+S enregistre la page en cours d'edition
+// au lieu de declencher la boite de dialogue "Enregistrer sous" du
+// navigateur. Installe une seule fois (pas a chaque rendu) et gate sur la
+// presence ET la visibilite de l'editeur pour ne jamais intercepter Ctrl+S
+// ailleurs dans le pilote.
+document.addEventListener('keydown', (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return;
+  const funnelsView = document.getElementById('funnelsView');
+  const blocksList = document.getElementById('funnelBlocksList');
+  if (!_funnelEditorCtx || !funnelsView || !blocksList || funnelsView.style.display === 'none') return;
+  e.preventDefault();
+  saveFunnelPage(_funnelEditorCtx.funnelId, _funnelEditorCtx.page);
+});
 
 async function loadFunnels() {
+  _funnelEditorCtx = null;
   $('#funnelsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
   try {
     const res = await fetch('/api/funnels');
@@ -3662,6 +3709,7 @@ function renderFunnelsList(funnels) {
 }
 
 async function loadFunnelDetail(funnelId) {
+  _funnelEditorCtx = null;
   $('#funnelsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
   try {
     const res = await fetch('/api/funnels/' + funnelId);
@@ -3935,6 +3983,7 @@ function openFunnelPageEditor(funnelId, pageId) {
 }
 
 function renderFunnelPageEditor(funnelId, page) {
+  _funnelEditorCtx = { funnelId, page };
   if (!page.font) page.font = FUNNEL_DEFAULT_FONT;
   ensureGoogleFontLoaded(page.font);
   const blocksHtml = (page.blocks || []).map((b, i) => renderFunnelBlockEditor(b, i)).join('');
@@ -4023,13 +4072,31 @@ function sanitizeRichHtml(html) {
 }
 
 const RICH_TEXT_TOOLBAR_BUTTONS = [
-  { cmd: 'bold', label: '<b>G</b>', title: 'Gras' },
-  { cmd: 'italic', label: '<i>I</i>', title: 'Italique' },
-  { cmd: 'underline', label: '<u>S</u>', title: 'Souligné' },
+  { cmd: 'bold', label: '<b>G</b>', title: 'Gras (Ctrl/Cmd+B)' },
+  { cmd: 'italic', label: '<i>I</i>', title: 'Italique (Ctrl/Cmd+I)' },
+  { cmd: 'underline', label: '<u>S</u>', title: 'Souligné (Ctrl/Cmd+U)' },
   { cmd: 'formatBlock:p', label: '¶', title: 'Paragraphe' },
   { cmd: 'insertUnorderedList', label: '•', title: 'Liste à puces' },
   { cmd: 'insertOrderedList', label: '1.', title: 'Liste numérotée' },
 ];
+
+// Rappels de framework affiches sous chaque bloc — LRS note deja les audits
+// sur ces criteres (PAS, Hormozi, Schwartz, Cialdini, Fogg), autant les
+// rappeler pendant l'ecriture plutot que de les decouvrir a l'audit d'apres.
+const FUNNEL_BLOCK_HINTS = {
+  heading: "PAS : nomme un problème précis, agite la conséquence concrète, promets un résultat chiffré + délai.",
+  subheadline: "Complète le titre : lève une objection ou ajoute une preuve immédiate — n'y répète pas la même idée.",
+  proof: "Cialdini (Social Proof) : chiffres, prénoms, résultats précis — pas de généralités (\"beaucoup de clients satisfaits\").",
+  guarantee: "Cialdini (Réciprocité) : réduis le risque perçu — délai clair, conditions simples, sans astérisque caché.",
+  offer_stack: "Hormozi (Value Equation) : chaque ligne répond à \"qu'est-ce que ça change concrètement pour l'acheteur ?\"",
+  cta: "Fogg (Prompt) : un verbe d'action, cohérent avec la promesse du titre, sans ambiguïté sur ce qui se passe après le clic.",
+  bullets: "Un bénéfice concret par ligne (ce que ça change), pas une caractéristique (ce que c'est).",
+  faq: "Traite les objections réellement entendues par vos clients, pas des questions génériques.",
+};
+
+// Categories de Swipe Files (Ressources) reutilisables directement dans un
+// bloc — evite de re-taper un hook/headline/CTA qui a deja fait ses preuves.
+const FUNNEL_BLOCK_SWIPE_CATEGORY = { heading: 'headlines', subheadline: 'headlines', cta: 'ctas' };
 
 function renderRichTextEditor(i, block) {
   const toolbar = RICH_TEXT_TOOLBAR_BUTTONS.map(b =>
@@ -4040,7 +4107,10 @@ function renderRichTextEditor(i, block) {
   let sizeStyle = '';
   if (block.type === 'heading') {
     const current = FUNNEL_HEADING_SIZES.find(s => s.val === block.size) || FUNNEL_HEADING_SIZES[1];
-    sizeStyle = `font-weight:700;font-size:${current.fontSize}`;
+    // Uniquement la taille : forcer le gras au niveau du bloc entrait en
+    // conflit avec le Ctrl/Cmd+B (execCommand voyait deja "gras" et
+    // basculait vers un <span style="font-weight:normal"> a la place).
+    sizeStyle = `font-size:${current.fontSize}`;
     sizeSeg = `
       <div class="segmented" data-heading-size="${i}" style="margin-bottom:8px;width:auto;display:inline-flex">
         ${FUNNEL_HEADING_SIZES.map(s => `<button class="${s.val === current.val ? 'active' : ''}" data-val="${s.val}">${s.label}</button>`).join('')}
@@ -4048,10 +4118,21 @@ function renderRichTextEditor(i, block) {
     `;
   }
 
+  const hint = FUNNEL_BLOCK_HINTS[block.type];
+  const swipeCategory = FUNNEL_BLOCK_SWIPE_CATEGORY[block.type];
+  const text = sanitizeRichHtml(block.text || '');
+  const plainLen = text.replace(/<[^>]+>/g, '').length;
+
   return `
     ${sizeSeg}
-    <div class="richtext-toolbar">${toolbar}</div>
-    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}" style="${sizeStyle}">${sanitizeRichHtml(block.text || '')}</div>
+    ${hint ? `<div class="richtext-hint">💡 ${escapeHtml(hint)}</div>` : ''}
+    <div class="richtext-toolbar">
+      ${toolbar}
+      ${swipeCategory ? `<button type="button" data-swipe-insert="${i}" data-swipe-category="${swipeCategory}" title="Insérer depuis Swipe Files" style="margin-left:auto">📋</button>` : ''}
+    </div>
+    <div id="swipePanel-${i}" class="swipe-panel" style="display:none"></div>
+    <div class="richtext-editable" contenteditable="true" data-block-richtext="${i}" style="${sizeStyle}">${text}</div>
+    <div class="richtext-counter" data-counter-for="${i}">${plainLen} caractère${plainLen === 1 ? '' : 's'}</div>
   `;
 }
 
@@ -4130,6 +4211,30 @@ function bindFunnelRichTextEvents() {
       const clean = rawHtml ? sanitizeRichHtml(rawHtml) : escapeHtml(rawText).replace(/\n/g, '<br/>');
       document.execCommand('insertHTML', false, clean);
     });
+
+    // Raccourcis clavier copywriting : Ctrl/Cmd+B/I/U pendant la frappe,
+    // sans devoir lacher le clavier pour aller cliquer la barre d'outils.
+    div.addEventListener('keydown', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const cmd = k === 'b' ? 'bold' : k === 'i' ? 'italic' : k === 'u' ? 'underline' : null;
+      if (!cmd) return;
+      e.preventDefault();
+      document.execCommand(cmd, false, null);
+    });
+
+    const counter = $(`[data-counter-for="${div.dataset.blockRichtext}"]`);
+    if (counter) {
+      div.addEventListener('input', () => {
+        const len = div.textContent.length;
+        counter.textContent = `${len} caractère${len === 1 ? '' : 's'}`;
+      });
+    }
+  });
+
+  $$('[data-swipe-insert]', $('#funnelBlocksList')).forEach(btn => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => toggleSwipeInsertPanel(btn.dataset.swipeInsert, btn.dataset.swipeCategory));
   });
 
   $$('[data-heading-size]', $('#funnelBlocksList')).forEach(seg => {
@@ -4199,6 +4304,42 @@ async function saveFunnelPage(funnelId, page) {
     loadFunnelDetail(funnelId);
   } catch (err) {
     errBox.textContent = err.message; errBox.style.display = 'block';
+  }
+}
+
+async function toggleSwipeInsertPanel(idxStr, category) {
+  const idx = Number(idxStr);
+  const panel = $(`#swipePanel-${idx}`);
+  if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  panel.innerHTML = `<div class="swipe-panel-item" style="color:var(--text-muted)">Chargement…</div>`;
+  try {
+    const res = await fetch('/api/swipefiles');
+    const data = await res.json();
+    const entries = (data[category] || []).slice(0, 15);
+    if (!entries.length) {
+      panel.innerHTML = `<div class="swipe-panel-item" style="color:var(--text-muted)">Aucune swipe file dans cette catégorie pour l'instant — alimentée automatiquement après chaque audit, ou depuis Ressources → Swipe Files.</div>`;
+      return;
+    }
+    panel.innerHTML = entries.map((entry, i) =>
+      `<div class="swipe-panel-item" data-swipe-pick="${i}">${escapeHtml(entry.text)}</div>`
+    ).join('');
+    $$('[data-swipe-pick]', panel).forEach(row => {
+      row.addEventListener('click', () => {
+        const entry = entries[Number(row.dataset.swipePick)];
+        const editable = $(`[data-block-richtext="${idx}"]`);
+        if (editable) {
+          editable.focus();
+          document.execCommand('selectAll', false, null);
+          document.execCommand('insertText', false, entry.text);
+          const counter = $(`[data-counter-for="${idx}"]`);
+          if (counter) counter.textContent = `${editable.textContent.length} caractère${editable.textContent.length === 1 ? '' : 's'}`;
+        }
+        panel.style.display = 'none';
+      });
+    });
+  } catch (err) {
+    panel.innerHTML = `<div class="swipe-panel-item" style="color:var(--danger)">Erreur : ${escapeHtml(err.message)}</div>`;
   }
 }
 
