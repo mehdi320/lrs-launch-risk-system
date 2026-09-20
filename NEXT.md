@@ -56,9 +56,9 @@ existe). Impossible de confirmer depuis le code :
 | 1 | **Bug réel** : `LRS_APP_URL` a pour défaut `http://localhost:8501` (ancien port Streamlit, supprimé) dans `creative_studio/serving/app.py:71`, `webhook_server.py:25` et `.env.example:65`. Sans valeur explicite dans `.env` pointant vers le pilote (port 8600, ou `https://app.<domaine>` derrière Caddy), le lien magique envoyé par email pointe vers une adresse morte. | Baki (remplir `.env`) | 5 min |
 | 2 | Remplir `.env` complet : `STRIPE_SECRET_KEY`, `STRIPE_BETA_PRICE_ID` (créer le produit/prix Stripe mode Test si pas fait — `STRIPE_SMTP_SETUP.md` §1), `STRIPE_WEBHOOK_SECRET`, `SMTP_*`, `APP_PASSWORD` réel, `LRS_APP_URL` correct (point 1) | Baki | 20 min |
 | 3 | Tester le parcours complet en local (paiement test carte `4242...` → webhook → email reçu → lien magique → accès pilote débloqué), maintenant que le gate est réellement branché sur le pilote — suivre `STRIPE_SMTP_SETUP.md` §3 | Baki | 30-45 min |
-| 4 | Supprimer `webhook_server.py` — code mort : référence `app.py`/Streamlit et le port 8501, n'est appelé par aucun service dans `docker-compose.yml` ni `Dockerfile` (seul `creative_studio/serving/app.py` est réellement utilisé). Risque de confusion pour une future session. | Claude Code seul | 10 min |
-| 5 | Corriger le défaut `LRS_APP_URL=http://localhost:8501` dans `.env.example` (→ `http://localhost:8600`) et la mention "URL publique de l'app Streamlit" dans `STRIPE_SMTP_SETUP.md:186` (→ pilote) | Claude Code seul | 10 min |
-| 6 | Réécrire `PASSATION.md` pour refléter l'état réel (app.py supprimé, gate résolu, 22 commits d'historique manquants) — évite de réamorcer une session sur de fausses prémisses | Claude Code (rédaction) + Baki (validation du contenu produit) | 30-45 min |
+| 4 | ~~Supprimer `webhook_server.py`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
+| 5 | ~~Corriger le défaut `LRS_APP_URL=http://localhost:8501`~~ — **fait**, `.env.example` et `creative_studio/serving/app.py:71` pointent maintenant vers `http://localhost:8600`, `STRIPE_SMTP_SETUP.md:186` mis à jour (commit `ef8fae2`) | Claude Code seul | fait |
+| 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
 | 7 | Provisionner le VPS (GCP `e2-micro` free tier) + acheter le nom de domaine + pointer les 3 A records (`app.`, `pilot.`, `api.`) — jamais fait (`PASSATION.md` §5.2, `DEPLOYMENT.md` checklist) | Baki | 1-2h |
 | 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels | 30-60 min |
 | 9 | Passer Stripe en Live (ré-autoriser le CLI, créer produit/prix Live, `sk_live_...`, webhook Dashboard réel) — bloqué tant que 7-8 ne sont pas faits (Stripe doit joindre l'endpoint publiquement) | Baki | 30 min une fois l'infra prête |
@@ -70,13 +70,13 @@ existe). Impossible de confirmer depuis le code :
 **Lundi matin (Baki)** — Créer le produit/prix Stripe Test si absent,
 remplir `.env` complet (tâches 1-2 ci-dessus, ~30 min).
 
-**Lundi après-midi (Baki, en parallèle Claude Code)** — Baki : lancer
-`uvicorn pilot_server:app --port 8600`, `uvicorn
-creative_studio.serving.app:app --port 8000`, `stripe listen`, dérouler le
-parcours complet de paiement test (tâche 3). Pendant ce temps, Claude Code
-peut faire seul : supprimer `webhook_server.py` (tâche 4), corriger les
-défauts `LRS_APP_URL` dans la doc (tâche 5), réécrire `PASSATION.md`
-(tâche 6, brouillon — validation ensuite par Baki).
+**Lundi après-midi (Baki)** — Lancer `uvicorn pilot_server:app --port
+8600`, `uvicorn creative_studio.serving.app:app --port 8000`, `stripe
+listen`, dérouler le parcours complet de paiement test (tâche 3). Les
+tâches 4-6 (nettoyage `webhook_server.py`, défauts `LRS_APP_URL`,
+brouillon `PASSATION.md`) sont déjà faites (commit `ef8fae2`, poussé le
+2026-09-20) — il reste à Baki de relire le brouillon de `PASSATION.md`
+et à valider qu'il correspond bien à sa vision produit.
 
 **Mardi matin (Baki)** — Provisionner le VPS GCP + domaine + DNS (tâche
 7, ~1-2h — aucune partie de ceci ne peut être faite par Claude Code, accès
