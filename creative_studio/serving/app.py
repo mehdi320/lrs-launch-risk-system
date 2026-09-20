@@ -68,7 +68,7 @@ if stripe is not None:
 
 # ── Abonnement bêta LRS (distinct des Payment Links funnel ci-dessus) ──
 STRIPE_BETA_PRICE_ID = os.environ.get("STRIPE_BETA_PRICE_ID", "")
-LRS_APP_URL = os.environ.get("LRS_APP_URL", "http://localhost:8501")
+LRS_APP_URL = os.environ.get("LRS_APP_URL", "http://localhost:8600")
 LRS_SALES_PAGE_URL = os.environ.get("LRS_SALES_PAGE_URL", "")
 
 app = FastAPI(title="LRS Creative Studio — Serving")
