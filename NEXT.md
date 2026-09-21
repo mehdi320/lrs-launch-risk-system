@@ -68,8 +68,8 @@ réel). Pas de raison de bloquer le premier bloc sur le second.
 | # | Tâche | Qui | Temps estimé |
 |---|---|---|---|
 | 1 | ~~Bug `LRS_APP_URL`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
-| 2 | Remplir `.env` complet en mode **Test** : `STRIPE_SECRET_KEY` (`sk_test_...`), `STRIPE_BETA_PRICE_ID` (créer le produit/prix Stripe Test si pas fait — `STRIPE_SMTP_SETUP.md` §1, gratuit), `STRIPE_WEBHOOK_SECRET`, `SMTP_*`, `APP_PASSWORD` réel, `LRS_APP_URL=http://localhost:8600` | Baki | 20 min |
-| 3 | Tester le parcours complet en local (paiement test carte `4242...` → webhook → email reçu → lien magique → accès pilote débloqué), maintenant que le gate est réellement branché sur le pilote — suivre `STRIPE_SMTP_SETUP.md` §3 | Baki | 30-45 min |
+| 2 | ~~`.env` de test créé + serveurs lancés~~ — **fait le 2026-09-21** dans cette session cloud (`APP_PASSWORD`, `APP_SECRET_KEY`, `LRS_APP_URL`, `LRS_SALES_PAGE_URL` remplis ; `STRIPE_SECRET_KEY`/`STRIPE_BETA_PRICE_ID`/`SMTP_*` laissés vides, je n'ai pas vos identifiants réels). **Reste à vous** : reprendre ce `.env` avec vos vraies valeurs Stripe Test + SMTP (voir §2 ci-dessus pour le détail) — le fichier n'existe que dans cette session éphémère, pas sur votre machine. | Claude Code (squelette fait) + Baki (vraies valeurs Stripe/SMTP) | 15 min pour vous |
+| 3 | ~~Tester le parcours~~ — **partiellement fait le 2026-09-21**, sans navigateur ni vraie carte : suite `test_stripe_webhook.py` 6/6, login admin (bon/mauvais mot de passe), lien magique consommé une fois puis bloqué en réutilisation, **et résiliation testée : l'accès est coupé immédiatement même avec un cookie de session valide** — confirme que le gate se revérifie à chaque requête, pas seulement au login. Non testé (nécessite vos identifiants réels) : un vrai paiement via la page Stripe Checkout dans un navigateur, un vrai email reçu par SMTP. | Claude Code (logique validée) + Baki (test réel carte + email) | 15-20 min pour vous |
 | 4 | ~~Supprimer `webhook_server.py`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
 | 5 | ~~Corriger le défaut `LRS_APP_URL`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
 | 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
@@ -87,13 +87,18 @@ réel). Pas de raison de bloquer le premier bloc sur le second.
 ## 4. Plan lundi/mardi
 
 **Lundi matin (Baki)** — Créer le produit/prix Stripe Test si absent,
-remplir `.env` complet (tâches 2 ci-dessus, ~20 min, gratuit).
+copier `.env.example` en `.env` sur votre machine et remplir
+`STRIPE_SECRET_KEY`/`STRIPE_BETA_PRICE_ID`/`STRIPE_WEBHOOK_SECRET`/
+`SMTP_*` (le reste des valeurs est déjà vérifié correct — tâche 2,
+~15 min).
 
 **Lundi après-midi (Baki)** — Lancer `uvicorn pilot_server:app --port
 8600`, `uvicorn creative_studio.serving.app:app --port 8000`, `stripe
-listen`, dérouler le parcours complet de paiement test (tâche 3). Relire
-le brouillon de `PASSATION.md` (tâche 6). Le fix Vercel (tâche 11) est
-déjà fait.
+listen`, dérouler le parcours complet de paiement test avec une vraie
+carte et un vrai email (tâche 3 — la logique webhook/lien magique/gate
+est déjà validée, il reste juste à confirmer le chemin navigateur+email).
+Relire le brouillon de `PASSATION.md` (tâche 6). Le fix Vercel (tâche 11)
+est déjà fait.
 
 **Mardi (Baki, une fois la paye tombée)** — Acheter le domaine,
 provisionner le VPS GCP + DNS (tâche 7, ~1-2h), puis `docker compose up
