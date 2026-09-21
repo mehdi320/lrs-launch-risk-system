@@ -31,6 +31,14 @@ réamorcer une session sur ce document sans le recouper.
 - `docker-compose.yml` (3 services : pilot, serving, caddy) + `Caddyfile`
   (TLS Let's Encrypt auto) prêts côté code — **jamais testés sur un
   démon Docker réel** (`DEPLOYMENT.md:3-4`).
+- Revue de sécurité complète du repo faite le 2026-09-21 (au-delà du diff
+  habituel) : un point réel trouvé et corrigé — SSRF via redirection HTTP
+  non revalidée dans `creative_studio/core/pdf_export.py::_image_bytes`
+  (commit `8427dac`), non exploitable via l'app déployée actuellement
+  (chemin d'appel orphelin depuis le retrait de Streamlit) mais corrigé
+  quand même avant que le code ne soit reconnecté. Reste de l'audit
+  (`user_accounts.py`, `email_alerts.py`, `integrations.py`, webhook
+  Stripe, XSS du rendu Funnel 2 étapes) : rien trouvé.
 
 ## 2. Ce qui dépend de votre machine — à vérifier sur place
 
