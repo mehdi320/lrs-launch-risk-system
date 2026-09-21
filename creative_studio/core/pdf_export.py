@@ -24,7 +24,7 @@ import ipaddress
 import re
 import socket
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 from xml.sax.saxutils import escape as _xml_escape
 
 import requests
@@ -216,7 +216,29 @@ def _image_bytes(media: FunnelStepMedia) -> bytes | None:
                 return f.read()
         if not _is_safe_fetch_target(media.location):
             return None
-        response = requests.get(media.location, timeout=15)
+        # Suit les redirections manuellement pour revalider chaque saut (voir
+        # _is_safe_fetch_target ci-dessus) — un requests.get() classique suit
+        # les redirections par défaut sans revérifier l'IP cible, ce qui
+        # permettrait de contourner le contrôle initial via une réponse 3xx
+        # d'un hôte public vers une adresse interne (même pattern que
+        # audit_engine.py::extract_page() et
+        # reference_extraction.py::fetch_reference_text()).
+        current_url = media.location
+        response = None
+        for _ in range(5):
+            response = requests.get(current_url, timeout=15, allow_redirects=False)
+            if response.is_redirect or response.is_permanent_redirect:
+                location = response.headers.get("Location", "")
+                if not location:
+                    break
+                next_url = urljoin(current_url, location)
+                if not _is_safe_fetch_target(next_url):
+                    return None
+                current_url = next_url
+                continue
+            break
+        if response is None:
+            return None
         response.raise_for_status()
         return response.content
     except Exception:
