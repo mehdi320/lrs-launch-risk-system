@@ -75,15 +75,35 @@ réel). Pas de raison de bloquer le premier bloc sur le second.
 | 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
 | 11 | ~~Corriger le Root Directory du projet Vercel~~ — **fait le 2026-09-21**, par Baki directement dans le dashboard (l'appel API depuis cette session cloud était bloqué par la politique réseau, jamais résolu par le token). Root Directory = `sales-site`, Framework Preset repassé sur Next.js (était resté sur la détection Python héritée de l'ancienne racine du repo). Build **Ready**, `/vente` vérifié en ligne. | Baki | fait |
 
-### Attend la paye — domaine, VPS, Stripe Live (argent réel)
+### Chemin rapide — ouvrir les ventes aujourd'hui, sans VPS (ngrok)
+
+Correction du 2026-09-21 : le VPS n'est **pas** un prérequis pour que le
+bouton d'abonnement fonctionne en vrai. Il ne sert qu'à une chose — recevoir
+le webhook Stripe qui active le compte. Un tunnel `ngrok` fait ça
+gratuitement, tout de suite, tant que le PC de Baki reste allumé et le
+process actif (fragile, pas du "vrai" hébergement — le VPS ci-dessous reste
+la version durable à faire une fois la paye tombée).
+
+| # | Tâche | Qui | Temps estimé |
+|---|---|---|---|
+| 13 | Installer `ngrok`, lancer `ngrok http 8000` pour obtenir une URL HTTPS publique vers le service webhook local | Baki | 10 min |
+| 14 | Remplir un vrai `.env` (sur la machine de Baki, pas dans cette session éphémère) avec les vraies valeurs **Live** : `STRIPE_SECRET_KEY` (`sk_live_...`), `STRIPE_BETA_PRICE_ID` (celui déjà actif, trouvé sur le dashboard Live), `SMTP_*` réels | Baki | 10 min |
+| 15 | Créer l'endpoint webhook dans Stripe Dashboard (mode **Live**) pointant vers l'URL ngrok + `/webhook/stripe`, écoutant `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` ; copier le `whsec_...` dans `.env` (`STRIPE_WEBHOOK_SECRET`) | Baki | 5 min |
+| 16 | Lancer `uvicorn creative_studio.serving.app:app --port 8000` (avec ce vrai `.env`, sans `LRS_CS_ALLOW_UNVERIFIED_WEBHOOK`) | Baki | 2 min |
+| 17 | Brancher le bouton sur `sales-site/` — soit `NEXT_PUBLIC_STRIPE_LINK` (Payment Link) dans Vercel → Environment Variables, soit intégrer le snippet Stripe Buy Button déjà fourni (`buy_btn_1UCyXdFMKX0qC8wWSojUTEv6` / `pk_live_8dMJDhsBZ87pYEpgTyvk0Sw200SXHeON4h`) dans `sales-site/components/vente-shared.tsx` à la place de `<a href={STRIPE_LINK}>`. Redéployer. | Claude Code (le snippet) ou Baki (l'env var Vercel) | 15 min |
+| 18 | Test réel : un paiement (le vôtre ou celui d'un vrai client), vérifier que l'email avec le lien magique arrive et que l'accès au pilote se débloque | Baki | 5-10 min |
+
+### Durable — VPS + domaine (argent réel, à faire quand la paye tombe)
+
+Plus urgent pour le confort (webhook stable, pas dépendant du PC de Baki),
+mais plus la même urgence bloquante qu'avant la correction ci-dessus.
 
 | # | Tâche | Qui | Temps estimé |
 |---|---|---|---|
 | 7 | Provisionner le VPS (GCP `e2-micro` free tier — gratuit, mais acheter le nom de domaine ne l'est pas) + pointer les 3 A records (`app.`, `pilot.`, `api.`) — jamais fait (`PASSATION.md` §5.2, `DEPLOYMENT.md` checklist) | Baki | 1-2h |
-| 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels, bloqué sur 7 | 30-60 min |
-| 9 | Passer Stripe en Live (ré-autoriser le CLI, créer produit/prix Live, `sk_live_...`, webhook Dashboard réel) — bloqué tant que 7-8 ne sont pas faits (Stripe doit joindre l'endpoint publiquement) | Baki | 30 min une fois l'infra prête |
+| 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique (remplace l'URL ngrok de la tâche 15) | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels, bloqué sur 7 | 30-60 min |
+| 9 | Repasser le webhook Stripe Live du tunnel ngrok vers l'URL VPS stable une fois 7-8 faits | Baki | 10 min |
 | 10 | Faire relire `privacy.html`/`terms.html` (pilote) et créer l'équivalent pour `sales-site/` par un professionnel — toujours vrai, aucun commit de revue légale trouvé après `85a7b90`. Coûte probablement aussi de l'argent (juriste). | Baki (externe) | hors périmètre technique |
-| 12 | Brancher le bouton Stripe Live sur `sales-site/` — **décidé le 2026-09-21 : on attend le VPS**, pas de branchement avant, pour ne pas faire payer un client réel sans que le webhook d'activation existe (pas de backend public = paiement pris, personne n'active le compte). Snippet Stripe Buy Button déjà fourni par Baki, à utiliser tel quel une fois 7-8 faits : `<script async src="https://js.stripe.com/v3/buy-button.js"></script>` + `<stripe-buy-button buy-button-id="buy_btn_1UCyXdFMKX0qC8wWSojUTEv6" publishable-key="pk_live_8dMJDhsBZ87pYEpgTyvk0Sw200SXHeON4h"></stripe-buy-button>` (clé publique, pas de risque à la garder en clair). À intégrer dans `sales-site/components/vente-shared.tsx` à la place du `<a href={STRIPE_LINK}>` actuel, ou en gardant les deux en parallèle. | Claude Code, une fois 7-9 faits | 15 min |
 
 ## 4. Plan lundi/mardi
 
@@ -103,7 +123,11 @@ est déjà fait.
 
 **Mardi (Baki, une fois la paye tombée)** — Acheter le domaine,
 provisionner le VPS GCP + DNS (tâche 7, ~1-2h), puis `docker compose up
--d` sur le serveur réel, vérification TLS Caddy, bascule webhook Stripe
-vers l'URL publique (tâche 8). Stripe Live (tâche 9) et revue légale
-(tâche 10) suivent une fois l'infra publique stable — pas forcément le
-même jour si la paye/l'achat du domaine prend plus de temps que prévu.
+-d` sur le serveur réel, vérification TLS Caddy, bascule du webhook
+Stripe de l'URL ngrok vers l'URL publique stable (tâches 8-9). Revue
+légale (tâche 10) suit une fois l'infra publique stable.
+
+**Aujourd'hui/ce soir, si Baki veut ouvrir les ventes tout de suite** —
+chemin ngrok (tâches 13-18 ci-dessus), ~45 min au total, ne nécessite ni
+VPS ni domaine ni paye. Fragile (dépend du PC allumé) mais fonctionnel
+immédiatement.
