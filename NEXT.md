@@ -51,40 +51,46 @@ existe). Impossible de confirmer depuis le code :
 
 ## 3. Tâches restantes, par priorité
 
+Séparées en deux blocs : ce qui est **gratuit** (mode Stripe Test, aucun
+achat) et ce qui **attend la paye** (domaine, VPS, Stripe Live — argent
+réel). Pas de raison de bloquer le premier bloc sur le second.
+
+### Gratuit — faisable dès maintenant
+
 | # | Tâche | Qui | Temps estimé |
 |---|---|---|---|
-| 1 | **Bug réel** : `LRS_APP_URL` a pour défaut `http://localhost:8501` (ancien port Streamlit, supprimé) dans `creative_studio/serving/app.py:71`, `webhook_server.py:25` et `.env.example:65`. Sans valeur explicite dans `.env` pointant vers le pilote (port 8600, ou `https://app.<domaine>` derrière Caddy), le lien magique envoyé par email pointe vers une adresse morte. | Baki (remplir `.env`) | 5 min |
-| 2 | Remplir `.env` complet : `STRIPE_SECRET_KEY`, `STRIPE_BETA_PRICE_ID` (créer le produit/prix Stripe mode Test si pas fait — `STRIPE_SMTP_SETUP.md` §1), `STRIPE_WEBHOOK_SECRET`, `SMTP_*`, `APP_PASSWORD` réel, `LRS_APP_URL` correct (point 1) | Baki | 20 min |
+| 1 | ~~Bug `LRS_APP_URL`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
+| 2 | Remplir `.env` complet en mode **Test** : `STRIPE_SECRET_KEY` (`sk_test_...`), `STRIPE_BETA_PRICE_ID` (créer le produit/prix Stripe Test si pas fait — `STRIPE_SMTP_SETUP.md` §1, gratuit), `STRIPE_WEBHOOK_SECRET`, `SMTP_*`, `APP_PASSWORD` réel, `LRS_APP_URL=http://localhost:8600` | Baki | 20 min |
 | 3 | Tester le parcours complet en local (paiement test carte `4242...` → webhook → email reçu → lien magique → accès pilote débloqué), maintenant que le gate est réellement branché sur le pilote — suivre `STRIPE_SMTP_SETUP.md` §3 | Baki | 30-45 min |
 | 4 | ~~Supprimer `webhook_server.py`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
-| 5 | ~~Corriger le défaut `LRS_APP_URL=http://localhost:8501`~~ — **fait**, `.env.example` et `creative_studio/serving/app.py:71` pointent maintenant vers `http://localhost:8600`, `STRIPE_SMTP_SETUP.md:186` mis à jour (commit `ef8fae2`) | Claude Code seul | fait |
+| 5 | ~~Corriger le défaut `LRS_APP_URL`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
 | 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
-| 7 | Provisionner le VPS (GCP `e2-micro` free tier) + acheter le nom de domaine + pointer les 3 A records (`app.`, `pilot.`, `api.`) — jamais fait (`PASSATION.md` §5.2, `DEPLOYMENT.md` checklist) | Baki | 1-2h |
-| 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels | 30-60 min |
+| 11 | Corriger le Root Directory du projet Vercel (`sales-site`) — build preview cassé depuis le retrait du déploiement, cf. l'email "Preview deployment failed" du 2026-09-20. **Bloqué sur un token API Vercel que Baki doit envoyer** ; dès reçu, Claude Code le fait seul. | Baki (envoyer le token) puis Claude Code seul | 5 min une fois le token reçu |
+
+### Attend la paye — domaine, VPS, Stripe Live (argent réel)
+
+| # | Tâche | Qui | Temps estimé |
+|---|---|---|---|
+| 7 | Provisionner le VPS (GCP `e2-micro` free tier — gratuit, mais acheter le nom de domaine ne l'est pas) + pointer les 3 A records (`app.`, `pilot.`, `api.`) — jamais fait (`PASSATION.md` §5.2, `DEPLOYMENT.md` checklist) | Baki | 1-2h |
+| 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels, bloqué sur 7 | 30-60 min |
 | 9 | Passer Stripe en Live (ré-autoriser le CLI, créer produit/prix Live, `sk_live_...`, webhook Dashboard réel) — bloqué tant que 7-8 ne sont pas faits (Stripe doit joindre l'endpoint publiquement) | Baki | 30 min une fois l'infra prête |
-| 10 | Faire relire `privacy.html`/`terms.html` (pilote) et créer l'équivalent pour `sales-site/` par un professionnel — toujours vrai, aucun commit de revue légale trouvé après `85a7b90` | Baki (externe) | hors périmètre technique |
-| 11 | Redéployer `sales-site/` sur Vercel **en preview d'abord** (dernier commit sales-site : `1addf3e`, avant l'incident de déploiement prod accidentel décrit dans `PASSATION.md` §2) | Baki | 20 min |
+| 10 | Faire relire `privacy.html`/`terms.html` (pilote) et créer l'équivalent pour `sales-site/` par un professionnel — toujours vrai, aucun commit de revue légale trouvé après `85a7b90`. Coûte probablement aussi de l'argent (juriste). | Baki (externe) | hors périmètre technique |
 
 ## 4. Plan lundi/mardi
 
 **Lundi matin (Baki)** — Créer le produit/prix Stripe Test si absent,
-remplir `.env` complet (tâches 1-2 ci-dessus, ~30 min).
+remplir `.env` complet (tâches 2 ci-dessus, ~20 min, gratuit).
 
 **Lundi après-midi (Baki)** — Lancer `uvicorn pilot_server:app --port
 8600`, `uvicorn creative_studio.serving.app:app --port 8000`, `stripe
-listen`, dérouler le parcours complet de paiement test (tâche 3). Les
-tâches 4-6 (nettoyage `webhook_server.py`, défauts `LRS_APP_URL`,
-brouillon `PASSATION.md`) sont déjà faites (commit `ef8fae2`, poussé le
-2026-09-20) — il reste à Baki de relire le brouillon de `PASSATION.md`
-et à valider qu'il correspond bien à sa vision produit.
+listen`, dérouler le parcours complet de paiement test (tâche 3). Relire
+le brouillon de `PASSATION.md` (tâche 6). Si le token Vercel est envoyé
+entre-temps, Claude Code corrige le Root Directory dans la foulée
+(tâche 11).
 
-**Mardi matin (Baki)** — Provisionner le VPS GCP + domaine + DNS (tâche
-7, ~1-2h — aucune partie de ceci ne peut être faite par Claude Code, accès
-compte cloud/registrar requis).
-
-**Mardi après-midi (Baki)** — `docker compose up -d` sur le serveur réel,
-vérification TLS Caddy, bascule webhook Stripe vers l'URL publique (tâche
-8, "à vérifier sur place"). Si le temps le permet : redéployer
-`sales-site/` en preview Vercel (tâche 11). Stripe Live (tâche 9) et revue
-légale (tâche 10) restent pour une session suivante, une fois l'infra
-publique stable.
+**Mardi (Baki, une fois la paye tombée)** — Acheter le domaine,
+provisionner le VPS GCP + DNS (tâche 7, ~1-2h), puis `docker compose up
+-d` sur le serveur réel, vérification TLS Caddy, bascule webhook Stripe
+vers l'URL publique (tâche 8). Stripe Live (tâche 9) et revue légale
+(tâche 10) suivent une fois l'infra publique stable — pas forcément le
+même jour si la paye/l'achat du domaine prend plus de temps que prévu.
