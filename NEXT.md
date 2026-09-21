@@ -75,14 +75,19 @@ réel). Pas de raison de bloquer le premier bloc sur le second.
 | 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
 | 11 | ~~Corriger le Root Directory du projet Vercel~~ — **fait le 2026-09-21**, par Baki directement dans le dashboard (l'appel API depuis cette session cloud était bloqué par la politique réseau, jamais résolu par le token). Root Directory = `sales-site`, Framework Preset repassé sur Next.js (était resté sur la détection Python héritée de l'ancienne racine du repo). Build **Ready**, `/vente` vérifié en ligne. | Baki | fait |
 
-### Chemin rapide — ouvrir les ventes aujourd'hui, sans VPS (ngrok)
+### Chemin rapide — ouvrir les ventes sans VPS (ngrok) — écarté pour l'instant
 
-Correction du 2026-09-21 : le VPS n'est **pas** un prérequis pour que le
-bouton d'abonnement fonctionne en vrai. Il ne sert qu'à une chose — recevoir
-le webhook Stripe qui active le compte. Un tunnel `ngrok` fait ça
+Correction du 2026-09-21 : le VPS n'est **pas** un prérequis technique pour
+que le bouton d'abonnement fonctionne en vrai. Il ne sert qu'à une chose —
+recevoir le webhook Stripe qui active le compte. Un tunnel `ngrok` fait ça
 gratuitement, tout de suite, tant que le PC de Baki reste allumé et le
-process actif (fragile, pas du "vrai" hébergement — le VPS ci-dessous reste
-la version durable à faire une fois la paye tombée).
+process actif (fragile, pas du "vrai" hébergement).
+
+**Décision de Baki (2026-09-21, même session) : on n'utilise pas ce
+raccourci.** Tout — webhook Live inclus — attend la paye et le VPS durable
+(section suivante). Les tâches 13-18 restent documentées ci-dessous à
+titre de référence si la décision change, mais ne sont **pas** le plan
+actuel.
 
 | # | Tâche | Qui | Temps estimé |
 |---|---|---|---|
@@ -95,15 +100,17 @@ la version durable à faire une fois la paye tombée).
 
 ### Durable — VPS + domaine (argent réel, à faire quand la paye tombe)
 
-Plus urgent pour le confort (webhook stable, pas dépendant du PC de Baki),
-mais plus la même urgence bloquante qu'avant la correction ci-dessus.
+Seul chemin retenu pour ouvrir les ventes en Live (Baki a écarté le
+raccourci ngrok ci-dessus) — donc redevient le vrai bloquant avant tout
+paiement réel, en attendant la paye.
 
 | # | Tâche | Qui | Temps estimé |
 |---|---|---|---|
 | 7 | Provisionner le VPS (GCP `e2-micro` free tier — gratuit, mais acheter le nom de domaine ne l'est pas) + pointer les 3 A records (`app.`, `pilot.`, `api.`) — jamais fait (`PASSATION.md` §5.2, `DEPLOYMENT.md` checklist) | Baki | 1-2h |
 | 8 | `docker compose up -d` sur le serveur réel, vérifier que Caddy obtient les certificats TLS (`docker compose logs caddy`), reconfigurer l'endpoint webhook Stripe avec la vraie URL publique (remplace l'URL ngrok de la tâche 15) | Baki — **à vérifier sur place**, dépend d'un serveur/Docker réels, bloqué sur 7 | 30-60 min |
-| 9 | Repasser le webhook Stripe Live du tunnel ngrok vers l'URL VPS stable une fois 7-8 faits | Baki | 10 min |
+| 9 | Configurer l'endpoint webhook Stripe (mode **Live**) sur l'URL VPS stable, écoutant `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` — copier le `whsec_...` dans le `.env` du VPS | Baki | 10 min |
 | 10 | Faire relire `privacy.html`/`terms.html` (pilote) et créer l'équivalent pour `sales-site/` par un professionnel — toujours vrai, aucun commit de revue légale trouvé après `85a7b90`. Coûte probablement aussi de l'argent (juriste). | Baki (externe) | hors périmètre technique |
+| 12 | Brancher le bouton Stripe Live sur `sales-site/` — soit `NEXT_PUBLIC_STRIPE_LINK` (Payment Link) dans Vercel → Environment Variables, soit intégrer le snippet Stripe Buy Button déjà fourni (`buy_btn_1UCyXdFMKX0qC8wWSojUTEv6` / `pk_live_8dMJDhsBZ87pYEpgTyvk0Sw200SXHeON4h`) dans `sales-site/components/vente-shared.tsx` à la place de `<a href={STRIPE_LINK}>`. Redéployer. | Claude Code (le snippet) ou Baki (l'env var Vercel) | 15 min |
 
 ## 4. Plan lundi/mardi
 
@@ -121,13 +128,10 @@ est déjà validée, il reste juste à confirmer le chemin navigateur+email).
 Relire le brouillon de `PASSATION.md` (tâche 6). Le fix Vercel (tâche 11)
 est déjà fait.
 
-**Mardi (Baki, une fois la paye tombée)** — Acheter le domaine,
-provisionner le VPS GCP + DNS (tâche 7, ~1-2h), puis `docker compose up
--d` sur le serveur réel, vérification TLS Caddy, bascule du webhook
-Stripe de l'URL ngrok vers l'URL publique stable (tâches 8-9). Revue
-légale (tâche 10) suit une fois l'infra publique stable.
-
-**Aujourd'hui/ce soir, si Baki veut ouvrir les ventes tout de suite** —
-chemin ngrok (tâches 13-18 ci-dessus), ~45 min au total, ne nécessite ni
-VPS ni domaine ni paye. Fragile (dépend du PC allumé) mais fonctionnel
-immédiatement.
+**À la paye (Baki)** — Acheter le domaine, provisionner le VPS GCP + DNS
+(tâche 7, ~1-2h), puis `docker compose up -d` sur le serveur réel,
+vérification TLS Caddy, brancher le webhook Stripe Live sur l'URL publique
+(tâches 8-9). Revue légale (tâche 10) et branchement du bouton Live
+(tâche 12) suivent une fois l'infra publique stable. C'est le seul plan
+retenu — le chemin ngrok (tâches 13-18) a été explicitement écarté par
+Baki le 2026-09-21, ne pas le proposer à nouveau sans qu'il le redemande.
