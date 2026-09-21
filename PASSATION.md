@@ -378,10 +378,12 @@ plus (section 1, section 3). Ce qui reste réellement ouvert :
 - **Pas de social proof** sur la page de vente — décision explicite de
   l'utilisateur ("sera ajouté manuellement plus tard"), donc absent
   par design, pas un oubli.
-- **`sales-site/` n'est pas déployé actuellement** — dernier commit
-  `1addf3e`, testé en local et une fois sur Vercel (retiré après un
-  déploiement accidentel en production, voir section 2). À redéployer
-  en preview d'abord.
+- **`sales-site/` redéployé en preview Vercel le 2026-09-21** (Root
+  Directory + Framework Preset corrigés dans le projet Vercel, qui
+  pointaient encore sur la config Python héritée de l'ancienne racine du
+  repo — build **Ready**, `/vente` vérifié en ligne). Reste en preview,
+  pas en production (leçon de l'incident section 2) — la bascule prod se
+  fera une fois le backend/VPS prêt à recevoir le webhook Stripe.
 - **VPS de production jamais créé** — le déploiement Docker+Caddy est
   prêt côté code (2 services applicatifs + caddy, section 3) mais n'a
   jamais tourné sur un vrai serveur. L'utilisateur a explicitement mis
@@ -428,8 +430,9 @@ pour reprendre le travail. Résumé de ce qui reste, dans l'ordre où
    Live, récupérer `sk_live_...`, configurer le webhook réel dans le
    Dashboard (dépend du point 2 : Stripe doit joindre l'endpoint
    publiquement).
-4. Redéployer `sales-site/` sur Vercel — en preview d'abord (leçon de
-   l'incident section 2), avant de repasser en production.
+4. ~~Redéployer `sales-site/` sur Vercel~~ — fait le 2026-09-21, en
+   preview (leçon de l'incident section 2). Reste à repasser en
+   production une fois le backend/VPS prêt.
 5. Faire relire le contenu légal (`privacy.html`, `terms.html` du
    pilote, et créer l'équivalent pour `sales-site/`) par un
    professionnel avant toute mise en ligne publique.

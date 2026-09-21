@@ -73,7 +73,7 @@ réel). Pas de raison de bloquer le premier bloc sur le second.
 | 4 | ~~Supprimer `webhook_server.py`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
 | 5 | ~~Corriger le défaut `LRS_APP_URL`~~ — **fait** (commit `ef8fae2`) | Claude Code seul | fait |
 | 6 | ~~Réécrire `PASSATION.md`~~ — **fait**, brouillon poussé (commit `ef8fae2`) ; reste la validation du contenu produit par Baki | Claude Code (fait) + Baki (validation) | à valider |
-| 11 | Corriger le Root Directory du projet Vercel (`sales-site`) — build preview cassé depuis le retrait du déploiement, cf. l'email "Preview deployment failed" du 2026-09-20. **Bloqué sur un token API Vercel que Baki doit envoyer** ; dès reçu, Claude Code le fait seul. | Baki (envoyer le token) puis Claude Code seul | 5 min une fois le token reçu |
+| 11 | ~~Corriger le Root Directory du projet Vercel~~ — **fait le 2026-09-21**, par Baki directement dans le dashboard (l'appel API depuis cette session cloud était bloqué par la politique réseau, jamais résolu par le token). Root Directory = `sales-site`, Framework Preset repassé sur Next.js (était resté sur la détection Python héritée de l'ancienne racine du repo). Build **Ready**, `/vente` vérifié en ligne. | Baki | fait |
 
 ### Attend la paye — domaine, VPS, Stripe Live (argent réel)
 
@@ -92,9 +92,8 @@ remplir `.env` complet (tâches 2 ci-dessus, ~20 min, gratuit).
 **Lundi après-midi (Baki)** — Lancer `uvicorn pilot_server:app --port
 8600`, `uvicorn creative_studio.serving.app:app --port 8000`, `stripe
 listen`, dérouler le parcours complet de paiement test (tâche 3). Relire
-le brouillon de `PASSATION.md` (tâche 6). Si le token Vercel est envoyé
-entre-temps, Claude Code corrige le Root Directory dans la foulée
-(tâche 11).
+le brouillon de `PASSATION.md` (tâche 6). Le fix Vercel (tâche 11) est
+déjà fait.
 
 **Mardi (Baki, une fois la paye tombée)** — Acheter le domaine,
 provisionner le VPS GCP + DNS (tâche 7, ~1-2h), puis `docker compose up
