@@ -15,6 +15,7 @@ from email import encoders as email_encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape
 
 APP_VERSION = "3.5"
 
@@ -28,6 +29,24 @@ def _is_safe_header_value(value: str) -> bool:
     validation, donc on ne fait pas confiance uniquement à l'appelant pour
     empêcher une injection d'en-tête SMTP."""
     return bool(value) and "\r" not in value and "\n" not in value
+
+
+def _header_text(value) -> str:
+    """Neutralise CR/LF dans une valeur destinée à un en-tête non validé par
+    _is_safe_header_value (Subject...) — même risque qu'un To/From non
+    filtré : `url`/`decision` peuvent contenir du texte saisi par
+    l'abonné (page auditée) et Message.__setitem__ n'assainit rien, un
+    \\r\\n dedans injecterait des en-têtes SMTP arbitraires (Bcc, Content-Type
+    de la MIME suivante...). On neutralise plutôt que de rejeter l'envoi
+    pour un caractère de contrôle dans un simple sujet d'email."""
+    return str(value).replace("\r", " ").replace("\n", " ")
+
+
+def _body_text(value) -> str:
+    """Échappe une valeur avant insertion dans le corps HTML de l'email —
+    `url`/`decision`/le texte généré par le plan d'action (LLM) ne sont pas
+    garantis exempts de caractères HTML spéciaux."""
+    return escape(str(value))
 
 
 def get_smtp_config():
@@ -63,7 +82,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
     qws = fp.get("quick_wins", [])[:3]
 
     qws_html = "".join(
-        f"<li style='margin:4px 0;color:#555'>{qw.get('what', '')}</li>"
+        f"<li style='margin:4px 0;color:#555'>{_body_text(qw.get('what', ''))}</li>"
         for qw in qws
     )
 
@@ -75,21 +94,21 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
 
   <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 LRS™ — Résultat d'Audit</div>
-    <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{ts} · {mode_m}</div>
+    <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{_body_text(ts)} · {_body_text(mode_m)}</div>
   </div>
 
   <div style='padding:24px 28px'>
     <div style='font-size:0.85rem;color:#888;margin-bottom:4px'>URL / Offre</div>
-    <div style='font-size:0.95rem;color:#1a1a2e;margin-bottom:20px'>{url}</div>
+    <div style='font-size:0.95rem;color:#1a1a2e;margin-bottom:20px'>{_body_text(url)}</div>
 
     <div style='background:#f8f8fc;border-radius:10px;padding:20px;text-align:center;margin-bottom:20px'>
       <div style='color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:1px'>Score LRS</div>
       <div style='color:{score_color};font-size:3.5rem;font-weight:900;line-height:1'>{score}</div>
       <div style='color:#aaa;font-size:0.9rem'>/20</div>
-      <div style='color:{score_color};font-size:1.1rem;font-weight:700;margin-top:8px'>{decision}</div>
+      <div style='color:{score_color};font-size:1.1rem;font-weight:700;margin-top:8px'>{_body_text(decision)}</div>
     </div>
 
-    {"<div style='margin-bottom:20px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>🎯 Action Prioritaire</div><div style='background:#fff0f0;border-left:3px solid var(--danger);border-radius:6px;padding:12px 16px;color:#333'>" + top.get("what", "") + "</div></div>" if top and top.get("what") else ""}
+    {"<div style='margin-bottom:20px'><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>🎯 Action Prioritaire</div><div style='background:#fff0f0;border-left:3px solid var(--danger);border-radius:6px;padding:12px 16px;color:#333'>" + _body_text(top.get("what", "")) + "</div></div>" if top and top.get("what") else ""}
 
     {"<div><div style='font-weight:700;color:#1a1a2e;margin-bottom:8px'>⚡ Quick Wins</div><ul style='padding-left:18px;margin:0'>" + qws_html + "</ul></div>" if qws_html else ""}
   </div>
@@ -101,7 +120,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
 </body></html>"""
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🚦 LRS Audit — Score {score}/20 — {decision} — {str(url)[:40]}"
+    msg["Subject"] = f"🚦 LRS Audit — Score {score}/20 — {_header_text(decision)} — {_header_text(url)[:40]}"
     msg["From"] = user
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
@@ -110,8 +129,8 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
         part = MIMEBase("application", "octet-stream")
         part.set_payload(pdf_bytes)
         email_encoders.encode_base64(part)
-        safe_url = (url or "audit").replace("https://", "").replace("http://", "").replace("/", "_")[:40]
-        fname_pdf = f"LRS_{ts.replace('/', '').replace(':', '').replace(' ', '_')}_{safe_url}.pdf"
+        safe_url = _header_text(url or "audit").replace("https://", "").replace("http://", "").replace("/", "_")[:40]
+        fname_pdf = f"LRS_{_header_text(ts).replace('/', '').replace(':', '').replace(' ', '_')}_{safe_url}.pdf"
         part.add_header("Content-Disposition", f"attachment; filename={fname_pdf}")
         msg.attach(part)
 
@@ -145,7 +164,7 @@ def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
   </div>
   <div style='padding:24px 28px'>
     <div style='font-size:0.85rem;color:#888;margin-bottom:4px'>Page</div>
-    <div style='font-size:0.95rem;color:#1a1a2e;font-weight:600;margin-bottom:20px'>{url_v}</div>
+    <div style='font-size:0.95rem;color:#1a1a2e;font-weight:600;margin-bottom:20px'>{_body_text(url_v)}</div>
     <div style='display:flex;gap:16px;margin-bottom:20px'>
       <div style='flex:1;background:#f8f8fc;border-radius:8px;padding:16px;text-align:center'>
         <div style='color:#888;font-size:0.72rem;text-transform:uppercase'>Score précédent</div>
@@ -172,7 +191,7 @@ def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"⚠️ LRS™ Alerte — Score chute de {abs(delta)} pts · {url_v[:40]}"
+        msg["Subject"] = f"⚠️ LRS™ Alerte — Score chute de {abs(delta)} pts · {_header_text(url_v)[:40]}"
         msg["From"] = user
         msg["To"] = to_email
         msg.attach(MIMEText(html_body, "html"))
@@ -213,12 +232,12 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
             delta_html = f"<span style='color:{delta_color};margin-left:8px;font-size:0.8rem'>{delta_arrow} {abs(delta)} pts</span>"
         rows_html += f"""
         <tr>
-          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#333;font-size:0.85rem'>{url_v}</td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#333;font-size:0.85rem'>{_body_text(url_v)}</td>
           <td style='padding:10px 12px;border-bottom:1px solid #eee;text-align:center'>
             <span style='color:{sc_color};font-weight:800;font-size:1.1rem'>{sc}/20</span>{delta_html}
           </td>
-          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#555;font-size:0.82rem'>{dec}</td>
-          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#999;font-size:0.78rem'>{ts}</td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#555;font-size:0.82rem'>{_body_text(dec)}</td>
+          <td style='padding:10px 12px;border-bottom:1px solid #eee;color:#999;font-size:0.78rem'>{_body_text(ts)}</td>
         </tr>"""
 
     danger_count = sum(1 for e in monitored_entries if (e.get("score") if e.get("score") is not None else 20) <= 9)
@@ -297,7 +316,7 @@ def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
       15 minutes et à usage unique.
     </p>
     <div style='text-align:center;margin:24px 0'>
-      <a href='{magic_link_url}'
+      <a href='{escape(magic_link_url, quote=True)}'
          style='display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
                 padding:12px 28px;border-radius:8px;font-weight:700;font-size:0.95rem'>
         Accéder à LRS →
