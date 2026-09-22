@@ -6,14 +6,18 @@
 #
 # Lancer : uvicorn pilot_server:app --port 8600 --reload
 
+import base64
 import contextvars
 import datetime
+import hashlib
+import json
 import os
 import secrets as _secrets
 import sys
 import time
 from contextlib import asynccontextmanager
 
+from cryptography.fernet import Fernet, InvalidToken
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -123,6 +127,48 @@ def CAMPAIGN_FILE():   return _user_file(".lrs_campaigns.json")
 def AB_FILE():         return _user_file(".lrs_abtests.json")
 def SWIPE_FILE():      return _user_file(".lrs_swipefiles.json")
 def ADS_CREDS_FILE():  return _user_file(".lrs_ads_creds.json")
+
+
+# ── Chiffrement au repos des identifiants Ads (Meta/TikTok) ────────
+# Contrairement aux autres fichiers _user_file (historique, projets...),
+# .lrs_ads_creds.json contient des tokens d'accès à des comptes publicitaires
+# tiers en clair : un accès disque (backup exfiltré, mauvaise config
+# d'hébergement mutualisé, etc.) suffisait sinon à les récupérer directement.
+# Clé dérivée d'APP_SECRET_KEY (déjà le secret long-terme du pilote, voir
+# SessionMiddleware ci-dessus) plutôt qu'un nouveau secret à gérer.
+def _ads_creds_fernet() -> Fernet:
+    key = hashlib.sha256(_APP_SECRET_KEY.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def _load_ads_creds() -> dict:
+    path = ADS_CREDS_FILE()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        return json.loads(_ads_creds_fernet().decrypt(raw).decode("utf-8"))
+    except InvalidToken:
+        # Fichier écrit avant ce correctif (JSON en clair) — migre vers le
+        # format chiffré dès cette lecture plutôt que d'exiger une reconnexion.
+        legacy = load_json_file(path, dict)
+        if legacy:
+            _save_ads_creds(legacy)
+        return legacy
+    except Exception:
+        return {}
+
+
+def _save_ads_creds(creds: dict) -> None:
+    try:
+        token = _ads_creds_fernet().encrypt(json.dumps(creds, ensure_ascii=False).encode("utf-8"))
+        with open(ADS_CREDS_FILE(), "wb") as f:
+            f.write(token)
+    except Exception:
+        pass  # silencieux si pas de droits d'écriture, cohérent avec save_json_file
+
+
 def SCHEDULE_FILE():   return _user_file(".lrs_schedule.json")
 def ONBOARDING_FILE(): return _user_file(".lrs_onboarded.json")
 
@@ -172,13 +218,17 @@ async def _require_auth(request: Request, call_next):
 # Clé de session : fixe si fournie (recommandé en prod pour survivre aux
 # redémarrages), sinon générée aléatoirement au démarrage (les sessions
 # ouvertes sont invalidées à chaque redémarrage — acceptable pour un pilote).
+# Réutilisée aussi pour chiffrer .lrs_ads_creds.json au repos (voir
+# _ads_creds_fernet ci-dessous) : mêmes contraintes/garanties.
+_APP_SECRET_KEY = os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32)
+
 # https_only=False par défaut pour ne pas casser le dev local (uvicorn parle
 # HTTP en clair sans reverse proxy) — mettre APP_HTTPS_ONLY=true dès que le
 # pilote tourne derrière un reverse proxy qui termine le TLS (voir
 # DEPLOYMENT.md), sinon le cookie de session part aussi sur du HTTP simple.
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32),
+    secret_key=_APP_SECRET_KEY,
     https_only=os.getenv("APP_HTTPS_ONLY", "").strip().lower() in ("1", "true", "yes"),
 )
 # Compresse les réponses (index.html ~140 Ko non minifié, réponses JSON des
@@ -947,7 +997,7 @@ def delete_campaign(name: str):
 
 @app.get("/api/ads-connector/creds")
 def get_ads_creds():
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     return {
         "meta_configured": bool(creds.get("meta_token") and creds.get("meta_acc_id")),
         "tt_configured": bool(creds.get("tt_token") and creds.get("tt_adv_id")),
@@ -964,7 +1014,7 @@ class AdsCredsRequest(BaseModel):
 
 @app.post("/api/ads-connector/creds")
 def save_ads_creds_endpoint(req: AdsCredsRequest):
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     if req.platform == "meta":
         creds["meta_token"] = req.token.strip()
         creds["meta_acc_id"] = req.account_id.strip()
@@ -973,7 +1023,7 @@ def save_ads_creds_endpoint(req: AdsCredsRequest):
         creds["tt_adv_id"] = req.account_id.strip()
     else:
         raise HTTPException(status_code=400, detail="Plateforme inconnue.")
-    save_json_file(ADS_CREDS_FILE(), creds)
+    _save_ads_creds(creds)
     return {"ok": True}
 
 
@@ -984,7 +1034,7 @@ class AdsImportRequest(BaseModel):
 
 @app.post("/api/ads-connector/import")
 def import_ads_campaigns(req: AdsImportRequest):
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     try:
         if req.platform == "meta":
             token, acc_id = creds.get("meta_token", ""), creds.get("meta_acc_id", "")
