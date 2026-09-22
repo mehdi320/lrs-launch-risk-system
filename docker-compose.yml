@@ -29,6 +29,12 @@ services:
       - "127.0.0.1:8600:8600"
     env_file:
       - .env
+    environment:
+      # Fait échouer le démarrage si APP_PASSWORD n'est pas défini (voir
+      # pilot_server.py::_lifespan) plutôt que de démarrer en accès libre
+      # sur /api/* — ce déploiement docker-compose EST le déploiement de
+      # prod, jamais du dev local (qui tourne sans Docker, voir TEST_LOCAL.md).
+      - LRS_ENV=production
     volumes:
       - .:/app
     restart: unless-stopped

@@ -15,6 +15,7 @@ import os
 import secrets as _secrets
 import sys
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -44,9 +45,28 @@ def _get_app_password():
     return os.getenv("APP_PASSWORD", "")
 
 
+# LRS_ENV=production : opt-in explicite posé par docker-compose.yml sur les
+# deux services déployés (voir ce fichier) — jamais présent en dev local par
+# défaut. Sert uniquement à transformer l'avertissement "accès libre"
+# ci-dessous en échec de démarrage : le risque documenté depuis toujours
+# (APP_PASSWORD non défini = /api/* entièrement ouvert) ne dépendait que de
+# la vigilance de qui déploie à lire ce warning dans les logs. Ici, un
+# déploiement mal configuré ne démarre tout simplement pas.
+def _is_production() -> bool:
+    return os.getenv("LRS_ENV", "").strip().lower() == "production"
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     if not _get_app_password():
+        if _is_production():
+            raise RuntimeError(
+                "APP_PASSWORD non défini avec LRS_ENV=production — démarrage refusé "
+                "(le pilote démarrerait sinon en accès libre sur /api/*, sans aucune "
+                "authentification). Définissez APP_PASSWORD (voir .env.example) ou "
+                "retirez LRS_ENV=production si c'est un déploiement de test volontairement "
+                "ouvert."
+            )
         print(
             "\n⚠️  APP_PASSWORD non défini — le pilote démarre en accès libre "
             "(aucune authentification sur /api/*). Acceptable en dev local ; à "
@@ -197,6 +217,39 @@ def _active_subscriber_email(request: Request):
     return email if (user and user.get("status") == "active") else None
 
 
+# ── CSRF : vérification d'Origin sur les requêtes qui mutent de l'état ──
+# _require_auth protège contre l'accès non-authentifié, pas contre un site
+# tiers qui ferait faire une requête à un navigateur déjà connecté (cookie
+# de session envoyé automatiquement). SameSite=Lax (défaut de
+# SessionMiddleware, voir plus bas) bloque déjà l'essentiel des POST
+# cross-site dans les navigateurs modernes, mais pas dans absolument tous
+# les cas (vieux navigateurs, comportements spécifiques par plateforme) —
+# on vérifie donc en plus l'en-tête Origin, seul rempart réellement portable.
+# Un vrai navigateur envoie toujours Origin sur un POST/PUT/PATCH/DELETE,
+# same-origin ou non ; son absence indique un client non-navigateur
+# (curl, un futur webhook...), qu'on laisse passer — ce n'est pas ce que
+# CSRF exploite (pas de cookie de session envoyé automatiquement).
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _origin_is_trusted(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    try:
+        origin_host = urllib.parse.urlsplit(origin).netloc.lower()
+    except ValueError:
+        return False
+    return origin_host == request.headers.get("host", "").lower()
+
+
+@app.middleware("http")
+async def _csrf_protect(request: Request, call_next):
+    if request.method in _UNSAFE_METHODS and not _origin_is_trusted(request):
+        return JSONResponse({"detail": "Origine de la requête non autorisée."}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _require_auth(request: Request, call_next):
     subscriber_email = _active_subscriber_email(request)
@@ -280,6 +333,41 @@ async def _security_headers(request: Request, call_next):
     for name, value in _SECURITY_HEADERS.items():
         response.headers[name] = value
     return response
+
+
+# ── Budget anti-abus sur les appels LLM ─────────────────────────
+# Chaque audit/génération de copy appelle un LLM payant (OpenAI/Anthropic).
+# Passée l'authentification (mot de passe admin OU abonnement Stripe actif,
+# voir _require_auth), rien ne bornait le nombre d'appels qu'un compte pouvait
+# déclencher — un compte compromis ou un script qui boucle sur /api/audit
+# pouvait faire exploser la facture. Fenêtre glissante simple par
+# utilisateur (_current_user_ns, même espace que l'isolation des données),
+# même logique que _login_rate_limited plus bas pour le mot de passe admin.
+LLM_RATE_LIMIT = int(os.getenv("LRS_LLM_RATE_LIMIT", "30"))
+LLM_RATE_WINDOW_SECONDS = int(os.getenv("LRS_LLM_RATE_WINDOW_SECONDS", "300"))
+_llm_calls: dict[str, tuple[int, float]] = {}  # user_ns -> (count, fenêtre_debut)
+
+
+def _consume_llm_budget(units: int = 1) -> None:
+    """Lève 429 si l'utilisateur courant a déjà consommé son budget d'appels
+    LLM pour la fenêtre en cours, sinon décrémente. `units` = nombre d'appels
+    LLM que la requête va réellement déclencher (ex. bulk-audit sur N urls =
+    N unités demandées d'un coup) : compter au niveau requête, pas au niveau
+    URL individuelle, empêcherait de contourner le quota en regroupant les
+    appels dans une seule requête HTTP."""
+    ns = _current_user_ns()
+    now = time.monotonic()
+    count, window_start = _llm_calls.get(ns, (0, now))
+    if now - window_start > LLM_RATE_WINDOW_SECONDS:
+        count, window_start = 0, now
+    if count + units > LLM_RATE_LIMIT:
+        retry_after = max(1, int(LLM_RATE_WINDOW_SECONDS - (now - window_start)))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Trop de requêtes IA sur les {LLM_RATE_WINDOW_SECONDS // 60} dernières minutes — réessayez dans {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+    _llm_calls[ns] = (count + units, window_start)
 
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
@@ -388,6 +476,7 @@ def run_funnel_audit_endpoint(req: FunnelAuditRequest):
     if req.funnel_type not in audit_engine.FUNNEL_TYPES:
         raise HTTPException(status_code=400, detail="funnel_type invalide.")
 
+    _consume_llm_budget()
     try:
         result = audit_engine.run_funnel_audit(
             funnel_type=req.funnel_type,
@@ -450,6 +539,7 @@ def run_audit_endpoint(req: AuditRequest):
         page_lang = audit_engine.detect_language(landing_content)
         page_type = audit_engine.detect_page_type(landing_content, url)
 
+    _consume_llm_budget()
     try:
         result = audit_engine.run_audit(
             mode=mode,
@@ -671,6 +761,7 @@ def run_bulk_audit(req: BulkAuditRequest):
     urls = [u.strip() for u in req.urls if u.strip().startswith("http")][:BULK_MAX_URLS]
     if not urls:
         raise HTTPException(status_code=400, detail="Aucune URL valide fournie.")
+    _consume_llm_budget(len(urls))
 
     results = []
     for url in urls:
@@ -731,6 +822,7 @@ def get_creative_angles(req: CreativeAnglesRequest):
     offer_description = req.offer_description.strip()
     if not offer_description:
         raise HTTPException(status_code=400, detail="Merci de décrire votre offre.")
+    _consume_llm_budget()
     try:
         result = audit_engine.generate_creative_angles(
             offer_description=offer_description,
@@ -765,6 +857,7 @@ def run_compare(req: CompareRequest):
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not url_a or not url_b:
         raise HTTPException(status_code=400, detail="Les deux URLs sont requises.")
+    _consume_llm_budget(2)
 
     sides = []
     for url, label in [(url_a, req.label_a or "Page A"), (url_b, req.label_b or "Page B")]:
@@ -820,6 +913,7 @@ def run_abtest(req: ABTestRunRequest):
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not name or not url_a or not url_b:
         raise HTTPException(status_code=400, detail="Nom du test et les deux URLs sont requis.")
+    _consume_llm_budget(2)
 
     variant_results = {}
     for variant, url in [("A", url_a), ("B", url_b)]:
@@ -936,6 +1030,8 @@ def audit_project(name: str, req: ProjectAuditRequest):
     targets = [u for u in urls if u not in proj.get("audits", {})] if req.only_remaining else urls
     if not targets:
         targets = urls
+    if targets:
+        _consume_llm_budget(len(targets))
 
     errors = []
     for url in targets:
@@ -1324,6 +1420,7 @@ def studio_generate(req: StudioGenerateRequest):
         framework = Framework(req.framework)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Framework inconnu : {req.framework}")
+    _consume_llm_budget()
 
     product = Product(
         name=req.product_name.strip(), description=req.description.strip(),
@@ -1628,6 +1725,7 @@ def run_schedule_now(sid: str):
     sched = schedule.get(sid)
     if not sched:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
+    _consume_llm_budget()
     _run_one_scheduled_audit(sid, sched, schedule)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
@@ -1654,6 +1752,14 @@ def check_due_schedules():
             last_run = datetime.datetime(2000, 1, 1)
         if (now - last_run).days < freq_days:
             continue
+        try:
+            _consume_llm_budget()
+        except HTTPException:
+            # Budget épuisé pour cette fenêtre : on s'arrête là plutôt que
+            # d'échouer toute la requête — les schedules pas encore traités
+            # gardent leur last_run inchangé, donc restent "dus" et seront
+            # repris au prochain appel (à l'ouverture du pilote côté client).
+            break
         if _run_one_scheduled_audit(sid, sched, schedule):
             ran += 1
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.parse
 import uuid
 
 try:
@@ -126,6 +127,35 @@ async def _security_headers(request: Request, call_next):
     for name, value in _SECURITY_HEADERS.items():
         response.headers[name] = value
     return response
+
+
+# Vérification d'Origin sur les requêtes qui mutent de l'état — même
+# logique que pilot_server.py::_csrf_protect (voir son commentaire pour le
+# détail). Le webhook Stripe n'envoie jamais d'Origin (appel serveur à
+# serveur), donc n'est pas affecté ; /v/{test_id}/submit-form n'utilise
+# aucun cookie de session/identité (VISITOR_COOKIE ne fait qu'assigner une
+# variante A/B, pas authentifier), donc n'est pas une cible CSRF classique,
+# mais autant fermer la porte pour la cohérence de l'ensemble du service.
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _origin_is_trusted(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    try:
+        origin_host = urllib.parse.urlsplit(origin).netloc.lower()
+    except ValueError:
+        return False
+    return origin_host == request.headers.get("host", "").lower()
+
+
+@app.middleware("http")
+async def _csrf_protect(request: Request, call_next):
+    if request.method in _UNSAFE_METHODS and not _origin_is_trusted(request):
+        return PlainTextResponse("Origine de la requête non autorisée.", status_code=403)
+    return await call_next(request)
+
 
 products = ProductRepository()
 variants = VariantRepository()
