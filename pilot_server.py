@@ -236,6 +236,51 @@ app.add_middleware(
 # config côté client (les navigateurs négocient gzip automatiquement).
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+# Headers de sécurité — défense en profondeur : redondant avec les mêmes
+# headers posés par Caddy (voir Caddyfile) pour quiconque expose ce service
+# sans passer par le reverse proxy (dev local, autre déploiement). HSTS est
+# volontairement exclu ici : n'a de sens qu'émis par la couche qui termine
+# le TLS (Caddy), l'émettre ici sur une connexion HTTP simple (dev local)
+# serait trompeur.
+#
+# CSP alignée sur pilot_static/ : script-src limité à 'self' + Plausible
+# (seul script externe, voir index.html/faq.html/privacy.html/terms.html) ;
+# le JS applicatif est désormais dans app.js (fichier externe) plutôt
+# qu'inline, ce qui évite tout recours à 'unsafe-inline' ou 'sha256-...'
+# sur script-src. style-src garde 'unsafe-inline' : ~200 attributs
+# style="" inline dans index.html, tous statiques (pas de contenu
+# utilisateur interpolé) — surface XSS bien moindre que script-src.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), interest-cohort=()"
+    ),
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' https://plausible.io; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self'; "
+        "font-src 'self'; "
+        "connect-src 'self' https://plausible.io; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "upgrade-insecure-requests"
+    ),
+}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers[name] = value
+    return response
+
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
 

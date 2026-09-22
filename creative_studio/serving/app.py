@@ -78,6 +78,55 @@ app = FastAPI(title="LRS Creative Studio — Serving")
 ensure_media_dir()
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 
+# CSS/JS statiques des pages de funnel (voir serving/templates.py) — fichiers
+# versionnés avec le repo (pas de dossier à créer au runtime, contrairement à
+# /media), référencés en dur par _PAGE_TEMPLATE et _*_SCRIPT.
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+# Headers de sécurité sur toutes les réponses (pages de funnel, JSON API,
+# webhook, redirects checkout) — défense en profondeur, redondant avec les
+# mêmes headers posés par Caddy (voir Caddyfile) pour quiconque expose ce
+# service sans passer par le reverse proxy.
+#
+# CSP stricte : script-src/style-src en 'self' uniquement — le JS/CSS des
+# pages de funnel vit dans /static (voir serving/templates.py), plus aucun
+# inline nulle part sur ce service, donc pas besoin de 'unsafe-inline' ni de
+# hash à régénérer. img-src/media-src autorisent https: en plus de 'self' :
+# un FunnelStepMedia peut être une URL externe fournie par l'abonnée
+# (source_type=URL, voir storage/media.py) affichée telle quelle au visiteur.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), interest-cohort=()"
+    ),
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' https:; "
+        "media-src 'self' https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "upgrade-insecure-requests"
+    ),
+}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers[name] = value
+    return response
+
 products = ProductRepository()
 variants = VariantRepository()
 tests = ABTestRepository()
