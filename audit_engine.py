@@ -13,8 +13,10 @@ import json
 import os
 import re
 import socket
+import threading
 import time
 import unicodedata
+from contextlib import contextmanager
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 
@@ -150,17 +152,16 @@ def check_js_heavy(html: str, extracted: str) -> bool:
 # l'IP resolue (avant le fetch ET a chaque saut de redirection, suivie
 # manuellement) plutot que de bloquer uniquement sur la chaine d'URL brute
 # (qui peut etre obfusquee — IP en decimal, etc. — mais pas l'IP resolue).
-def _is_safe_fetch_target(url):
+def _resolve_safe_ips(hostname):
+    """Resout `hostname` et retourne la liste des IPs (str) si TOUTES sont
+    publiques, sinon None (une seule IP privee/loopback/link-local/
+    multicast/reservee/non-specifiee suffit a rejeter le nom entier). Une
+    resolution qui echoue est traitee comme non sure."""
     try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
+        infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        return False
+        return None
+    ips = []
     for info in infos:
         try:
             ip = ipaddress.ip_address(info[4][0])
@@ -168,13 +169,81 @@ def _is_safe_fetch_target(url):
             continue
         if (ip.is_private or ip.is_loopback or ip.is_link_local
                 or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
-            return False
-    return True
+            return None
+        ips.append(str(ip))
+    return ips or None
+
+
+def _is_safe_fetch_target(url):
+    return _validate_fetch_target(url)[0] is not None
+
+
+def _validate_fetch_target(url):
+    """Valide `url` (schema http/https + hostname qui ne resout que vers des
+    IPs publiques) et retourne (hostname, safe_ips) si sur, (None, None)
+    sinon. Point d'entree unique utilise par extract_page pour ne resoudre
+    le DNS qu'une seule fois par saut de redirection (le resultat est ensuite
+    epingle via _dns_pinned_to, voir plus bas)."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None, None
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None, None
+    safe_ips = _resolve_safe_ips(parsed.hostname)
+    if safe_ips is None:
+        return None, None
+    return parsed.hostname, safe_ips
+
+
+# ── Anti DNS-rebinding : epingle la resolution DNS a l'IP deja validee ──
+# _is_safe_fetch_target() valide l'IP a un instant T ; sans ce qui suit,
+# requests.get() refait sa PROPRE resolution DNS independante au moment de
+# se connecter (urllib3 -> socket.getaddrinfo). Un attaquant qui controle
+# le DNS de son propre domaine (TTL=0, reponses alternees) peut renvoyer
+# une IP publique pour la premiere resolution (celle qu'on valide) puis
+# 127.0.0.1 / une IP interne pour la seconde (celle utilisee pour la vraie
+# connexion TCP) — SSRF malgre la validation. On elimine cette fenetre en
+# figeant, pour ce thread et la duree de l'appel HTTP, la resolution de CE
+# hostname precis aux IPs deja validees : requests se connecte alors
+# exactement a l'IP qu'on a verifiee, plus jamais a une resolution ulterieure
+# non revalidee. Thread-local (pas un monkeypatch global permanent) pour
+# ne jamais affecter une resolution DNS concurrente sur un autre thread.
+_dns_pin = threading.local()
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _pinned_getaddrinfo(host, port=None, family=0, type=0, proto=0, flags=0):
+    pin = getattr(_dns_pin, "value", None)
+    if not pin or pin[0] != host:
+        return _real_getaddrinfo(host, port, family, type, proto, flags)
+    results = []
+    for ip in pin[1]:
+        ipobj = ipaddress.ip_address(ip)
+        if ipobj.version == 6:
+            results.append((socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0, 0, 0)))
+        else:
+            results.append((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0)))
+    return results
+
+
+socket.getaddrinfo = _pinned_getaddrinfo
+
+
+@contextmanager
+def _dns_pinned_to(hostname, safe_ips):
+    previous = getattr(_dns_pin, "value", None)
+    _dns_pin.value = (hostname, safe_ips)
+    try:
+        yield
+    finally:
+        _dns_pin.value = previous
 
 
 # ── EXTRACTION PAGE WEB ─────────────────────────────────────────
 def extract_page(url):
-    if not _is_safe_fetch_target(url):
+    hostname, safe_ips = _validate_fetch_target(url)
+    if hostname is None:
         return "", "URL invalide ou pointant vers une adresse non autorisee.", False
 
     headers = {
@@ -187,13 +256,18 @@ def extract_page(url):
         current_url = url
         r = None
         for _ in range(5):  # suit les redirections manuellement pour revalider chaque saut
-            r = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
+            # DNS epingle a safe_ips (voir _dns_pinned_to) : requests.get() ne
+            # peut pas re-resoudre vers une IP differente de celle deja validee
+            # ci-dessus, meme si le DNS de current_url change entre-temps.
+            with _dns_pinned_to(hostname, safe_ips):
+                r = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
             if r.is_redirect or r.is_permanent_redirect:
                 location = r.headers.get("Location", "")
                 if not location:
                     break
                 next_url = urljoin(current_url, location)
-                if not _is_safe_fetch_target(next_url):
+                hostname, safe_ips = _validate_fetch_target(next_url)
+                if hostname is None:
                     return "", "Redirection vers une adresse non autorisee.", False
                 current_url = next_url
                 continue

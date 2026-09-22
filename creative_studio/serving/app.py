@@ -121,14 +121,6 @@ _SECURITY_HEADERS = {
 }
 
 
-@app.middleware("http")
-async def _security_headers(request: Request, call_next):
-    response = await call_next(request)
-    for name, value in _SECURITY_HEADERS.items():
-        response.headers[name] = value
-    return response
-
-
 # Vérification d'Origin sur les requêtes qui mutent de l'état — même
 # logique que pilot_server.py::_csrf_protect (voir son commentaire pour le
 # détail). Le webhook Stripe n'envoie jamais d'Origin (appel serveur à
@@ -155,6 +147,18 @@ async def _csrf_protect(request: Request, call_next):
     if request.method in _UNSAFE_METHODS and not _origin_is_trusted(request):
         return PlainTextResponse("Origine de la requête non autorisée.", status_code=403)
     return await call_next(request)
+
+
+# Enregistré après _csrf_protect (et donc "autour" de lui, voir Starlette :
+# le dernier middleware ajouté est le plus englobant) pour que les headers
+# de sécurité s'appliquent aussi aux réponses que _csrf_protect court-
+# circuite (403), pas seulement à celles qui atteignent les routes.
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers[name] = value
+    return response
 
 
 products = ProductRepository()
