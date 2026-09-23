@@ -14,7 +14,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -187,6 +187,49 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
 
+# ══════════════════════════════════════════════════════════════
+# ── Anti-abus : rate limit sur les endpoints qui appellent un LLM ──
+# Audit sécurité 2026-09-23, point 20 : /api/audit, /api/funnel-audit,
+# /api/bulk-audit (jusqu'à 20 audits en un seul appel),
+# /api/creative-angles et /api/creative-studio/generate déclenchent tous
+# un appel OpenAI/Anthropic facturé à l'usage, sans aucune limite
+# jusqu'ici — seul /api/auth/login avait un rate limit (voir
+# _login_rate_limited ci-dessous). Même principe (compteur en mémoire,
+# fenêtre glissante simple), mais la clé est l'identité applicative
+# (email abonné, ou "_admin" pour le mot de passe partagé) plutôt que
+# l'IP : plus juste pour un compte payant derrière un NAT/proxy partagé,
+# et ça isole un abonné bruyant des autres. Repli sur l'IP si aucune
+# session n'est identifiable (ne devrait pas arriver derrière
+# _require_auth, gardé par prudence).
+_LLM_RATE_LIMIT_MAX = int(os.getenv("LRS_LLM_RATE_LIMIT_MAX", "10"))
+_LLM_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("LRS_LLM_RATE_LIMIT_WINDOW_SECONDS", "60"))
+_llm_call_log = {}  # identite -> (count, window_start_ts)
+
+
+def _llm_rate_limit_key(request: Request) -> str:
+    email = request.session.get("subscriber_email")
+    if email:
+        return f"user:{email}"
+    if request.session.get("authenticated"):
+        return "_admin"
+    return f"ip:{request.client.host}" if request.client else "ip:unknown"
+
+
+def _require_llm_rate_limit(request: Request) -> None:
+    key = _llm_rate_limit_key(request)
+    now = time.time()
+    count, window_start = _llm_call_log.get(key, (0, now))
+    if now - window_start > _LLM_RATE_LIMIT_WINDOW_SECONDS:
+        count, window_start = 0, now
+    if count >= _LLM_RATE_LIMIT_MAX:
+        retry_after = int(_LLM_RATE_LIMIT_WINDOW_SECONDS - (now - window_start))
+        raise HTTPException(
+            status_code=429,
+            detail=f"Trop de requêtes IA. Réessayez dans {max(retry_after, 1)}s.",
+        )
+    _llm_call_log[key] = (count + 1, window_start)
+
+
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
 
 
@@ -284,7 +327,7 @@ class FunnelAuditRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
-@app.post("/api/funnel-audit")
+@app.post("/api/funnel-audit", dependencies=[Depends(_require_llm_rate_limit)])
 def run_funnel_audit_endpoint(req: FunnelAuditRequest):
     url_step1 = req.url_step1.strip()
     url_step2 = req.url_step2.strip()
@@ -334,7 +377,7 @@ class CreativeAnglesRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
-@app.post("/api/audit")
+@app.post("/api/audit", dependencies=[Depends(_require_llm_rate_limit)])
 def run_audit_endpoint(req: AuditRequest):
     mode = req.mode if req.mode in VALID_MODES else "Funnel Only"
     url = req.url.strip()
@@ -570,7 +613,7 @@ def get_alerts():
     return {"alerts": alerts}
 
 
-@app.post("/api/bulk-audit")
+@app.post("/api/bulk-audit", dependencies=[Depends(_require_llm_rate_limit)])
 def run_bulk_audit(req: BulkAuditRequest):
     mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
     urls = [u.strip() for u in req.urls if u.strip().startswith("http")][:BULK_MAX_URLS]
@@ -631,7 +674,7 @@ def run_bulk_audit(req: BulkAuditRequest):
     return {"results": results}
 
 
-@app.post("/api/creative-angles")
+@app.post("/api/creative-angles", dependencies=[Depends(_require_llm_rate_limit)])
 def get_creative_angles(req: CreativeAnglesRequest):
     offer_description = req.offer_description.strip()
     if not offer_description:
@@ -1211,7 +1254,7 @@ class StudioGenerateRequest(BaseModel):
     model: str = ""
 
 
-@app.post("/api/creative-studio/generate")
+@app.post("/api/creative-studio/generate", dependencies=[Depends(_require_llm_rate_limit)])
 def studio_generate(req: StudioGenerateRequest):
     try:
         from creative_studio.core.variants import Framework, Product, VariantKind
