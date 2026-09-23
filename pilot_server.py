@@ -191,6 +191,8 @@ def _save_ads_creds(creds: dict) -> None:
 
 def SCHEDULE_FILE():   return _user_file(".lrs_schedule.json")
 def ONBOARDING_FILE(): return _user_file(".lrs_onboarded.json")
+def NOTIFICATIONS_FILE():      return _user_file(".lrs_notifications.json")
+def NOTIFICATION_PREFS_FILE(): return _user_file(".lrs_notification_prefs.json")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1627,7 +1629,6 @@ class ScheduleCreateRequest(BaseModel):
     platform: str = "Meta"
     offer_type: str = "Digital product"
     brand_type: str = "Nouveau lancement"
-    alert_email: str = ""
 
 
 @app.post("/api/monitoring/schedule")
@@ -1641,7 +1642,6 @@ def create_schedule(req: ScheduleCreateRequest):
         "url": url, "freq_days": req.freq_days, "mode": req.mode,
         "platform": req.platform, "offer_type": req.offer_type, "brand_type": req.brand_type,
         "enabled": True, "last_run": "", "last_score": None, "last_error": "",
-        "alert_email": req.alert_email.strip(),
         "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
     save_json_file(SCHEDULE_FILE(), schedule)
@@ -1663,6 +1663,99 @@ def delete_schedule(sid: str):
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     schedule.pop(sid, None)
     save_json_file(SCHEDULE_FILE(), schedule)
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════
+# ── Centre de notifications in-app ──────────────────────────────
+# Objectif produit (2026-09-23) : tout ce qui se passe sur LRS doit rester
+# visible DANS LRS — l'email n'est plus le canal par défaut pour les
+# alertes de monitoring (chute de score, digest), juste une option en
+# plus qu'on coche explicitement (voir NOTIFICATION_PREFS_FILE). Avant ce
+# changement, une alerte de chute de score ou un digest ne partaient QUE
+# par email (alert_email par planification, jamais exposé nulle part
+# ailleurs / LRS_DIGEST_EMAIL global côté env, jamais documenté) —
+# invisibles dans l'app si jamais configurés, et les deux mécanismes
+# étaient retirés au profit de ce centre de notifications.
+_NOTIFICATIONS_MAX = 200
+
+
+def _add_notification(kind, title, message, url=""):
+    notifs = load_json_file(NOTIFICATIONS_FILE(), list)
+    notifs.insert(0, {
+        "id": _secrets.token_hex(8),
+        "kind": kind,  # "score_drop" | "digest"
+        "title": title,
+        "message": message,
+        "url": url,
+        "created_at": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "read": False,
+    })
+    save_json_file(NOTIFICATIONS_FILE(), notifs[:_NOTIFICATIONS_MAX])
+
+
+def _get_notification_prefs():
+    prefs = load_json_file(NOTIFICATION_PREFS_FILE(), dict)
+    return {
+        "email_enabled": bool(prefs.get("email_enabled", False)),
+        "email": prefs.get("email", "") or "",
+    }
+
+
+def _maybe_email_notification(sender):
+    """Appelle `sender(email)` si l'utilisateur a coché "recevoir aussi par
+    email" et renseigné une adresse valide — sinon ne fait rien (le
+    notification in-app, elle, est toujours créée par l'appelant)."""
+    prefs = _get_notification_prefs()
+    if not prefs["email_enabled"] or not prefs["email"]:
+        return
+    if not user_accounts.is_valid_email(prefs["email"]):
+        return
+    try:
+        sender(prefs["email"])
+    except Exception:
+        pass
+
+
+@app.get("/api/notifications")
+def list_notifications():
+    notifs = load_json_file(NOTIFICATIONS_FILE(), list)
+    unread = sum(1 for n in notifs if not n.get("read"))
+    return {"notifications": notifs[:50], "unread_count": unread}
+
+
+class MarkNotificationsReadRequest(BaseModel):
+    ids: list[str] = Field(default_factory=list)
+    all: bool = False
+
+
+@app.post("/api/notifications/read")
+def mark_notifications_read(req: MarkNotificationsReadRequest):
+    notifs = load_json_file(NOTIFICATIONS_FILE(), list)
+    ids = set(req.ids)
+    for n in notifs:
+        if req.all or n.get("id") in ids:
+            n["read"] = True
+    save_json_file(NOTIFICATIONS_FILE(), notifs)
+    return {"ok": True}
+
+
+class NotificationPrefsRequest(BaseModel):
+    email_enabled: bool = False
+    email: str = ""
+
+
+@app.get("/api/notifications/prefs")
+def get_notification_prefs_endpoint():
+    return _get_notification_prefs()
+
+
+@app.post("/api/notifications/prefs")
+def set_notification_prefs(req: NotificationPrefsRequest):
+    email = req.email.strip().lower()
+    if req.email_enabled and email and not user_accounts.is_valid_email(email):
+        raise HTTPException(status_code=400, detail="Adresse email invalide.")
+    save_json_file(NOTIFICATION_PREFS_FILE(), {"email_enabled": req.email_enabled, "email": email})
     return {"ok": True}
 
 
@@ -1701,17 +1794,19 @@ def _run_one_scheduled_audit(sid, sched, schedule):
         schedule[sid]["last_error"] = ""
         schedule[sid]["last_score"] = new_score
 
-        alert_email = sched.get("alert_email", "") or os.getenv("LRS_ALERT_EMAIL", "")
-        if alert_email and prev_score is not None:
+        if prev_score is not None:
             drop = new_score - int(prev_score)
             if drop <= -2:
-                try:
-                    email_alerts.send_score_drop_alert(
-                        {**meta, "score": new_score, "decision": result.get("_c", {}).get("decision", "")},
-                        int(prev_score), alert_email,
-                    )
-                except Exception:
-                    pass
+                decision = result.get("_c", {}).get("decision", "")
+                _add_notification(
+                    "score_drop",
+                    f"Chute de score — {url}",
+                    f"Score passé de {prev_score}/20 à {new_score}/20 ({decision}).",
+                    url=url,
+                )
+                _maybe_email_notification(lambda email: email_alerts.send_score_drop_alert(
+                    {**meta, "score": new_score, "decision": decision}, int(prev_score), email,
+                ))
         return True
     except Exception as e:
         schedule[sid]["last_error"] = str(e)[:200]
@@ -1765,16 +1860,18 @@ def check_due_schedules():
 
     if ran:
         save_json_file(SCHEDULE_FILE(), schedule)
-        digest_email = os.getenv("LRS_DIGEST_EMAIL", "")
-        if digest_email and schedule:
-            digest_entries = [
-                {"url": s.get("url", ""), "score": s.get("last_score", 0), "decision": "", "timestamp": s.get("last_run", "")}
-                for s in schedule.values()
-            ]
-            try:
-                email_alerts.send_monitoring_digest(digest_entries, digest_email)
-            except Exception:
-                pass
+        digest_entries = [
+            {"url": s.get("url", ""), "score": s.get("last_score", 0), "decision": "", "timestamp": s.get("last_run", "")}
+            for s in schedule.values()
+        ]
+        danger_count = sum(1 for e in digest_entries if (e["score"] or 0) <= 9)
+        danger_note = f" — {danger_count} en danger (≤9/20)" if danger_count else ""
+        _add_notification(
+            "digest",
+            f"{ran} audit(s) planifié(s) exécuté(s)",
+            f"{len(digest_entries)} page(s) suivie(s){danger_note}.",
+        )
+        _maybe_email_notification(lambda email: email_alerts.send_monitoring_digest(digest_entries, email))
     return {"ran": ran, "schedule": schedule}
 
 

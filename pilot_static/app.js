@@ -69,11 +69,111 @@ function setupSidebar() {
 
 // ── Monitoring : vérification des audits planifiés en retard ─
 function checkDueMonitoring() {
-  fetch('/api/monitoring/check', { method: 'POST' }).catch(() => {});
+  fetch('/api/monitoring/check', { method: 'POST' })
+    .then(() => loadNotifications())
+    .catch(() => {});
+}
+
+// ── Centre de notifications (tout reste dans LRS — l'email est optionnel) ─
+function renderNotifItem(n) {
+  return `
+    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}">
+      <div class="notif-item-title">${n.kind === 'score_drop' ? '⚠️' : '📊'} ${escapeHtml(n.title)}</div>
+      <div>${escapeHtml(n.message)}</div>
+      <div class="notif-item-meta">${escapeHtml(n.created_at)}</div>
+    </div>
+  `;
+}
+
+async function loadNotifications() {
+  try {
+    const res = await fetch('/api/notifications');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = $('#notifList');
+    list.innerHTML = data.notifications.length
+      ? data.notifications.map(renderNotifItem).join('')
+      : '<div class="notif-empty">Aucune notification pour l’instant.</div>';
+    const badge = $('#notifBadge');
+    if (data.unread_count > 0) {
+      badge.textContent = data.unread_count > 9 ? '9+' : String(data.unread_count);
+      badge.classList.add('show');
+    } else {
+      badge.classList.remove('show');
+    }
+  } catch (err) { /* silencieux — pas critique pour le reste de l'app */ }
+}
+
+async function loadNotificationPrefs() {
+  try {
+    const res = await fetch('/api/notifications/prefs');
+    if (!res.ok) return;
+    const prefs = await res.json();
+    $('#notifEmailEnabled').checked = prefs.email_enabled;
+    $('#notifEmailAddress').value = prefs.email || '';
+    $('#notifEmailAddress').style.display = prefs.email_enabled ? 'block' : 'none';
+  } catch (err) { /* silencieux */ }
+}
+
+async function saveNotificationPrefs() {
+  const email_enabled = $('#notifEmailEnabled').checked;
+  const email = $('#notifEmailAddress').value.trim();
+  try {
+    await fetch('/api/notifications/prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_enabled, email }),
+    });
+  } catch (err) { /* silencieux */ }
+}
+
+function setupNotifications() {
+  const bell = $('#notifBell');
+  const panel = $('#notifPanel');
+
+  bell.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) loadNotifications();
+  });
+  document.addEventListener('click', (e) => {
+    if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== bell) {
+      panel.classList.remove('open');
+    }
+  });
+
+  $('#notifMarkAllRead').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/notifications/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    loadNotifications();
+  });
+
+  $('#notifList').addEventListener('click', async (e) => {
+    const item = e.target.closest('.notif-item');
+    if (!item || !item.classList.contains('unread')) return;
+    item.classList.remove('unread');
+    await fetch('/api/notifications/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [item.dataset.id] }),
+    });
+    loadNotifications();
+  });
+
+  $('#notifEmailEnabled').addEventListener('change', (e) => {
+    $('#notifEmailAddress').style.display = e.target.checked ? 'block' : 'none';
+    saveNotificationPrefs();
+  });
+  $('#notifEmailAddress').addEventListener('change', saveNotificationPrefs);
+
+  loadNotificationPrefs();
+  loadNotifications();
 }
 
 function initApp() {
   setupSidebar();
+  setupNotifications();
   checkDueMonitoring();
   loadDashboard();
 }
@@ -1150,10 +1250,10 @@ function renderSuiviMonitoring(selectedUrl) {
           <button data-val="Marque etablie">Marque établie</button>
         </div>
       </div>
-      <div class="field" style="margin-top:14px">
-        <label class="field-label" for="schAlertEmail">📧 Email alerte (optionnel)</label>
-        <input type="text" id="schAlertEmail" placeholder="vous@email.com — alerte si le score chute de ≥2 pts" />
-      </div>
+      <p style="margin-top:14px;font-size:12.5px;color:var(--text-muted)">
+        🔔 Une chute de score ≥2 pts apparaît dans vos notifications (cloche en haut).
+        Pour recevoir aussi un email, activez-le dans les préférences de notification.
+      </p>
       <button class="cta" id="schCreateBtn">⏰ Planifier</button>
       <div class="error-box" id="schErrorBox"></div>
     </div>
@@ -1227,7 +1327,6 @@ function renderSuiviMonitoring(selectedUrl) {
           platform: $('#schPlat').value,
           offer_type: $('#schOffer').value,
           brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
-          alert_email: $('#schAlertEmail').value.trim(),
         }),
       });
       const data = await res.json();
