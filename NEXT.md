@@ -1,15 +1,27 @@
-# NEXT — État réel et plan (audit du 2026-09-20)
+# NEXT — État réel et plan (audit du 2026-09-20, mis à jour le 2026-09-23)
 
-Audit en lecture seule sur `claude/lrs-audit-post-merge-a31f47` (= `main`,
-HEAD `f94c2df`, aucun commit d'écart dans un sens ou l'autre). Chaque
-affirmation ci-dessous pointe vers un fichier ou un commit — aucune
-supposition sur l'état de votre machine (Docker, `.env` réel).
+**Mise à jour du 2026-09-23** — beaucoup de mouvement depuis le 20 :
+- Audit sécurité/qualité complet sur branche `audit/securite`, mergé dans
+  `main` (voir `AUDIT.md` à la racine pour le détail des 20 points).
+- **Pendant ce même audit, une session indépendante a fait un pentest actif
+  directement sur `main`** (7 commits : quota LLM par utilisateur, CSRF,
+  fail-closed en prod, échappement HTML des emails, headers CSP stricts,
+  chiffrement des tokens Ads Meta/TikTok au repos, protection SSRF
+  renforcée avec anti DNS-rebinding). Réconcilié sans perte — voir le
+  commit de merge sur `main`.
+- **OpenAI entièrement retiré** — Claude (Anthropic) est désormais l'unique
+  moteur LLM de LRS, audit ET Creative Studio. Sans `ANTHROPIC_API_KEY`,
+  erreur claire plutôt qu'un fallback silencieux vers OpenAI.
+- **Centre de notifications in-app ajouté** — chute de score et digest de
+  monitoring créent une notification dans l'app (cloche en haut à droite)
+  au lieu de ne partir QUE par email comme avant. L'email est désormais une
+  case à cocher optionnelle (préférence globale par utilisateur), plus un
+  champ par planification.
 
-**Correction importante** : `PASSATION.md` date du 7 septembre (commit
-`a77fc89`) et se trouve **22 commits en retard** sur HEAD. Il décrit encore
-`app.py`/Streamlit comme existant et l'architecture d'accès du pilote comme
-"non tranchée" — les deux sont faux aujourd'hui (voir ci-dessous). Ne pas
-réamorcer une session sur ce document sans le recouper.
+Le reste de ce document (ci-dessous) date du 20 septembre — toujours valide
+pour la partie "attend la paye" (domaine, VPS, Stripe Live), mais certaines
+mentions de `PASSATION.md` "en retard" sont maintenant partiellement
+résolues (voir ses propres mises à jour).
 
 ---
 
