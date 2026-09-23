@@ -34,42 +34,7 @@ _PAGE_TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{headline}</title>
-<style>
-  * {{ box-sizing: border-box; }}
-  body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-          max-width: 680px; margin: 0 auto; padding: 32px 20px 96px; line-height: 1.55;
-          color: #1a1a2e; background: #fff; }}
-  h1 {{ font-size: 1.9rem; margin-bottom: 0.4em; }}
-  .hook {{ font-size: 1.1rem; color: #444; margin-bottom: 1.6em; }}
-  .section {{ margin-bottom: 1.2em; white-space: pre-wrap; }}
-  .price {{ font-weight: 700; }}
-  .cta {{ display: block; text-align: center; background: #6366f1; color: #fff;
-          font-weight: 700; font-size: 1.1rem; padding: 16px 24px; border-radius: 10px;
-          text-decoration: none; margin-top: 2em; border: none; width: 100%; cursor: pointer; }}
-  .cta:hover {{ background: #4f46e5; }}
-  .funnel-media {{ max-width: 100%; border-radius: 10px; margin: 1.2em 0; display: block; }}
-  .funnel-element {{ background: #f3f4f6; border-radius: 8px; padding: 10px 14px;
-                      margin: 0.8em 0; font-weight: 600; color: #1a1a2e; }}
-  .lrs-form-label {{ display: block; font-weight: 600; margin: 0.9em 0 0.3em; }}
-  .lrs-form-input {{ display: block; width: 100%; padding: 12px 14px; font-size: 16px;
-                      border: 1px solid #ccc; border-radius: 8px; }}
-  .lrs-form-next {{ display: block; width: 100%; margin-top: 1.4em; padding: 14px 24px;
-                     font-weight: 700; font-size: 1rem; background: #e5e7eb; color: #1a1a2e;
-                     border: none; border-radius: 10px; cursor: pointer; }}
-  @media (max-width: 480px) {{
-    body {{ padding: 20px 16px 80px; }}
-    h1 {{ font-size: 1.5rem; }}
-  }}
-  .lrs-popup-overlay {{ position: fixed; inset: 0; background: rgba(0,0,0,0.55);
-                         display: flex; align-items: center; justify-content: center;
-                         padding: 20px; z-index: 1000; }}
-  .lrs-popup-overlay[hidden] {{ display: none; }}
-  .lrs-popup-card {{ position: relative; background: #fff; border-radius: 14px;
-                      max-width: 420px; width: 100%; padding: 28px 24px; text-align: center; }}
-  .lrs-popup-close {{ position: absolute; top: 10px; right: 14px; background: none; border: none;
-                       font-size: 1.4rem; line-height: 1; cursor: pointer; color: #888; }}
-  .lrs-popup-card h2 {{ font-size: 1.3rem; margin: 0 0 0.5em; }}
-</style>
+<link rel="stylesheet" href="/static/css/funnel-page.css">
 </head>
 <body>
   {hero_media}
@@ -91,50 +56,13 @@ _PAGE_TEMPLATE = """<!doctype html>
 # correspondant est présent sur la page — le texte statique
 # (render_element_text pour les éléments, le CopyBlock pour le popup) fait
 # toujours foi comme contenu de secours si JS est désactivé.
-_COUNTDOWN_SCRIPT = """<script>
-(function () {
-  function fmt(diffMs) {
-    if (diffMs <= 0) return "Expiré";
-    var s = Math.floor(diffMs / 1000);
-    var d = Math.floor(s / 86400); s -= d * 86400;
-    var h = Math.floor(s / 3600); s -= h * 3600;
-    var m = Math.floor(s / 60); s -= m * 60;
-    return d + "j " + h + "h " + m + "m " + s + "s";
-  }
-  document.querySelectorAll('[data-countdown-target]').forEach(function (el) {
-    var target = new Date(el.dataset.countdownTarget).getTime();
-    var span = el.querySelector('.lrs-countdown-static');
-    if (!span || isNaN(target)) return;
-    var idx = span.textContent.lastIndexOf(":");
-    var prefix = idx >= 0 ? span.textContent.slice(0, idx) : span.textContent;
-    function tick() {
-      span.textContent = prefix + ": " + fmt(target - Date.now());
-    }
-    tick();
-    setInterval(tick, 1000);
-  });
-})();
-</script>"""
-
-_FORM_SCRIPT = """<script>
-function lrsFormNext(btn) {
-  var current = btn.closest('.lrs-form-screen');
-  var next = current.nextElementSibling;
-  if (next) { current.hidden = true; next.hidden = false; }
-}
-</script>"""
-
-_EXIT_INTENT_SCRIPT = """<script>
-(function () {
-  var popup = document.getElementById('lrs-exit-popup');
-  if (!popup) return;
-  document.addEventListener('mouseout', function (e) {
-    if (e.clientY > 0 || sessionStorage.getItem('lrsExitPopupShown')) return;
-    popup.hidden = false;
-    sessionStorage.setItem('lrsExitPopupShown', '1');
-  });
-})();
-</script>"""
+#
+# Fichiers externes (static/js/) plutôt qu'inline : permet une CSP
+# script-src 'self' stricte côté serving/app.py, sans 'unsafe-inline' ni
+# hash à régénérer à chaque édition de ces scripts.
+_COUNTDOWN_SCRIPT = '<script src="/static/js/countdown.js"></script>'
+_FORM_SCRIPT = '<script src="/static/js/form-nav.js"></script>'
+_EXIT_INTENT_SCRIPT = '<script src="/static/js/exit-intent.js"></script>'
 
 
 def _media_src(media: FunnelStepMedia) -> str:
@@ -196,7 +124,7 @@ def _form_html(form: FunnelStepForm | None, cta_label: str, submit_url: str) -> 
         action_html = (
             f'<button type="submit" class="cta">{escape(cta_label)}</button>'
             if is_last else
-            '<button type="button" class="lrs-form-next" onclick="lrsFormNext(this)">Suivant</button>'
+            '<button type="button" class="lrs-form-next" data-lrs-action="form-next">Suivant</button>'
         )
         hidden_attr = "" if i == 0 else " hidden"
         screens_html.append(f'<div class="lrs-form-screen"{hidden_attr}>{fields_html}{action_html}</div>')
@@ -225,7 +153,7 @@ def _popup_html(popup: FunnelStepPopup | None, cta_url: str, submit_url: str) ->
         '<div id="lrs-exit-popup" class="lrs-popup-overlay" hidden>'
         '<div class="lrs-popup-card">'
         '<button type="button" class="lrs-popup-close" '
-        'onclick="document.getElementById(\'lrs-exit-popup\').hidden=true">×</button>'
+        'data-lrs-action="close-popup">×</button>'
         f"<h2>{escape(popup.copy.headline)}</h2>"
         f"<p>{escape(popup.copy.hook)}</p>"
         f"{body_html}{action_html}"

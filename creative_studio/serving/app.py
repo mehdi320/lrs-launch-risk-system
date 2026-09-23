@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.parse
 import uuid
 
 try:
@@ -77,6 +78,88 @@ app = FastAPI(title="LRS Creative Studio — Serving")
 # le dossier doit exister avant le mount, StaticFiles refuse un dossier absent.
 ensure_media_dir()
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
+# CSS/JS statiques des pages de funnel (voir serving/templates.py) — fichiers
+# versionnés avec le repo (pas de dossier à créer au runtime, contrairement à
+# /media), référencés en dur par _PAGE_TEMPLATE et _*_SCRIPT.
+_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+# Headers de sécurité sur toutes les réponses (pages de funnel, JSON API,
+# webhook, redirects checkout) — défense en profondeur, redondant avec les
+# mêmes headers posés par Caddy (voir Caddyfile) pour quiconque expose ce
+# service sans passer par le reverse proxy.
+#
+# CSP stricte : script-src/style-src en 'self' uniquement — le JS/CSS des
+# pages de funnel vit dans /static (voir serving/templates.py), plus aucun
+# inline nulle part sur ce service, donc pas besoin de 'unsafe-inline' ni de
+# hash à régénérer. img-src/media-src autorisent https: en plus de 'self' :
+# un FunnelStepMedia peut être une URL externe fournie par l'abonnée
+# (source_type=URL, voir storage/media.py) affichée telle quelle au visiteur.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), interest-cohort=()"
+    ),
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self'; "
+        "img-src 'self' https:; "
+        "media-src 'self' https:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "upgrade-insecure-requests"
+    ),
+}
+
+
+# Vérification d'Origin sur les requêtes qui mutent de l'état — même
+# logique que pilot_server.py::_csrf_protect (voir son commentaire pour le
+# détail). Le webhook Stripe n'envoie jamais d'Origin (appel serveur à
+# serveur), donc n'est pas affecté ; /v/{test_id}/submit-form n'utilise
+# aucun cookie de session/identité (VISITOR_COOKIE ne fait qu'assigner une
+# variante A/B, pas authentifier), donc n'est pas une cible CSRF classique,
+# mais autant fermer la porte pour la cohérence de l'ensemble du service.
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _origin_is_trusted(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    try:
+        origin_host = urllib.parse.urlsplit(origin).netloc.lower()
+    except ValueError:
+        return False
+    return origin_host == request.headers.get("host", "").lower()
+
+
+@app.middleware("http")
+async def _csrf_protect(request: Request, call_next):
+    if request.method in _UNSAFE_METHODS and not _origin_is_trusted(request):
+        return PlainTextResponse("Origine de la requête non autorisée.", status_code=403)
+    return await call_next(request)
+
+
+# Enregistré après _csrf_protect (et donc "autour" de lui, voir Starlette :
+# le dernier middleware ajouté est le plus englobant) pour que les headers
+# de sécurité s'appliquent aussi aux réponses que _csrf_protect court-
+# circuite (403), pas seulement à celles qui atteignent les routes.
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers[name] = value
+    return response
+
 
 products = ProductRepository()
 variants = VariantRepository()

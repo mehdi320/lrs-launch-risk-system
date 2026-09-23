@@ -9,12 +9,30 @@
 # app. et pilote. pointent tous les deux vers le pilote (seule interface
 # produit — Streamlit/app.py n'est plus déployé). Les deux sous-domaines
 # sont gardés pour ne pas casser un lien LRS_APP_URL déjà distribué.
+#
+# Headers de sécurité posés ici en plus de ceux déjà émis par pilot_server.py
+# et creative_studio.serving.app (voir leurs middlewares _security_headers) —
+# filet de sécurité au cas où l'un des deux services serait un jour exposé
+# sans passer par ce Caddyfile. HSTS n'a de sens qu'ici : c'est Caddy qui
+# termine le TLS (voir DEPLOYMENT.md), émis par l'app ce serait trompeur en
+# dev local où uvicorn parle HTTP en clair.
+(security_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
 
 app.{$LRS_DOMAIN} {
+	import security_headers
 	reverse_proxy pilot:8600
 }
 
 pilot.{$LRS_DOMAIN} {
+	import security_headers
 	reverse_proxy pilot:8600
 }
 
@@ -22,5 +40,6 @@ pilot.{$LRS_DOMAIN} {
 # c'est cette URL + /webhook/stripe qu'il faut déclarer dans le Dashboard
 # Stripe (Developers > Webhooks) une fois le DNS en place.
 api.{$LRS_DOMAIN} {
+	import security_headers
 	reverse_proxy serving:8000
 }

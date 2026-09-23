@@ -23,6 +23,8 @@ import io
 import ipaddress
 import re
 import socket
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 from xml.sax.saxutils import escape as _xml_escape
@@ -177,23 +179,14 @@ def _score_section_flowables(score: CopyScore, styles: dict[str, ParagraphStyle]
     ]
 
 
-def _is_safe_fetch_target(url: str) -> bool:
-    """Bloque les cibles SSRF classiques (adresses internes/loopback,
-    métadonnées cloud) avant tout fetch réseau — media.location vient d'une
-    URL externe saisie librement par l'utilisateur (voir ui/streamlit_tab.py,
-    MediaSourceType.URL). Copie autonome de la même validation que
-    core/reference_extraction.py::_is_safe_fetch_target — package "core"
-    volontairement indépendant du reste du repo (voir docstring de module)."""
+def _resolve_safe_ips(hostname: str) -> list[str] | None:
+    """Resout `hostname` et retourne ses IPs (str) si TOUTES sont publiques,
+    sinon None (une resolution qui echoue est traitee comme non sure)."""
     try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
+        infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        return False
+        return None
+    ips = []
     for info in infos:
         try:
             ip = ipaddress.ip_address(info[4][0])
@@ -201,44 +194,95 @@ def _is_safe_fetch_target(url: str) -> bool:
             continue
         if (ip.is_private or ip.is_loopback or ip.is_link_local
                 or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
-            return False
-    return True
+            return None
+        ips.append(str(ip))
+    return ips or None
+
+
+def _validate_fetch_target(url: str) -> tuple[str | None, list[str] | None]:
+    """Bloque les cibles SSRF classiques (adresses internes/loopback,
+    métadonnées cloud) avant tout fetch réseau — media.location vient d'une
+    URL externe saisie librement par l'utilisateur (voir ui/streamlit_tab.py,
+    MediaSourceType.URL). Copie autonome de la même validation que
+    core/reference_extraction.py — package "core" volontairement indépendant
+    du reste du repo (voir docstring de module). Retourne (hostname,
+    safe_ips) si sûr, (None, None) sinon."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None, None
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None, None
+    safe_ips = _resolve_safe_ips(parsed.hostname)
+    if safe_ips is None:
+        return None, None
+    return parsed.hostname, safe_ips
+
+
+# ── Anti DNS-rebinding : epingle la resolution DNS a l'IP deja validee ──
+# Meme risque et meme parade qu'ailleurs dans core/ (voir
+# reference_extraction.py::_dns_pinned_to pour le detail) : sans ca,
+# requests.get() re-resoudrait le DNS independamment au moment de se
+# connecter, apres que la validation ci-dessus a deja eu lieu.
+_dns_pin = threading.local()
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _pinned_getaddrinfo(host, port=None, family=0, type=0, proto=0, flags=0):
+    pin = getattr(_dns_pin, "value", None)
+    if not pin or pin[0] != host:
+        return _real_getaddrinfo(host, port, family, type, proto, flags)
+    results = []
+    for ip in pin[1]:
+        ipobj = ipaddress.ip_address(ip)
+        if ipobj.version == 6:
+            results.append((socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0, 0, 0)))
+        else:
+            results.append((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0)))
+    return results
+
+
+socket.getaddrinfo = _pinned_getaddrinfo
+
+
+@contextmanager
+def _dns_pinned_to(hostname, safe_ips):
+    previous = getattr(_dns_pin, "value", None)
+    _dns_pin.value = (hostname, safe_ips)
+    try:
+        yield
+    finally:
+        _dns_pin.value = previous
 
 
 def _image_bytes(media: FunnelStepMedia) -> bytes | None:
     """Récupère les bytes d'une image (upload local ou téléchargement URL) —
     None si indisponible plutôt que de faire échouer tout le PDF pour un
     média cassé (lien mort, fichier supprimé sur disque, ou URL bloquée par
-    _is_safe_fetch_target)."""
+    _validate_fetch_target)."""
     try:
         if media.source_type == MediaSourceType.UPLOAD:
             with open(media_path(media.location), "rb") as f:
                 return f.read()
-        if not _is_safe_fetch_target(media.location):
+        hostname, safe_ips = _validate_fetch_target(media.location)
+        if hostname is None:
             return None
-        # Suit les redirections manuellement pour revalider chaque saut (voir
-        # _is_safe_fetch_target ci-dessus) — un requests.get() classique suit
-        # les redirections par défaut sans revérifier l'IP cible, ce qui
-        # permettrait de contourner le contrôle initial via une réponse 3xx
-        # d'un hôte public vers une adresse interne (même pattern que
-        # audit_engine.py::extract_page() et
-        # reference_extraction.py::fetch_reference_text()).
         current_url = media.location
         response = None
-        for _ in range(5):
-            response = requests.get(current_url, timeout=15, allow_redirects=False)
+        for _ in range(5):  # suit les redirections manuellement pour revalider chaque saut
+            with _dns_pinned_to(hostname, safe_ips):
+                response = requests.get(current_url, timeout=15, allow_redirects=False)
             if response.is_redirect or response.is_permanent_redirect:
                 location = response.headers.get("Location", "")
                 if not location:
                     break
                 next_url = urljoin(current_url, location)
-                if not _is_safe_fetch_target(next_url):
+                hostname, safe_ips = _validate_fetch_target(next_url)
+                if hostname is None:
                     return None
                 current_url = next_url
                 continue
             break
-        if response is None:
-            return None
         response.raise_for_status()
         return response.content
     except Exception:

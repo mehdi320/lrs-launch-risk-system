@@ -6,15 +6,20 @@
 #
 # Lancer : uvicorn pilot_server:app --port 8600 --reload
 
+import base64
 import contextvars
 import datetime
+import hashlib
+import json
 import os
 import secrets as _secrets
 import sys
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -40,9 +45,28 @@ def _get_app_password():
     return os.getenv("APP_PASSWORD", "")
 
 
+# LRS_ENV=production : opt-in explicite posé par docker-compose.yml sur les
+# deux services déployés (voir ce fichier) — jamais présent en dev local par
+# défaut. Sert uniquement à transformer l'avertissement "accès libre"
+# ci-dessous en échec de démarrage : le risque documenté depuis toujours
+# (APP_PASSWORD non défini = /api/* entièrement ouvert) ne dépendait que de
+# la vigilance de qui déploie à lire ce warning dans les logs. Ici, un
+# déploiement mal configuré ne démarre tout simplement pas.
+def _is_production() -> bool:
+    return os.getenv("LRS_ENV", "").strip().lower() == "production"
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     if not _get_app_password():
+        if _is_production():
+            raise RuntimeError(
+                "APP_PASSWORD non défini avec LRS_ENV=production — démarrage refusé "
+                "(le pilote démarrerait sinon en accès libre sur /api/*, sans aucune "
+                "authentification). Définissez APP_PASSWORD (voir .env.example) ou "
+                "retirez LRS_ENV=production si c'est un déploiement de test volontairement "
+                "ouvert."
+            )
         print(
             "\n⚠️  APP_PASSWORD non défini — le pilote démarre en accès libre "
             "(aucune authentification sur /api/*). Acceptable en dev local ; à "
@@ -123,6 +147,48 @@ def CAMPAIGN_FILE():   return _user_file(".lrs_campaigns.json")
 def AB_FILE():         return _user_file(".lrs_abtests.json")
 def SWIPE_FILE():      return _user_file(".lrs_swipefiles.json")
 def ADS_CREDS_FILE():  return _user_file(".lrs_ads_creds.json")
+
+
+# ── Chiffrement au repos des identifiants Ads (Meta/TikTok) ────────
+# Contrairement aux autres fichiers _user_file (historique, projets...),
+# .lrs_ads_creds.json contient des tokens d'accès à des comptes publicitaires
+# tiers en clair : un accès disque (backup exfiltré, mauvaise config
+# d'hébergement mutualisé, etc.) suffisait sinon à les récupérer directement.
+# Clé dérivée d'APP_SECRET_KEY (déjà le secret long-terme du pilote, voir
+# SessionMiddleware ci-dessus) plutôt qu'un nouveau secret à gérer.
+def _ads_creds_fernet() -> Fernet:
+    key = hashlib.sha256(_APP_SECRET_KEY.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
+
+
+def _load_ads_creds() -> dict:
+    path = ADS_CREDS_FILE()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        return json.loads(_ads_creds_fernet().decrypt(raw).decode("utf-8"))
+    except InvalidToken:
+        # Fichier écrit avant ce correctif (JSON en clair) — migre vers le
+        # format chiffré dès cette lecture plutôt que d'exiger une reconnexion.
+        legacy = load_json_file(path, dict)
+        if legacy:
+            _save_ads_creds(legacy)
+        return legacy
+    except Exception:
+        return {}
+
+
+def _save_ads_creds(creds: dict) -> None:
+    try:
+        token = _ads_creds_fernet().encrypt(json.dumps(creds, ensure_ascii=False).encode("utf-8"))
+        with open(ADS_CREDS_FILE(), "wb") as f:
+            f.write(token)
+    except Exception:
+        pass  # silencieux si pas de droits d'écriture, cohérent avec save_json_file
+
+
 def SCHEDULE_FILE():   return _user_file(".lrs_schedule.json")
 def ONBOARDING_FILE(): return _user_file(".lrs_onboarded.json")
 
@@ -151,6 +217,39 @@ def _active_subscriber_email(request: Request):
     return email if (user and user.get("status") == "active") else None
 
 
+# ── CSRF : vérification d'Origin sur les requêtes qui mutent de l'état ──
+# _require_auth protège contre l'accès non-authentifié, pas contre un site
+# tiers qui ferait faire une requête à un navigateur déjà connecté (cookie
+# de session envoyé automatiquement). SameSite=Lax (défaut de
+# SessionMiddleware, voir plus bas) bloque déjà l'essentiel des POST
+# cross-site dans les navigateurs modernes, mais pas dans absolument tous
+# les cas (vieux navigateurs, comportements spécifiques par plateforme) —
+# on vérifie donc en plus l'en-tête Origin, seul rempart réellement portable.
+# Un vrai navigateur envoie toujours Origin sur un POST/PUT/PATCH/DELETE,
+# same-origin ou non ; son absence indique un client non-navigateur
+# (curl, un futur webhook...), qu'on laisse passer — ce n'est pas ce que
+# CSRF exploite (pas de cookie de session envoyé automatiquement).
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _origin_is_trusted(request: Request) -> bool:
+    origin = request.headers.get("origin")
+    if not origin:
+        return True
+    try:
+        origin_host = urllib.parse.urlsplit(origin).netloc.lower()
+    except ValueError:
+        return False
+    return origin_host == request.headers.get("host", "").lower()
+
+
+@app.middleware("http")
+async def _csrf_protect(request: Request, call_next):
+    if request.method in _UNSAFE_METHODS and not _origin_is_trusted(request):
+        return JSONResponse({"detail": "Origine de la requête non autorisée."}, status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _require_auth(request: Request, call_next):
     subscriber_email = _active_subscriber_email(request)
@@ -172,13 +271,17 @@ async def _require_auth(request: Request, call_next):
 # Clé de session : fixe si fournie (recommandé en prod pour survivre aux
 # redémarrages), sinon générée aléatoirement au démarrage (les sessions
 # ouvertes sont invalidées à chaque redémarrage — acceptable pour un pilote).
+# Réutilisée aussi pour chiffrer .lrs_ads_creds.json au repos (voir
+# _ads_creds_fernet ci-dessous) : mêmes contraintes/garanties.
+_APP_SECRET_KEY = os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32)
+
 # https_only=False par défaut pour ne pas casser le dev local (uvicorn parle
 # HTTP en clair sans reverse proxy) — mettre APP_HTTPS_ONLY=true dès que le
 # pilote tourne derrière un reverse proxy qui termine le TLS (voir
 # DEPLOYMENT.md), sinon le cookie de session part aussi sur du HTTP simple.
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("APP_SECRET_KEY") or _secrets.token_hex(32),
+    secret_key=_APP_SECRET_KEY,
     https_only=os.getenv("APP_HTTPS_ONLY", "").strip().lower() in ("1", "true", "yes"),
 )
 # Compresse les réponses (index.html ~140 Ko non minifié, réponses JSON des
@@ -186,48 +289,85 @@ app.add_middleware(
 # config côté client (les navigateurs négocient gzip automatiquement).
 app.add_middleware(GZipMiddleware, minimum_size=500)
 
+# Headers de sécurité — défense en profondeur : redondant avec les mêmes
+# headers posés par Caddy (voir Caddyfile) pour quiconque expose ce service
+# sans passer par le reverse proxy (dev local, autre déploiement). HSTS est
+# volontairement exclu ici : n'a de sens qu'émis par la couche qui termine
+# le TLS (Caddy), l'émettre ici sur une connexion HTTP simple (dev local)
+# serait trompeur.
+#
+# CSP alignée sur pilot_static/ : script-src limité à 'self' + Plausible
+# (seul script externe, voir index.html/faq.html/privacy.html/terms.html) ;
+# le JS applicatif est désormais dans app.js (fichier externe) plutôt
+# qu'inline, ce qui évite tout recours à 'unsafe-inline' ou 'sha256-...'
+# sur script-src. style-src garde 'unsafe-inline' : ~200 attributs
+# style="" inline dans index.html, tous statiques (pas de contenu
+# utilisateur interpolé) — surface XSS bien moindre que script-src.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "magnetometer=(), gyroscope=(), interest-cohort=()"
+    ),
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' https://plausible.io; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self'; "
+        "font-src 'self'; "
+        "connect-src 'self' https://plausible.io; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "upgrade-insecure-requests"
+    ),
+}
 
-# ══════════════════════════════════════════════════════════════
-# ── Anti-abus : rate limit sur les endpoints qui appellent un LLM ──
-# Audit sécurité 2026-09-23, point 20 : /api/audit, /api/funnel-audit,
-# /api/bulk-audit (jusqu'à 20 audits en un seul appel),
-# /api/creative-angles et /api/creative-studio/generate déclenchent tous
-# un appel OpenAI/Anthropic facturé à l'usage, sans aucune limite
-# jusqu'ici — seul /api/auth/login avait un rate limit (voir
-# _login_rate_limited ci-dessous). Même principe (compteur en mémoire,
-# fenêtre glissante simple), mais la clé est l'identité applicative
-# (email abonné, ou "_admin" pour le mot de passe partagé) plutôt que
-# l'IP : plus juste pour un compte payant derrière un NAT/proxy partagé,
-# et ça isole un abonné bruyant des autres. Repli sur l'IP si aucune
-# session n'est identifiable (ne devrait pas arriver derrière
-# _require_auth, gardé par prudence).
-_LLM_RATE_LIMIT_MAX = int(os.getenv("LRS_LLM_RATE_LIMIT_MAX", "10"))
-_LLM_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("LRS_LLM_RATE_LIMIT_WINDOW_SECONDS", "60"))
-_llm_call_log = {}  # identite -> (count, window_start_ts)
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers[name] = value
+    return response
 
 
-def _llm_rate_limit_key(request: Request) -> str:
-    email = request.session.get("subscriber_email")
-    if email:
-        return f"user:{email}"
-    if request.session.get("authenticated"):
-        return "_admin"
-    return f"ip:{request.client.host}" if request.client else "ip:unknown"
+# ── Budget anti-abus sur les appels LLM ─────────────────────────
+# Chaque audit/génération de copy appelle un LLM payant (OpenAI/Anthropic).
+# Passée l'authentification (mot de passe admin OU abonnement Stripe actif,
+# voir _require_auth), rien ne bornait le nombre d'appels qu'un compte pouvait
+# déclencher — un compte compromis ou un script qui boucle sur /api/audit
+# pouvait faire exploser la facture. Fenêtre glissante simple par
+# utilisateur (_current_user_ns, même espace que l'isolation des données),
+# même logique que _login_rate_limited plus bas pour le mot de passe admin.
+LLM_RATE_LIMIT = int(os.getenv("LRS_LLM_RATE_LIMIT", "30"))
+LLM_RATE_WINDOW_SECONDS = int(os.getenv("LRS_LLM_RATE_WINDOW_SECONDS", "300"))
+_llm_calls: dict[str, tuple[int, float]] = {}  # user_ns -> (count, fenêtre_debut)
 
 
-def _require_llm_rate_limit(request: Request) -> None:
-    key = _llm_rate_limit_key(request)
-    now = time.time()
-    count, window_start = _llm_call_log.get(key, (0, now))
-    if now - window_start > _LLM_RATE_LIMIT_WINDOW_SECONDS:
+def _consume_llm_budget(units: int = 1) -> None:
+    """Lève 429 si l'utilisateur courant a déjà consommé son budget d'appels
+    LLM pour la fenêtre en cours, sinon décrémente. `units` = nombre d'appels
+    LLM que la requête va réellement déclencher (ex. bulk-audit sur N urls =
+    N unités demandées d'un coup) : compter au niveau requête, pas au niveau
+    URL individuelle, empêcherait de contourner le quota en regroupant les
+    appels dans une seule requête HTTP."""
+    ns = _current_user_ns()
+    now = time.monotonic()
+    count, window_start = _llm_calls.get(ns, (0, now))
+    if now - window_start > LLM_RATE_WINDOW_SECONDS:
         count, window_start = 0, now
-    if count >= _LLM_RATE_LIMIT_MAX:
-        retry_after = int(_LLM_RATE_LIMIT_WINDOW_SECONDS - (now - window_start))
+    if count + units > LLM_RATE_LIMIT:
+        retry_after = max(1, int(LLM_RATE_WINDOW_SECONDS - (now - window_start)))
         raise HTTPException(
             status_code=429,
-            detail=f"Trop de requêtes IA. Réessayez dans {max(retry_after, 1)}s.",
+            detail=f"Trop de requêtes IA sur les {LLM_RATE_WINDOW_SECONDS // 60} dernières minutes — réessayez dans {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
         )
-    _llm_call_log[key] = (count + 1, window_start)
+    _llm_calls[ns] = (count + units, window_start)
 
 
 VALID_MODES = ("Funnel Only", "Ads Only", "Full Risk")
@@ -327,7 +467,7 @@ class FunnelAuditRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
-@app.post("/api/funnel-audit", dependencies=[Depends(_require_llm_rate_limit)])
+@app.post("/api/funnel-audit")
 def run_funnel_audit_endpoint(req: FunnelAuditRequest):
     url_step1 = req.url_step1.strip()
     url_step2 = req.url_step2.strip()
@@ -336,6 +476,7 @@ def run_funnel_audit_endpoint(req: FunnelAuditRequest):
     if req.funnel_type not in audit_engine.FUNNEL_TYPES:
         raise HTTPException(status_code=400, detail="funnel_type invalide.")
 
+    _consume_llm_budget()
     try:
         result = audit_engine.run_funnel_audit(
             funnel_type=req.funnel_type,
@@ -377,7 +518,7 @@ class CreativeAnglesRequest(BaseModel):
     model: str = "gpt-4o-mini"
 
 
-@app.post("/api/audit", dependencies=[Depends(_require_llm_rate_limit)])
+@app.post("/api/audit")
 def run_audit_endpoint(req: AuditRequest):
     mode = req.mode if req.mode in VALID_MODES else "Funnel Only"
     url = req.url.strip()
@@ -398,6 +539,7 @@ def run_audit_endpoint(req: AuditRequest):
         page_lang = audit_engine.detect_language(landing_content)
         page_type = audit_engine.detect_page_type(landing_content, url)
 
+    _consume_llm_budget()
     try:
         result = audit_engine.run_audit(
             mode=mode,
@@ -613,12 +755,13 @@ def get_alerts():
     return {"alerts": alerts}
 
 
-@app.post("/api/bulk-audit", dependencies=[Depends(_require_llm_rate_limit)])
+@app.post("/api/bulk-audit")
 def run_bulk_audit(req: BulkAuditRequest):
     mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
     urls = [u.strip() for u in req.urls if u.strip().startswith("http")][:BULK_MAX_URLS]
     if not urls:
         raise HTTPException(status_code=400, detail="Aucune URL valide fournie.")
+    _consume_llm_budget(len(urls))
 
     results = []
     for url in urls:
@@ -674,11 +817,12 @@ def run_bulk_audit(req: BulkAuditRequest):
     return {"results": results}
 
 
-@app.post("/api/creative-angles", dependencies=[Depends(_require_llm_rate_limit)])
+@app.post("/api/creative-angles")
 def get_creative_angles(req: CreativeAnglesRequest):
     offer_description = req.offer_description.strip()
     if not offer_description:
         raise HTTPException(status_code=400, detail="Merci de décrire votre offre.")
+    _consume_llm_budget()
     try:
         result = audit_engine.generate_creative_angles(
             offer_description=offer_description,
@@ -713,6 +857,7 @@ def run_compare(req: CompareRequest):
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not url_a or not url_b:
         raise HTTPException(status_code=400, detail="Les deux URLs sont requises.")
+    _consume_llm_budget(2)
 
     sides = []
     for url, label in [(url_a, req.label_a or "Page A"), (url_b, req.label_b or "Page B")]:
@@ -768,6 +913,7 @@ def run_abtest(req: ABTestRunRequest):
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not name or not url_a or not url_b:
         raise HTTPException(status_code=400, detail="Nom du test et les deux URLs sont requis.")
+    _consume_llm_budget(2)
 
     variant_results = {}
     for variant, url in [("A", url_a), ("B", url_b)]:
@@ -884,6 +1030,8 @@ def audit_project(name: str, req: ProjectAuditRequest):
     targets = [u for u in urls if u not in proj.get("audits", {})] if req.only_remaining else urls
     if not targets:
         targets = urls
+    if targets:
+        _consume_llm_budget(len(targets))
 
     errors = []
     for url in targets:
@@ -990,7 +1138,7 @@ def delete_campaign(name: str):
 
 @app.get("/api/ads-connector/creds")
 def get_ads_creds():
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     return {
         "meta_configured": bool(creds.get("meta_token") and creds.get("meta_acc_id")),
         "tt_configured": bool(creds.get("tt_token") and creds.get("tt_adv_id")),
@@ -1007,7 +1155,7 @@ class AdsCredsRequest(BaseModel):
 
 @app.post("/api/ads-connector/creds")
 def save_ads_creds_endpoint(req: AdsCredsRequest):
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     if req.platform == "meta":
         creds["meta_token"] = req.token.strip()
         creds["meta_acc_id"] = req.account_id.strip()
@@ -1016,7 +1164,7 @@ def save_ads_creds_endpoint(req: AdsCredsRequest):
         creds["tt_adv_id"] = req.account_id.strip()
     else:
         raise HTTPException(status_code=400, detail="Plateforme inconnue.")
-    save_json_file(ADS_CREDS_FILE(), creds)
+    _save_ads_creds(creds)
     return {"ok": True}
 
 
@@ -1027,7 +1175,7 @@ class AdsImportRequest(BaseModel):
 
 @app.post("/api/ads-connector/import")
 def import_ads_campaigns(req: AdsImportRequest):
-    creds = load_json_file(ADS_CREDS_FILE(), dict)
+    creds = _load_ads_creds()
     try:
         if req.platform == "meta":
             token, acc_id = creds.get("meta_token", ""), creds.get("meta_acc_id", "")
@@ -1254,7 +1402,7 @@ class StudioGenerateRequest(BaseModel):
     model: str = ""
 
 
-@app.post("/api/creative-studio/generate", dependencies=[Depends(_require_llm_rate_limit)])
+@app.post("/api/creative-studio/generate")
 def studio_generate(req: StudioGenerateRequest):
     try:
         from creative_studio.core.variants import Framework, Product, VariantKind
@@ -1272,6 +1420,7 @@ def studio_generate(req: StudioGenerateRequest):
         framework = Framework(req.framework)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Framework inconnu : {req.framework}")
+    _consume_llm_budget()
 
     product = Product(
         name=req.product_name.strip(), description=req.description.strip(),
@@ -1576,6 +1725,7 @@ def run_schedule_now(sid: str):
     sched = schedule.get(sid)
     if not sched:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
+    _consume_llm_budget()
     _run_one_scheduled_audit(sid, sched, schedule)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
@@ -1602,6 +1752,14 @@ def check_due_schedules():
             last_run = datetime.datetime(2000, 1, 1)
         if (now - last_run).days < freq_days:
             continue
+        try:
+            _consume_llm_budget()
+        except HTTPException:
+            # Budget épuisé pour cette fenêtre : on s'arrête là plutôt que
+            # d'échouer toute la requête — les schedules pas encore traités
+            # gardent leur last_run inchangé, donc restent "dus" et seront
+            # repris au prochain appel (à l'ouverture du pilote côté client).
+            break
         if _run_one_scheduled_audit(sid, sched, schedule):
             ran += 1
 

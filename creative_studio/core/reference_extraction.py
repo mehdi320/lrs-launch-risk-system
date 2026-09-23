@@ -17,6 +17,8 @@ from __future__ import annotations
 import io
 import ipaddress
 import socket
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -151,17 +153,14 @@ def _looks_like_pdf_url(url: str) -> bool:
 # volontairement autonome de la même validation plutôt qu'un import
 # cross-module, pour garder ce package "core" indépendant du reste du repo
 # (voir docstring de module).
-def _is_safe_fetch_target(url: str) -> bool:
+def _resolve_safe_ips(hostname: str) -> list[str] | None:
+    """Resout `hostname` et retourne ses IPs (str) si TOUTES sont publiques,
+    sinon None (une resolution qui echoue est traitee comme non sure)."""
     try:
-        parsed = urlparse(url)
-    except Exception:
-        return False
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    try:
-        infos = socket.getaddrinfo(parsed.hostname, None)
+        infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        return False
+        return None
+    ips = []
     for info in infos:
         try:
             ip = ipaddress.ip_address(info[4][0])
@@ -169,8 +168,99 @@ def _is_safe_fetch_target(url: str) -> bool:
             continue
         if (ip.is_private or ip.is_loopback or ip.is_link_local
                 or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
-            return False
-    return True
+            return None
+        ips.append(str(ip))
+    return ips or None
+
+
+def _is_safe_fetch_target(url: str) -> bool:
+    return _validate_fetch_target(url)[0] is not None
+
+
+def _validate_fetch_target(url: str) -> tuple[str | None, list[str] | None]:
+    """Valide `url` et retourne (hostname, safe_ips) si sur, (None, None)
+    sinon. Utilise par fetch_reference_text pour epingler la resolution DNS
+    (voir _dns_pinned_to) et ne resoudre qu'une fois par saut de redirection."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return None, None
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None, None
+    safe_ips = _resolve_safe_ips(parsed.hostname)
+    if safe_ips is None:
+        return None, None
+    return parsed.hostname, safe_ips
+
+
+# ── Anti DNS-rebinding : epingle la resolution DNS a l'IP deja validee ──
+# Meme risque et meme parade qu'audit_engine.py::_dns_pinned_to (voir son
+# commentaire pour le detail) : _is_safe_fetch_target() valide une IP a
+# l'instant T, requests.get() en re-resoudrait sinon une autre au moment de
+# se connecter — un DNS attaquant (TTL=0) peut faire pointer la 2e
+# resolution vers 127.0.0.1/une IP interne malgre la validation. Thread-local
+# pour ne jamais affecter une resolution DNS concurrente sur un autre thread.
+_dns_pin = threading.local()
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _pinned_getaddrinfo(host, port=None, family=0, type=0, proto=0, flags=0):
+    pin = getattr(_dns_pin, "value", None)
+    if not pin or pin[0] != host:
+        return _real_getaddrinfo(host, port, family, type, proto, flags)
+    results = []
+    for ip in pin[1]:
+        ipobj = ipaddress.ip_address(ip)
+        if ipobj.version == 6:
+            results.append((socket.AF_INET6, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0, 0, 0)))
+        else:
+            results.append((socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (ip, port or 0)))
+    return results
+
+
+socket.getaddrinfo = _pinned_getaddrinfo
+
+
+@contextmanager
+def _dns_pinned_to(hostname, safe_ips):
+    previous = getattr(_dns_pin, "value", None)
+    _dns_pin.value = (hostname, safe_ips)
+    try:
+        yield
+    finally:
+        _dns_pin.value = previous
+
+
+def _fetch_with_pinned_redirects(url: str, timeout: int = 20) -> requests.Response:
+    """Point de fetch réseau unique du module — suit les redirections
+    manuellement (5 sauts max), valide ET épingle la résolution DNS à chaque
+    saut (voir _dns_pinned_to). Partagé par les chemins PDF et page web pour
+    qu'aucun des deux ne délègue à un fetcher (trafilatura.fetch_url...) qui
+    suivrait des redirections en interne sans jamais les revalider — c'était
+    le cas du chemin page web jusqu'ici : une page publique contrôlée par un
+    attaquant pouvait rediriger vers une IP interne/le endpoint de métadonnées
+    cloud sans qu'aucune des deux validations en place ne le détecte."""
+    hostname, safe_ips = _validate_fetch_target(url)
+    if hostname is None:
+        raise ValueError("URL invalide ou pointant vers une adresse non autorisée.")
+    current_url = url
+    response = None
+    for _ in range(5):
+        with _dns_pinned_to(hostname, safe_ips):
+            response = requests.get(current_url, timeout=timeout, allow_redirects=False)
+        if response.is_redirect or response.is_permanent_redirect:
+            location = response.headers.get("Location", "")
+            if not location:
+                break
+            next_url = urljoin(current_url, location)
+            hostname, safe_ips = _validate_fetch_target(next_url)
+            if hostname is None:
+                raise ValueError("Redirection vers une adresse non autorisée.")
+            current_url = next_url
+            continue
+        break
+    response.raise_for_status()
+    return response
 
 
 def fetch_reference_text(raw_text_or_url: str) -> str:
@@ -182,34 +272,13 @@ def fetch_reference_text(raw_text_or_url: str) -> str:
     """
     candidate = raw_text_or_url.strip()
     if candidate.startswith("http://") or candidate.startswith("https://"):
-        if not _is_safe_fetch_target(candidate):
-            raise ValueError("URL invalide ou pointant vers une adresse non autorisée.")
         if _looks_like_pdf_url(candidate):
-            current_url = candidate
-            response = None
-            for _ in range(5):  # suit les redirections manuellement pour revalider chaque saut
-                response = requests.get(current_url, timeout=20, allow_redirects=False)
-                if response.is_redirect or response.is_permanent_redirect:
-                    location = response.headers.get("Location", "")
-                    if not location:
-                        break
-                    next_url = urljoin(current_url, location)
-                    if not _is_safe_fetch_target(next_url):
-                        raise ValueError("Redirection vers une adresse non autorisée.")
-                    current_url = next_url
-                    continue
-                break
-            response.raise_for_status()
+            response = _fetch_with_pinned_redirects(candidate)
             return extract_pdf_text(response.content)
         if trafilatura is None:
             raise RuntimeError("Le package 'trafilatura' n'est pas installé (pip install trafilatura).")
-        # Limite connue : trafilatura.fetch_url() gère ses propres redirections
-        # en interne, sans hook pour les revalider saut par saut — seule l'URL
-        # de départ est garantie validée ici.
-        downloaded = trafilatura.fetch_url(candidate)
-        if not downloaded:
-            raise RuntimeError(f"Impossible de récupérer le contenu de {candidate}.")
-        extracted = trafilatura.extract(downloaded)
+        response = _fetch_with_pinned_redirects(candidate)
+        extracted = trafilatura.extract(response.text)
         if not extracted:
             raise RuntimeError(f"Aucun contenu exploitable extrait de {candidate}.")
         return extracted

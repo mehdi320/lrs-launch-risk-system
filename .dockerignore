@@ -12,10 +12,34 @@ __pycache__/
 # État runtime local (voir docker-compose.yml pour la persistance en conteneur)
 .lrs_*.json
 .lrs_*.db
+.lrs_*.db-wal
+.lrs_*.db-shm
+
+# Données par utilisateur (isolation multi-tenant, pilot_server.py) et médias
+# uploadés (creative_studio) — emails d'abonnés en noms de dossier + leurs
+# audits/campagnes/fichiers : jamais gravés dans une image (docker-compose.yml
+# les shadow de toute façon via le bind mount `.:/app`, mais une image buildée
+# sans ce bind mount, ou poussée sur un registre, embarquerait sinon ce
+# snapshot local en clair dans ses layers).
+data/users/
+.lrs_creative_studio_media/
+
+# Secrets Streamlit locaux (app.py n'est plus déployé, mais un secrets.toml
+# peut encore traîner d'un ancien dev local)
+.streamlit/
 
 *.log
 .pytest_cache
+.ruff_cache
 .DS_Store
+
+# Environnement de dev local — jamais pertinent dans l'image (dépendances
+# réinstallées via requirements.txt à l'étape RUN pip install)
+venv/
+.venv/
+
+# Sessions Claude Code locales — hors périmètre du déploiement web
+.claude/
 
 # Outil MCP local (Claude Desktop/Code) — hors périmètre du déploiement web
 mcp_server/__pycache__
