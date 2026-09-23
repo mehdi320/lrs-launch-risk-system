@@ -288,6 +288,42 @@ actuel, CHECK élargis inclus) et `migrations/user_accounts/
 une base SQLite en mémoire (17 et 3 tables respectivement) — validé
 avant commit.
 
+### Point 11 — index manquants (initialement listé en Phase 3, corrigé depuis)
+**Commit `d4d12ea`.** `products.tenant_id`, `variants.product_id`,
+`ab_tests.product_id`, `funnels.product_id`, `email_sequences.product_id`
+et `magic_links.email` — index ajoutés (`CREATE INDEX IF NOT EXISTS`,
+idempotent, rétroactif sur une base existante). Bug trouvé et corrigé au
+passage : la migration lourde `_rebuild_variants_widen_constraints`
+(reconstruit la table `variants`) supprimait l'index au `DROP TABLE` sans
+jamais le recréer — même piège déjà évité pour `idx_events_*`, corrigé
+ici de la même façon. Testé : base fraîche (tous les index présents),
+base déjà migrée (l'index arrive quand même sans re-déclencher la
+migration lourde), idempotence (2ᵉ `init_db()` sans erreur), le pilote
+démarre toujours normalement. Fichiers `migrations/*/
+0002_add_missing_indexes.sql` ajoutés en référence.
+
+### Point 10 — `LIMIT` explicite (initialement listé en Phase 3, corrigé depuis)
+**Commit `1a92a1a`.** Les 8 requêtes de liste de
+`creative_studio/storage/repository.py` (products, variants, ab_tests,
+funnels, funnel_steps, funnel_step_media, funnel_step_elements,
+email_sequences) reçoivent désormais `LIMIT ?` (constante
+`_LIST_QUERY_LIMIT = 500`, très au-dessus du volume réel actuel — aucune
+troncature en usage normal). Testé : création de 2 produits, `list()`
+retourne bien les 2, le pilote démarre toujours normalement.
+
+### Point 17 (partiel) — échecs email journalisés (initialement listé en Phase 3, corrigé depuis)
+**Commit `6687413`.** Les 3 sites les plus à risque de `email_alerts.py`
+(`send_score_drop_alert`, `send_monitoring_digest`,
+`send_magic_link_email`) journalisent maintenant l'exception sur stderr
+avant de retourner `False` comme avant — le cas le plus grave étant
+`send_magic_link_email` : un abonné qui vient de payer ne recevait
+jamais son accès sans que rien ne le signale. Testé : simulation d'un
+host SMTP invalide, comportement de retour inchangé, le destinataire
+apparaît dans le log, **le mot de passe SMTP n'y apparaît jamais**
+(vérifié explicitement). Portée volontairement limitée à ces 3 sites —
+les 22 autres `except Exception:` du repo restent une recommandation,
+pas traités.
+
 ### Point 20 — rate limit sur les appels LLM
 **Commit `4293976`.** `pilot_server.py` — ajout de
 `_require_llm_rate_limit` (même principe que le rate limit déjà
@@ -317,43 +353,31 @@ entre deux endpoints différents pour la même identité, routes non-LLM
 
 ---
 
-## Phase 3 — Points 10 à 19 : recommandations, non corrigées
+## Phase 3 — Points 10 à 19 : recommandations
 
-Par ordre de priorité (impact réel × effort). Aucun code touché pour
-cette section, conformément à la mission.
+Par ordre de priorité (impact réel × effort). Conformément à la mission,
+rien de cette section n'a été codé **pendant l'audit lui-même** — mais
+les points 10, 11 et une partie du 17 ont depuis été corrigés à la
+demande explicite de l'utilisateur, en continuité directe de ce rapport
+(voir la Phase 2 ci-dessus, qui les documente avec leurs commits). Gardés
+ici barrés, pour l'historique de ce qui était initialement recommandé
+plutôt que corrigé.
 
-### 1. Point 11 — index manquants (priorité haute, effort faible)
-Ajouter dans `creative_studio/storage/db.py` (`_MIGRATIONS`, pattern déjà
-existant) :
-```sql
-CREATE INDEX IF NOT EXISTS idx_products_tenant ON products(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id);
-CREATE INDEX IF NOT EXISTS idx_ab_tests_product ON ab_tests(product_id);
-CREATE INDEX IF NOT EXISTS idx_funnels_product ON funnels(product_id);
-CREATE INDEX IF NOT EXISTS idx_email_sequences_product ON email_sequences(product_id);
-```
-Et dans `user_accounts.py` (`SCHEMA`) :
-```sql
-CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
-```
-Effort minimal (le pattern `_MIGRATIONS` existe déjà, littéralement
-copier une ligne), gain réel dès que le volume par tenant grandit au-delà
-de la bêta actuelle. Pas fait ici pour respecter "ne corrige rien" sur
-les points 10-19.
+~~1. Point 11 — index manquants (priorité haute, effort faible)~~ —
+**corrigé, commit `d4d12ea`, voir Phase 2.**
 
-### 2. Point 20-bis / 17 — logger les exceptions avalées (priorité haute, effort faible)
-Ce n'est pas un point numéroté séparément, mais la vraie conclusion du
-point 17 : les 25 `except Exception:` ne sont presque jamais un vrai
-problème de logique (dégradation contrôlée voulue), mais **aucun ne
-journalise rien** — un échec réel (bug, service tiers cassé) est
-invisible en prod. Ajouter un simple `print(..., file=sys.stderr)` ou un
-`logging.exception(...)` dans chaque bloc coûterait peu et rendrait les
-futurs bugs debuggables. Prioriser `email_alerts.py:185,276,325`
-(échec d'envoi = client qui ne reçoit jamais son accès, actuellement
-invisible) et `creative_studio/serving/app.py:373` (déjà partiellement
-loggé via `print`, à généraliser).
+~~2. Point 17 — logger les exceptions avalées (priorité haute, effort
+faible)~~ — **partiellement corrigé, commit `6687413`** (les 3 sites les
+plus critiques de `email_alerts.py`), voir Phase 2. Les 22 autres
+`except Exception:` du repo (liste complète plus haut, section
+"Point 17") restent une recommandation ouverte — même logique à
+appliquer au cas par cas, aucune urgence business équivalente au lien
+magique.
 
-### 3. Point 9-bis — durcir aussi `/checkout/beta` et `/webhook/stripe` (priorité moyenne)
+~~3. Point 10 — pagination explicite (priorité basse, effort faible)~~ —
+**corrigé, commit `1a92a1a`, voir Phase 2.**
+
+### 1. Point 9-bis — durcir aussi `/checkout/beta` et `/webhook/stripe` (priorité moyenne)
 Hors périmètre strict du point 9 (déjà corrigé), mais dans le même
 esprit : ces deux routes de `creative_studio/serving/app.py` parsent
 `request.body()`/query params sans modèle Pydantic. Moins urgent qu'avant
@@ -361,7 +385,7 @@ correction (signature Stripe déjà vérifiée pour le webhook), mais migrer
 vers des modèles explicites améliorerait la lisibilité et la détection
 d'erreurs de type en amont.
 
-### 4. Point 12 — paralléliser les appels Ads API (priorité moyenne, effort moyen)
+### 2. Point 12 — paralléliser les appels Ads API (priorité moyenne, effort moyen)
 `ads_api.py:32` et `:109` — remplacer la boucle séquentielle (jusqu'à 10
 requêtes HTTP, ~15s de timeout chacune dans le pire cas) par des appels
 concurrents (`concurrent.futures.ThreadPoolExecutor` ou
@@ -369,21 +393,13 @@ concurrents (`concurrent.futures.ThreadPoolExecutor` ou
 publicitaire plutôt que par campagne si l'API Meta/TikTok le permet.
 Impact direct sur le temps de réponse de "Importer mes campagnes".
 
-### 5. Point 16 — factoriser `vente/page.tsx` et `vente/fr/page.tsx` (priorité basse, effort moyen)
+### 3. Point 16 — factoriser `vente/page.tsx` et `vente/fr/page.tsx` (priorité basse, effort moyen)
 497 et 511 lignes, sous le seuil de 800 donné mais avec une structure
 quasi dupliquée entre EN et FR. Extraire le contenu commun (sections,
 copy paramétrable par langue) réduirait la duplication et le risque de
 divergence entre les deux versions au fil des éditions.
 
-### 6. Point 10 — pagination explicite (priorité basse, effort faible)
-Pas un risque actif aujourd'hui (toutes les requêtes `SELECT *` sont déjà
-bornées par une clé étrangère), mais ajouter un `LIMIT` explicite (ex.
-200) sur les requêtes de liste (`repository.py:71,111,174,368,626`,
-`user_accounts.py:137` n'en a pas besoin — clé primaire unique) serait
-une bonne pratique défensive avant que le volume par tenant ne devienne
-un vrai sujet.
-
-### 7. Point 13 (complément) — migrer `user_accounts.py` vers un vrai système de migrations (priorité basse, effort moyen)
+### 4. Point 13 (complément) — migrer `user_accounts.py` vers un vrai système de migrations (priorité basse, effort moyen)
 Les fichiers de référence sont créés (Phase 2), mais `user_accounts.py`
 n'a toujours, dans le code applicatif, aucun mécanisme équivalent à
 `_MIGRATIONS`/`_HEAVY_MIGRATIONS` de `creative_studio/storage/db.py`. Le
