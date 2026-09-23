@@ -439,6 +439,14 @@
     cursor: pointer; font-size: 18px;
     display: flex; align-items: center; justify-content: center;
   }
+  .help-bell {
+    position: fixed; top: 16px; right: 68px; z-index: 45;
+    width: 40px; height: 40px; border-radius: 12px;
+    border: 1px solid var(--border-strong);
+    background: rgba(255,255,255,0.85);
+    cursor: pointer; font-size: 16px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
   .notif-badge {
     position: absolute; top: -5px; right: -5px;
     background: var(--danger); color: #fff;
@@ -477,6 +485,42 @@
   .notif-prefs input[type="email"] {
     width: 100%; padding: 7px 10px; border-radius: 8px;
     border: 1px solid var(--border-strong); font-size: 12.5px;
+  }
+
+  /* ── Tutoriel d'onboarding ── */
+  .onb-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(10,10,20,0.45);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .onb-overlay.show { display: flex; }
+  .onb-modal {
+    width: min(480px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+    overflow: hidden;
+  }
+  .onb-body { padding: 32px 28px 24px; text-align: center; }
+  .onb-icon { font-size: 38px; margin-bottom: 14px; }
+  .onb-title { font-size: 19px; font-weight: 800; color: var(--text); margin-bottom: 10px; }
+  .onb-text { font-size: 13.5px; line-height: 1.6; color: var(--text-muted); }
+  .onb-text b { color: var(--text); }
+  .onb-dots { display: flex; justify-content: center; gap: 6px; padding-top: 20px; }
+  .onb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: background 0.2s, width 0.2s; }
+  .onb-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
+  .onb-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px; border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.015);
+  }
+  .onb-skip { font-size: 12.5px; color: var(--text-muted); cursor: pointer; }
+  .onb-nav { display: flex; gap: 8px; }
+  .onb-btn-prev {
+    padding: 9px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border-strong); background: transparent; cursor: pointer;
   }
 
   .sidebar {
@@ -884,6 +928,7 @@
       <div class="sidebar-brand" style="margin:0"><span class="dot"></span><span>LRS — Pilote</span></div>
     </div>
 
+    <button class="help-bell" id="helpBell" aria-label="Revoir le tutoriel">?</button>
     <button class="notif-bell" id="notifBell" aria-label="Notifications">
       🔔<span class="notif-badge" id="notifBadge"></span>
     </button>
@@ -899,6 +944,20 @@
           Recevoir aussi par email
         </label>
         <input type="email" id="notifEmailAddress" placeholder="vous@email.com" style="display:none" />
+      </div>
+    </div>
+
+    <div class="onb-overlay" id="onbOverlay">
+      <div class="onb-modal">
+        <div class="onb-body" id="onbBody"></div>
+        <div class="onb-dots" id="onbDots"></div>
+        <div class="onb-footer">
+          <span class="onb-skip" id="onbSkip">Passer le tutoriel</span>
+          <div class="onb-nav">
+            <button class="onb-btn-prev" id="onbPrev" style="display:none">Précédent</button>
+            <button class="cta" id="onbNext" style="padding:9px 20px">Suivant</button>
+          </div>
+        </div>
       </div>
     </div>
 
