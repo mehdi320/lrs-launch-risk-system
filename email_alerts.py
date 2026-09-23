@@ -11,6 +11,7 @@
 import datetime
 import os
 import smtplib
+import sys
 from email import encoders as email_encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -182,7 +183,12 @@ def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        # Échec avalé silencieusement jusqu'ici — un vrai souci SMTP
+        # (host injoignable, credentials expirés) était invisible en
+        # prod. Journalisé sur stderr, jamais le mot de passe (audit
+        # sécurité 2026-09-23, point 17).
+        print(f"[email_alerts] Échec d'envoi (alerte chute de score) à {to_email}: {exc}", file=sys.stderr)
         return False
 
 
@@ -273,7 +279,8 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"[email_alerts] Échec d'envoi (digest monitoring) à {to_email}: {exc}", file=sys.stderr)
         return False
 
 
@@ -322,5 +329,8 @@ def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        # Le cas le plus grave des trois : un abonné vient de payer et ne
+        # recevra jamais son lien d'accès sans que personne ne le sache.
+        print(f"[email_alerts] Échec d'envoi (lien magique) à {to_email}: {exc}", file=sys.stderr)
         return False
