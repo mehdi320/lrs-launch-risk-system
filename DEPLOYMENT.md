@@ -82,10 +82,10 @@ choisie.
 - [ ] `docker build .` et `docker compose up` validés localement (non fait
       ici, pas de démon Docker disponible pendant l'écriture de ce
       squelette).
-- [ ] Clés API en place : `OPENAI_API_KEY` et/ou `ANTHROPIC_API_KEY`
-      (l'audit du pilote préfère Claude dès qu'`ANTHROPIC_API_KEY` est
-      configurée — voir `audit_engine.py::run_audit()` — sinon retombe sur
-      OpenAI).
+- [ ] `ANTHROPIC_API_KEY` en place — obligatoire, seul moteur LLM de LRS
+      depuis le 2026-09-23 (OpenAI retiré, voir
+      `audit_engine.py::run_audit()`). Sans elle, audit et Creative
+      Studio échouent avec une erreur claire.
 - [ ] `APP_PASSWORD` + `APP_SECRET_KEY` définis si le pilote doit être
       protégé par mot de passe (sinon accès libre sur `/api/*` — voir
       `PILOT_UI.md` ; le pilote affiche un avertissement au démarrage

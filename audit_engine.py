@@ -1,12 +1,10 @@
-# LRS — Audit Engine (module autonome, sans dépendance Streamlit)
+# LRS — Audit Engine
 #
-# Extrait de app.py pour le pilote UI Apple-style (FastAPI + frontend custom).
-# Contient uniquement : extraction de page, détection de langue/type de page,
-# et l'appel OpenAI qui produit le score LRS. Utilisé par pilot_server.py.
-#
-# Ce module duplique volontairement (pour l'instant) une partie de la logique
-# encore présente dans app.py, le temps de valider le pilote. Si la migration
-# est confirmée, app.py importera directement d'ici au lieu de dupliquer.
+# Utilisé par pilot_server.py (seule interface produit, voir PASSATION.md).
+# Contient : extraction de page, détection de langue/type de page, et
+# l'appel Anthropic (Claude) qui produit le score LRS. OpenAI retiré le
+# 2026-09-23 — Claude exclusivement, voir _run_audit_claude et
+# generate_creative_angles.
 
 import ipaddress
 import json
@@ -22,11 +20,6 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 import trafilatura
-
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
 
 try:
     import anthropic
@@ -99,16 +92,8 @@ def _head_and_tail(full, budget=MAX_PAGE_CHARS):
     )
 
 
-def get_api_key():
-    key = os.getenv("OPENAI_API_KEY", "")
-    if key and key.startswith("sk-"):
-        return key
-    return ""
-
-
 def get_anthropic_api_key():
-    """Miroir de get_api_key() pour Claude — meme pattern que
-    creative_studio/core/llm_client.py::get_anthropic_api_key()."""
+    """Meme pattern que creative_studio/core/llm_client.py::get_anthropic_api_key()."""
     key = os.getenv("ANTHROPIC_API_KEY", "")
     if key and key.startswith("sk-ant-"):
         return key
@@ -649,9 +634,9 @@ def _lang_instruction(page_lang):
 class _AuditJSONParseError(Exception):
     """Levee par _parse_audit_json(strict=True) quand le JSON du LLM est
     illisible. Sert de signal interne pour retenter l'appel (voir
-    _run_audit_openai/_run_audit_claude) au lieu de retourner silencieusement
-    un score 0/20 fictif des la premiere reponse malformee — c'est ce qui
-    causait de faux "0/20" perçus comme un vrai verdict par l'utilisateur."""
+    _run_audit_claude) au lieu de retourner silencieusement un score 0/20
+    fictif des la premiere reponse malformee — c'est ce qui causait de
+    faux "0/20" perçus comme un vrai verdict par l'utilisateur."""
 
 
 def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
@@ -757,64 +742,7 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
     return system, "\n".join(user_parts)
 
 
-# ── APPEL OPENAI (version synchrone, pour l'API) ────────────────
-def _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, market_context, model,
-                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
-    if OpenAI is None:
-        raise ValueError("Librairie openai non installee. Relancez : pip install openai")
-
-    api_key = get_api_key()
-    if not api_key:
-        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans votre fichier .env.")
-
-    client = OpenAI(api_key=api_key)
-    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
-                                               market_context, brand_type, page_type, page_lang)
-
-    raw = ""
-    for attempt in range(3):
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.15,
-                max_tokens=4500,
-                response_format={"type": "json_object"},
-            )
-            raw = response.choices[0].message.content or ""
-            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
-        except _AuditJSONParseError:
-            # JSON illisible malgre response_format=json_object : on retente
-            # comme une erreur reseau plutot que de retourner un score 0/20
-            # fictif des la premiere reponse malformee.
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-                continue
-            break
-        except Exception as e:
-            last_err = str(e)
-            if "api_key" in last_err.lower() or "authentication" in last_err.lower():
-                raise ValueError("Cle API invalide ou expiree. Verifiez votre OPENAI_API_KEY.")
-            if "quota" in last_err.lower() or "billing" in last_err.lower():
-                raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
-            if attempt < 2:
-                time.sleep(2 ** attempt)
-                continue
-            if "rate_limit" in last_err.lower():
-                raise ValueError("Rate limit OpenAI atteint apres 3 tentatives. Attendez et relancez.")
-            raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
-
-    # 3 tentatives, JSON toujours illisible : on retombe sur le resultat
-    # "Analyse incomplete" (comportement historique) plutot que de planter
-    # l'appelant — mais l'utilisateur a maintenant eu 3 vraies chances
-    # d'obtenir un score reel avant d'en arriver la.
-    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
-
-
-# ── APPEL CLAUDE (squelette — meme contrat que _run_audit_openai) ──
+# ── APPEL CLAUDE ──────────────────────────────────────────────────
 def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
                        model=DEFAULT_ANTHROPIC_MODEL,
                        brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
@@ -843,8 +771,8 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
             raw = text_block.text if text_block is not None else ""
             return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
         except _AuditJSONParseError:
-            # Meme logique que _run_audit_openai : JSON illisible -> on
-            # retente plutot que de fabriquer un score 0/20 des le 1er coup.
+            # JSON illisible -> on retente plutot que de fabriquer un
+            # score 0/20 des le 1er coup.
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
@@ -866,22 +794,18 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
     return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
-# ── POINT D'ENTREE UNIQUE — bascule de moteur ────────────────────
+# ── POINT D'ENTREE UNIQUE ─────────────────────────────────────────
 def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
               brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
     """Point d'entree unique de l'audit, appele par pilot_server.py.
 
-    Prefere Claude des que ANTHROPIC_API_KEY est configuree (moteur cible de
-    la migration). Sans cette cle, retombe automatiquement sur OpenAI —
-    comportement strictement inchange tant que la cle Claude n'est pas
-    ajoutee, pour ne pas casser l'audit en production le temps de la
-    migration. `model` reste le nom de modele OpenAI utilise dans la
-    branche de secours ; la branche Claude utilise DEFAULT_ANTHROPIC_MODEL.
+    Anthropic (Claude) exclusivement depuis le 2026-09-23 — OpenAI retire
+    (voir _run_audit_claude ci-dessus). `model` est accepte pour
+    compatibilite avec les appelants existants (pilot_server.py) mais
+    n'est plus utilise : la branche Claude utilise toujours
+    DEFAULT_ANTHROPIC_MODEL, indifferemment de sa valeur.
     """
-    if get_anthropic_api_key():
-        return _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
-                                  brand_type=brand_type, page_type=page_type, page_lang=page_lang)
-    return _run_audit_openai(mode, platform, offer_type, landing_content, ad_text, market_context, model,
+    return _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
                               brand_type=brand_type, page_type=page_type, page_lang=page_lang)
 
 
@@ -957,15 +881,18 @@ def run_funnel_audit(funnel_type, platform, offer_type, url_step1, url_step2, ma
 
 
 # ── GÉNÉRATION D'ANGLES CRÉATIFS (à partir d'une offre, sans landing page) ──
-def generate_creative_angles(offer_description, platform, offer_type, model="gpt-4o-mini"):
-    if OpenAI is None:
-        raise ValueError("Librairie openai non installee. Relancez : pip install openai")
+def generate_creative_angles(offer_description, platform, offer_type, model=None):
+    """Anthropic (Claude) exclusivement depuis le 2026-09-23 — OpenAI retire.
+    `model` accepte pour compatibilite avec pilot_server.py mais ignore
+    (toujours DEFAULT_ANTHROPIC_MODEL), meme convention que run_audit()."""
+    if anthropic is None:
+        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
 
-    api_key = get_api_key()
+    api_key = get_anthropic_api_key()
     if not api_key:
-        raise ValueError("Cle API OpenAI manquante. Ajoutez OPENAI_API_KEY dans votre fichier .env.")
+        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
 
-    client = OpenAI(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key)
     system = (
         "Tu es un copywriter senior specialise en paid traffic (Meta/TikTok/Google Ads). "
         "Tu generes des angles publicitaires, hooks et un script UGC a partir d'une offre. "
@@ -986,36 +913,34 @@ def generate_creative_angles(offer_description, platform, offer_type, model="gpt
         '"script_ugc_20s":"X"}'
     )
 
-    response = None
+    raw = ""
     last_err = None
     for attempt in range(3):
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.7,
+            response = client.messages.create(
+                model=DEFAULT_ANTHROPIC_MODEL,
                 max_tokens=2000,
-                response_format={"type": "json_object"},
+                temperature=0.7,
+                system=system,
+                messages=[{"role": "user", "content": user_prompt}],
             )
+            text_block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+            raw = text_block.text if text_block is not None else ""
             break
         except Exception as e:
             last_err = str(e)
-            if "api_key" in last_err.lower() or "authentication" in last_err.lower():
-                raise ValueError("Cle API invalide ou expiree. Verifiez votre OPENAI_API_KEY.")
-            if "quota" in last_err.lower() or "billing" in last_err.lower():
-                raise ValueError("Quota OpenAI epuise. Verifiez votre solde sur platform.openai.com.")
+            low = last_err.lower()
+            if "authentication" in low or "api_key" in low or "x-api-key" in low:
+                raise ValueError("Cle API Claude invalide ou expiree. Verifiez votre ANTHROPIC_API_KEY.")
+            if "credit balance" in low or "billing" in low:
+                raise ValueError("Credit Claude epuise. Verifiez votre solde sur console.anthropic.com.")
             if attempt < 2:
                 time.sleep(2 ** attempt)
-            else:
-                raise ValueError("Erreur OpenAI apres 3 tentatives : " + last_err)
+                continue
+            if "rate_limit" in low or "overloaded" in low:
+                raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
+            raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
 
-    if response is None:
-        raise ValueError("Erreur OpenAI : pas de reponse apres 3 tentatives.")
-
-    raw = response.choices[0].message.content or ""
     try:
         data = json.loads(raw)
     except Exception:
