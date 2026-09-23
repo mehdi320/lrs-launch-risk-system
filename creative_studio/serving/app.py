@@ -220,6 +220,11 @@ def go_to_payment(test_id: str, request: Request):
     return response
 
 
+_FORM_MAX_FIELDS = 50
+_FORM_MAX_KEY_LEN = 200
+_FORM_MAX_VALUE_LEN = 5000
+
+
 @app.post("/v/{test_id}/submit-form")
 async def submit_form(test_id: str, request: Request):
     """Reçoit la soumission du formulaire multi-étapes d'une page, ou de la
@@ -228,6 +233,13 @@ async def submit_form(test_id: str, request: Request):
     serving/templates.py). Enregistre les valeurs (form_submissions),
     déclenche l'événement FORM_SUBMIT (signal pour core.funnel_analytics),
     puis redirige vers l'étape suivante du funnel comme un CTA classique.
+
+    Endpoint public, non authentifié (formulaire visible par n'importe quel
+    visiteur du funnel) — audit sécurité 2026-09-23, point 9 : sans bornes,
+    rien n'empêchait un nombre de champs ou une taille de valeur arbitraire
+    d'atterrir tel quel dans values_json (SQLite). _FORM_MAX_* définit des
+    limites généreuses pour un formulaire de funnel réel mais qui bornent
+    l'abus.
     """
     test = tests.get(test_id)
     if test is None:
@@ -258,7 +270,16 @@ async def submit_form(test_id: str, request: Request):
         source = FormSubmissionSource(form_data.get("__lrs_source", "page"))
     except ValueError:
         source = FormSubmissionSource.PAGE
-    values = {k: v for k, v in form_data.items() if k != "__lrs_source"}
+
+    # Bornes anti-abus (endpoint public, non authentifié) — voir AUDIT.md
+    # point 9. UploadFile rejeté : ce formulaire n'attend que des champs
+    # texte, jamais un fichier.
+    raw_items = [(k, v) for k, v in form_data.items() if k != "__lrs_source"][:_FORM_MAX_FIELDS]
+    values = {}
+    for k, v in raw_items:
+        if not isinstance(v, str):
+            continue
+        values[str(k)[:_FORM_MAX_KEY_LEN]] = v[:_FORM_MAX_VALUE_LEN]
 
     form_submissions.create(
         FormSubmission(
