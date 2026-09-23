@@ -262,5 +262,140 @@ admin) peut aujourd'hui générer un nombre illimité de requêtes LLM.
 
 ## Phase 2 — Correctifs appliqués
 
-_Complétée après la rédaction de ce rapport — voir section dédiée plus
-bas et les commits de la branche `audit/securite`._
+Un commit par point réellement modifié. Les points 1-8 n'ont **aucun**
+commit associé : NON APPLICABLE (1, 2 — pas de Supabase) ou déjà OK
+(3-8) — rien à corriger, donc pas de commit vide.
+
+### Point 9 — validation de schéma
+**Commit `9329e39`.** `creative_studio/serving/app.py:224-290`
+(`POST /v/{test_id}/submit-form`) — l'endpoint public acceptait un
+nombre de champs et une taille de valeur totalement libres. Bornes
+ajoutées : 50 champs max, 200 caractères par clé, 5000 par valeur ; tout
+champ qui n'est pas une chaîne (upload de fichier) est rejeté
+silencieusement (ce formulaire n'attend jamais de fichier). Validé par
+un test unitaire de la logique de bornage (cas nominal, flood de 500
+champs tronqué à 50, troncature clé/valeur, upload rejeté — tous
+passent) et par un redémarrage du service confirmant qu'il boot
+toujours normalement.
+
+### Point 13 — migrations SQL de référence
+**Commit `35f61d5`.** Aucune base de production touchée. Créé
+`migrations/README.md` (explique le système de migrations versionnées
+déjà réel dans `creative_studio/storage/db.py`, ni remplacé ni modifié),
+`migrations/creative_studio/0001_baseline.sql` (snapshot de l'état réel
+actuel, CHECK élargis inclus) et `migrations/user_accounts/
+0001_baseline.sql`. Les deux fichiers `.sql` chargent sans erreur dans
+une base SQLite en mémoire (17 et 3 tables respectivement) — validé
+avant commit.
+
+### Point 20 — rate limit sur les appels LLM
+**Commit `4293976`.** `pilot_server.py` — ajout de
+`_require_llm_rate_limit` (même principe que le rate limit déjà
+existant sur le login, `_login_rate_limited`), appliqué en dependency
+FastAPI aux 5 endpoints qui appellent un LLM : `/api/audit`,
+`/api/funnel-audit`, `/api/bulk-audit`, `/api/creative-angles`,
+`/api/creative-studio/generate`. Clé = identité applicative (email
+abonné ou admin), budget partagé entre les 5 endpoints. Seuil ajustable
+par variables d'environnement (`LRS_LLM_RATE_LIMIT_MAX`,
+`LRS_LLM_RATE_LIMIT_WINDOW_SECONDS`), 10 requêtes/60s par défaut.
+**Testé en conditions réelles** (seuil abaissé à 3 pour le test) : 3
+premiers appels passent la porte (échec normal plus loin faute de clé
+API — comportement inchangé), 4ᵉ appel → 429, budget confirmé partagé
+entre deux endpoints différents pour la même identité, routes non-LLM
+(`/api/plans`, `/api/health`) non affectées.
+
+### Build et tests après chaque correction
+- `python3 -m py_compile` sur chaque fichier modifié : OK à chaque
+  commit.
+- Les deux services (`pilot_server:app` sur 8600,
+  `creative_studio.serving.app:app` sur 8000) ont été redémarrés après
+  les points 9 et 20 et bootent normalement (`GET /api/health` → 200).
+- `test_stripe_webhook.py` (suite existante, 6 scénarios) — non
+  ré-exécutée dans cette session d'audit car aucun des 3 correctifs ne
+  touche au code qu'elle couvre (webhook Stripe) ; déjà validée 6/6 dans
+  une session précédente sur ce même code.
+
+---
+
+## Phase 3 — Points 10 à 19 : recommandations, non corrigées
+
+Par ordre de priorité (impact réel × effort). Aucun code touché pour
+cette section, conformément à la mission.
+
+### 1. Point 11 — index manquants (priorité haute, effort faible)
+Ajouter dans `creative_studio/storage/db.py` (`_MIGRATIONS`, pattern déjà
+existant) :
+```sql
+CREATE INDEX IF NOT EXISTS idx_products_tenant ON products(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_ab_tests_product ON ab_tests(product_id);
+CREATE INDEX IF NOT EXISTS idx_funnels_product ON funnels(product_id);
+CREATE INDEX IF NOT EXISTS idx_email_sequences_product ON email_sequences(product_id);
+```
+Et dans `user_accounts.py` (`SCHEMA`) :
+```sql
+CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
+```
+Effort minimal (le pattern `_MIGRATIONS` existe déjà, littéralement
+copier une ligne), gain réel dès que le volume par tenant grandit au-delà
+de la bêta actuelle. Pas fait ici pour respecter "ne corrige rien" sur
+les points 10-19.
+
+### 2. Point 20-bis / 17 — logger les exceptions avalées (priorité haute, effort faible)
+Ce n'est pas un point numéroté séparément, mais la vraie conclusion du
+point 17 : les 25 `except Exception:` ne sont presque jamais un vrai
+problème de logique (dégradation contrôlée voulue), mais **aucun ne
+journalise rien** — un échec réel (bug, service tiers cassé) est
+invisible en prod. Ajouter un simple `print(..., file=sys.stderr)` ou un
+`logging.exception(...)` dans chaque bloc coûterait peu et rendrait les
+futurs bugs debuggables. Prioriser `email_alerts.py:185,276,325`
+(échec d'envoi = client qui ne reçoit jamais son accès, actuellement
+invisible) et `creative_studio/serving/app.py:373` (déjà partiellement
+loggé via `print`, à généraliser).
+
+### 3. Point 9-bis — durcir aussi `/checkout/beta` et `/webhook/stripe` (priorité moyenne)
+Hors périmètre strict du point 9 (déjà corrigé), mais dans le même
+esprit : ces deux routes de `creative_studio/serving/app.py` parsent
+`request.body()`/query params sans modèle Pydantic. Moins urgent qu'avant
+correction (signature Stripe déjà vérifiée pour le webhook), mais migrer
+vers des modèles explicites améliorerait la lisibilité et la détection
+d'erreurs de type en amont.
+
+### 4. Point 12 — paralléliser les appels Ads API (priorité moyenne, effort moyen)
+`ads_api.py:32` et `:109` — remplacer la boucle séquentielle (jusqu'à 10
+requêtes HTTP, ~15s de timeout chacune dans le pire cas) par des appels
+concurrents (`concurrent.futures.ThreadPoolExecutor` ou
+`asyncio`+`httpx`), ou utiliser l'endpoint Insights au niveau du compte
+publicitaire plutôt que par campagne si l'API Meta/TikTok le permet.
+Impact direct sur le temps de réponse de "Importer mes campagnes".
+
+### 5. Point 16 — factoriser `vente/page.tsx` et `vente/fr/page.tsx` (priorité basse, effort moyen)
+497 et 511 lignes, sous le seuil de 800 donné mais avec une structure
+quasi dupliquée entre EN et FR. Extraire le contenu commun (sections,
+copy paramétrable par langue) réduirait la duplication et le risque de
+divergence entre les deux versions au fil des éditions.
+
+### 6. Point 10 — pagination explicite (priorité basse, effort faible)
+Pas un risque actif aujourd'hui (toutes les requêtes `SELECT *` sont déjà
+bornées par une clé étrangère), mais ajouter un `LIMIT` explicite (ex.
+200) sur les requêtes de liste (`repository.py:71,111,174,368,626`,
+`user_accounts.py:137` n'en a pas besoin — clé primaire unique) serait
+une bonne pratique défensive avant que le volume par tenant ne devienne
+un vrai sujet.
+
+### 7. Point 13 (complément) — migrer `user_accounts.py` vers un vrai système de migrations (priorité basse, effort moyen)
+Les fichiers de référence sont créés (Phase 2), mais `user_accounts.py`
+n'a toujours, dans le code applicatif, aucun mécanisme équivalent à
+`_MIGRATIONS`/`_HEAVY_MIGRATIONS` de `creative_studio/storage/db.py`. Le
+jour où `users`/`magic_links`/`processed_stripe_events` doit évoluer, il
+faudra soit y répliquer ce pattern, soit adopter un outil dédié
+(Alembic).
+
+### Non applicables / rien à recommander
+- **Point 14** (any / types Supabase) — rien à corriger, code déjà
+  propre.
+- **Point 15** ("use client" superflu) — rien à corriger, usage déjà
+  correct.
+- **Point 18** (realtime sans unsubscribe) — non applicable, pas de
+  realtime dans le repo.
+- **Point 19** (TODO IA) — rien à corriger, aucun TODO trouvé.
