@@ -16,6 +16,14 @@ export const STRIPE_LINK =
     ? process.env.NEXT_PUBLIC_STRIPE_LINK
     : "#";
 
+// Widget Stripe Buy Button — alternative au Payment Link ci-dessus. Clé
+// publique (pk_...), volontairement publique par conception, pas un
+// secret : embarquée dans le JS client, comme prévu par Stripe. Priorité
+// sur STRIPE_LINK quand les deux variables sont renseignées (voir
+// app/layout.tsx pour le chargement du script associé).
+export const STRIPE_BUY_BUTTON_ID = process.env.NEXT_PUBLIC_STRIPE_BUY_BUTTON_ID || "";
+export const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
+
 export function PrimaryCta({
   children,
   className = "",
@@ -23,6 +31,24 @@ export function PrimaryCta({
   children: React.ReactNode;
   className?: string;
 }) {
+  if (STRIPE_BUY_BUTTON_ID && STRIPE_PUBLISHABLE_KEY) {
+    // <stripe-buy-button> est un web component (custom element) défini par
+    // le script chargé dans layout.tsx — pas un composant React, d'où le
+    // dangerouslySetInnerHTML : JSX/TSX ne connaît pas cette balise et la
+    // typerait en erreur sinon. Contenu entièrement statique (deux valeurs
+    // d'environnement contrôlées par nous, jamais une entrée utilisateur),
+    // donc aucun risque d'injection ici.
+    return (
+      <span
+        className={"inline-block " + className}
+        dangerouslySetInnerHTML={{
+          __html:
+            `<stripe-buy-button buy-button-id="${STRIPE_BUY_BUTTON_ID}" ` +
+            `publishable-key="${STRIPE_PUBLISHABLE_KEY}"></stripe-buy-button>`,
+        }}
+      />
+    );
+  }
   return (
     <a
       href={STRIPE_LINK}

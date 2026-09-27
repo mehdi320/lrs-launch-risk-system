@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import CookieConsent from "@/components/CookieConsent";
 
@@ -22,6 +23,11 @@ export const metadata: Metadata = {
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID || "";
 const GTAG_ID = process.env.NEXT_PUBLIC_GTAG_ID || "";
 
+// Script du widget Stripe Buy Button — chargé seulement si le bouton est
+// réellement configuré (voir components/vente-shared.tsx::PrimaryCta),
+// même philosophie que les pixels ci-dessus : rien ne charge par défaut.
+const STRIPE_BUY_BUTTON_ID = process.env.NEXT_PUBLIC_STRIPE_BUY_BUTTON_ID || "";
+
 export default function RootLayout({
   children,
 }: {
@@ -32,6 +38,9 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         {children}
         <CookieConsent metaPixelId={META_PIXEL_ID} gtagId={GTAG_ID} />
+        {STRIPE_BUY_BUTTON_ID && (
+          <Script src="https://js.stripe.com/v3/buy-button.js" strategy="afterInteractive" />
+        )}
       </body>
     </html>
   );
