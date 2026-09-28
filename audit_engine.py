@@ -54,6 +54,22 @@ MAX_PAGE_CHARS = 20000
 # creative_studio/core/llm_client.py::DEFAULT_MODEL.
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
 
+# Moteur local Ollama — dev uniquement (generations de test gratuites, ex.
+# demos pour les videos marketing). Active par LLM_BACKEND=ollama dans le
+# .env local ; ignore des que LRS_ENV=production pour que la prod reste
+# toujours sur Claude/OpenAI, meme si la variable fuit dans un deploiement.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+# Le contexte par defaut d'Ollama (4096 tokens) tronquerait le prompt
+# d'audit (methodologie + page jusqu'a MAX_PAGE_CHARS ~ 10-15k tokens).
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+
+
+def use_ollama():
+    if os.getenv("LRS_ENV", "").strip().lower() == "production":
+        return False
+    return os.getenv("LLM_BACKEND", "").strip().lower() == "ollama"
+
 
 def load_txt(filename):
     try:
@@ -866,6 +882,45 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
     return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
+# ── APPEL OLLAMA (local, dev uniquement — meme contrat) ──────────
+def _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
+                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    # API native /api/chat plutot que l'endpoint compatible OpenAI : seule
+    # la native accepte num_ctx par requete.
+    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
+                                               market_context, brand_type, page_type, page_lang)
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt},
+        ],
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0.15, "num_ctx": OLLAMA_NUM_CTX, "num_predict": 4500},
+    }
+
+    raw = ""
+    for attempt in range(3):
+        try:
+            resp = requests.post(OLLAMA_HOST + "/api/chat", json=payload, timeout=600)
+        except requests.ConnectionError:
+            raise ValueError("Ollama injoignable sur " + OLLAMA_HOST + ". Lancez l'app Ollama (ou `ollama serve`).")
+        except requests.Timeout:
+            raise ValueError("Ollama n'a pas repondu en 10 min. Modele trop lourd pour la machine ?")
+        if resp.status_code == 404:
+            raise ValueError("Modele Ollama '" + OLLAMA_MODEL + "' absent. Lancez : ollama pull " + OLLAMA_MODEL)
+        if resp.status_code != 200:
+            raise ValueError("Erreur Ollama " + str(resp.status_code) + " : " + resp.text[:300])
+        raw = (resp.json().get("message") or {}).get("content", "")
+        try:
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            continue
+
+    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
+
+
 # ── POINT D'ENTREE UNIQUE — bascule de moteur ────────────────────
 def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
               brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
@@ -877,7 +932,13 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     ajoutee, pour ne pas casser l'audit en production le temps de la
     migration. `model` reste le nom de modele OpenAI utilise dans la
     branche de secours ; la branche Claude utilise DEFAULT_ANTHROPIC_MODEL.
+
+    LLM_BACKEND=ollama (hors production) court-circuite les deux : audit
+    100 % local via OLLAMA_MODEL, sans cle ni cout.
     """
+    if use_ollama():
+        return _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
+                                  brand_type=brand_type, page_type=page_type, page_lang=page_lang)
     if get_anthropic_api_key():
         return _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
                                   brand_type=brand_type, page_type=page_type, page_lang=page_lang)
