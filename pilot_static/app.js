@@ -1,6 +1,25 @@
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
+// ── Traitements longs en cours (Multi-Audit) ─────────────
+// Chaque sous-vue reconstruit son HTML à chaque navigation : sans ce suivi,
+// revenir sur l'onglet pendant qu'un audit tournait réaffichait un bouton
+// actif et masquait le chargement, d'où un risque de double lancement.
+// Clé = préfixe des IDs (bulk, cmp, funnel, ab).
+const _running = new Set();
+function setRunning(prefix, on) {
+  if (on) _running.add(prefix); else _running.delete(prefix);
+  syncRunning(prefix);
+}
+function syncRunning(prefix) {
+  const btn = $('#' + prefix + 'RunBtn');
+  const box = $('#' + prefix + 'LoadingBox');
+  if (!btn || !box) return;
+  const on = _running.has(prefix);
+  btn.disabled = on;
+  box.style.display = on ? 'flex' : 'none';
+}
+
 // ── Auth (mot de passe partagé) ──────────────────────────
 async function attemptLogin() {
   const pwd = $('#loginPwd').value;
@@ -314,6 +333,10 @@ function renderMultiBulkShell() {
       <div class="field">
         <label class="field-label" for="bulkUrls">${t("URLs à auditer (une par ligne, 20 max)")}</label>
         <textarea id="bulkUrls" placeholder="https://page1.com&#10;https://page2.com&#10;https://concurrent.com" style="min-height:140px"></textarea>
+        <label class="cta-secondary" style="display:inline-block;margin-top:8px;cursor:pointer">
+          ${t("📂 Importer un CSV")}
+          <input type="file" id="bulkCsvInput" accept=".csv,.txt,text/csv,text/plain" style="display:none" />
+        </label>
       </div>
       <div class="row">
         <div class="field">
@@ -359,6 +382,45 @@ function renderMultiBulkShell() {
   `;
   ['bulkModeSeg', 'bulkPlatformSeg', 'bulkOfferSeg', 'bulkBrandSeg'].forEach(setupSegmented);
   $('#bulkRunBtn').addEventListener('click', runBulkAudit);
+  $('#bulkCsvInput').addEventListener('change', importBulkCsv);
+  syncRunning('bulk');
+  if (_lastBulkResults) renderBulkResults(_lastBulkResults);
+}
+
+// Import CSV : récupère toute cellule qui ressemble à une URL http(s),
+// quelle que soit la colonne (export Ads Manager, liste brute, etc.).
+async function importBulkCsv(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const found = (text.match(/https?:\/\/[^\s,;"']+/g) || []);
+  const existing = $('#bulkUrls').value.split('\n').map(u => u.trim()).filter(Boolean);
+  const urls = [...new Set([...existing, ...found])].slice(0, 20);
+  $('#bulkUrls').value = urls.join('\n');
+  const errBox = $('#bulkErrorBox');
+  if (!found.length) {
+    errBox.textContent = t('Aucune URL trouvée dans ce fichier.');
+    errBox.style.display = 'block';
+  } else {
+    errBox.style.display = 'none';
+  }
+  e.target.value = '';
+}
+
+let _lastBulkResults = null;
+
+function exportBulkCsv() {
+  const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const header = ['URL', 'Score', 'Hook', 'Offer', 'Trust', 'Friction', t('Décision'), t('Erreur')];
+  const lines = (_lastBulkResults || []).map(r => [
+    r.url, r.score, r.hook, r.offer, r.trust, r.friction, r.decision, r.error,
+  ].map(esc).join(','));
+  const blob = new Blob(['\ufeff' + [header.map(esc).join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'LRS_bulk_audit.csv';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 async function runBulkAudit() {
@@ -370,8 +432,7 @@ async function runBulkAudit() {
     errBox.style.display = 'block';
     return;
   }
-  $('#bulkRunBtn').disabled = true;
-  $('#bulkLoadingBox').style.display = 'flex';
+  setRunning('bulk', true);
   $('#bulkResults').innerHTML = '';
 
   try {
@@ -387,8 +448,7 @@ async function runBulkAudit() {
       }),
     });
     const data = await res.json();
-    $('#bulkLoadingBox').style.display = 'none';
-    $('#bulkRunBtn').disabled = false;
+    setRunning('bulk', false);
     if (!res.ok) {
       errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
@@ -396,14 +456,14 @@ async function runBulkAudit() {
     }
     renderBulkResults(data.results || []);
   } catch (err) {
-    $('#bulkLoadingBox').style.display = 'none';
-    $('#bulkRunBtn').disabled = false;
+    setRunning('bulk', false);
     errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
 
 function renderBulkResults(results) {
+  _lastBulkResults = results;
   const ok = results.filter(r => r.score !== null);
   const errors = results.filter(r => r.score === null);
 
@@ -445,12 +505,16 @@ function renderBulkResults(results) {
 
   $('#bulkResults').innerHTML = `
     <div class="dash-section fade-up">
-      <h2>${t('Résultats — {n} page(s) auditée(s)', { n: results.length })}</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h2>${t('Résultats — {n} page(s) auditée(s)', { n: results.length })}</h2>
+        <button class="cta-secondary" id="bulkExportBtn">${t("⬇️ Exporter en CSV")}</button>
+      </div>
       ${podiumHtml}
       ${listHtml}
     </div>
     ${errorsHtml}
   `;
+  $('#bulkExportBtn').addEventListener('click', exportBulkCsv);
 }
 
 // ── Comparaison / Concurrents (vue partagée, /api/compare) ──
@@ -500,6 +564,7 @@ function renderCompareShell(containerId, cfg) {
   `;
   ['cmpModeSeg', 'cmpPlatformSeg'].forEach(setupSegmented);
   $('#cmpRunBtn').addEventListener('click', runCompare);
+  syncRunning('cmp');
 }
 
 async function runCompare() {
@@ -512,8 +577,7 @@ async function runCompare() {
     errBox.style.display = 'block';
     return;
   }
-  $('#cmpRunBtn').disabled = true;
-  $('#cmpLoadingBox').style.display = 'flex';
+  setRunning('cmp', true);
   $('#cmpResults').innerHTML = '';
 
   try {
@@ -527,8 +591,7 @@ async function runCompare() {
       }),
     });
     const data = await res.json();
-    $('#cmpLoadingBox').style.display = 'none';
-    $('#cmpRunBtn').disabled = false;
+    setRunning('cmp', false);
     if (!res.ok) {
       errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
@@ -536,8 +599,7 @@ async function runCompare() {
     }
     renderCompareResults(data);
   } catch (err) {
-    $('#cmpLoadingBox').style.display = 'none';
-    $('#cmpRunBtn').disabled = false;
+    setRunning('cmp', false);
     errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
@@ -547,7 +609,8 @@ function renderCompareResults(data) {
   const ca = data.a.result._c || {};
   const cb = data.b.result._c || {};
   const sa = ca.score || 0, sb = cb.score || 0;
-  const winnerIsA = sa >= sb;
+  const winnerIsA = sa > sb;
+  const winnerIsB = sb > sa;
 
   const rows = [
     ['Hook', 'hook', 5], ['Offer', 'offer', 5], ['Trust', 'trust', 5], ['Friction', 'friction', 5], ['Total', 'score', 20],
@@ -568,12 +631,13 @@ function renderCompareResults(data) {
       </div>
       <div class="vs-mid">
         <div class="vs-mid-label">VS</div>
+        ${!winnerIsA && !winnerIsB ? `<div class="vs-mid-val" style="color:var(--text-muted)">${t('🤝 Égalité')}</div>` : ''}
       </div>
-      <div class="vs-card ${!winnerIsA ? 'winner' : ''}">
+      <div class="vs-card ${winnerIsB ? 'winner' : ''}">
         <div class="vs-tag" style="color:var(--warning)">${escapeHtml(data.b.label)}</div>
         <div class="vs-score" style="color:${scoreColor(sb)}">${sb}<span class="vs-den">/20</span></div>
         <div class="vs-decision" style="color:${scoreColor(sb)}">${escapeHtml(cb.decision || '')}</div>
-        ${!winnerIsA ? `<div class="vs-crown">${t('👑 MEILLEUR SCORE')}</div>` : ''}
+        ${winnerIsB ? `<div class="vs-crown">${t('👑 MEILLEUR SCORE')}</div>` : ''}
       </div>
     </div>
     <div class="section fade-up">
@@ -637,6 +701,7 @@ function renderFunnelShell() {
   `;
   ['funnelTypeSeg', 'funnelPlatformSeg', 'funnelOfferSeg'].forEach(setupSegmented);
   $('#funnelRunBtn').addEventListener('click', runFunnelAudit);
+  syncRunning('funnel');
 }
 
 async function runFunnelAudit() {
@@ -649,8 +714,7 @@ async function runFunnelAudit() {
     errBox.style.display = 'block';
     return;
   }
-  $('#funnelRunBtn').disabled = true;
-  $('#funnelLoadingBox').style.display = 'flex';
+  setRunning('funnel', true);
   $('#funnelResults').innerHTML = '';
 
   try {
@@ -665,8 +729,7 @@ async function runFunnelAudit() {
       }),
     });
     const data = await res.json();
-    $('#funnelLoadingBox').style.display = 'none';
-    $('#funnelRunBtn').disabled = false;
+    setRunning('funnel', false);
     if (!res.ok) {
       errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
@@ -674,8 +737,7 @@ async function runFunnelAudit() {
     }
     renderFunnelResults(data);
   } catch (err) {
-    $('#funnelLoadingBox').style.display = 'none';
-    $('#funnelRunBtn').disabled = false;
+    setRunning('funnel', false);
     errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
@@ -814,6 +876,7 @@ async function renderABTestShell() {
   `;
   ['abPlatformSeg', 'abTypeSeg'].forEach(setupSegmented);
   $('#abRunBtn').addEventListener('click', runABTest);
+  syncRunning('ab');
   await loadExistingABTests();
 }
 
@@ -829,8 +892,7 @@ async function runABTest() {
     errBox.style.display = 'block';
     return;
   }
-  $('#abRunBtn').disabled = true;
-  $('#abLoadingBox').style.display = 'flex';
+  setRunning('ab', true);
   $('#abResults').innerHTML = '';
 
   try {
@@ -845,8 +907,7 @@ async function runABTest() {
       body: JSON.stringify(payload),
     });
     const data = await res.json();
-    $('#abLoadingBox').style.display = 'none';
-    $('#abRunBtn').disabled = false;
+    setRunning('ab', false);
     if (!res.ok) {
       errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
@@ -855,8 +916,7 @@ async function runABTest() {
     renderABTestResult(data);
     renderExistingABTests(data.abtests);
   } catch (err) {
-    $('#abLoadingBox').style.display = 'none';
-    $('#abRunBtn').disabled = false;
+    setRunning('ab', false);
     errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
@@ -939,7 +999,7 @@ function renderExistingABTests(abtests) {
                 <span style="color:var(--accent)">A:${r.score_a}</span>
                 <span style="color:var(--text-muted)">vs</span>
                 <span style="color:var(--warning)">B:${r.score_b}</span>
-                <span style="font-weight:700;color:${r.winner === 'A' ? 'var(--accent)' : r.winner === 'B' ? 'var(--warning)' : 'var(--text-muted)'}">→ ${t('{w} gagne', { w: r.winner })}</span>
+                <span style="font-weight:700;color:${r.winner === 'A' ? 'var(--accent)' : r.winner === 'B' ? 'var(--warning)' : 'var(--text-muted)'}">→ ${r.winner === 'A' || r.winner === 'B' ? t('{w} gagne', { w: r.winner }) : t('Égalité')}</span>
               </div>
             `).join('')}
           </div>
@@ -949,6 +1009,7 @@ function renderExistingABTests(abtests) {
   `;
   $$('#abExisting [data-del-ab]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(t('Supprimer définitivement cet élément ?'))) return;
       try {
         await fetch('/api/abtests/' + encodeURIComponent(btn.dataset.delAb), { method: 'DELETE' });
         await loadExistingABTests();
@@ -1152,7 +1213,7 @@ function renderSuiviMonitoring(selectedUrl) {
       </div>
       <div class="field" style="margin-top:14px">
         <label class="field-label" for="schAlertEmail">${t("📧 Email alerte (optionnel)")}</label>
-        <input type="text" id="schAlertEmail" placeholder="${t("vous@email.com — alerte si le score chute de ≥2 pts")}" />
+        <input type="email" id="schAlertEmail" placeholder="${t("vous@email.com — alerte si le score chute de ≥2 pts")}" />
       </div>
       <button class="cta" id="schCreateBtn">${t("⏰ Planifier")}</button>
       <div class="error-box" id="schErrorBox"></div>
@@ -1241,6 +1302,7 @@ function renderSuiviMonitoring(selectedUrl) {
 
   $$('#suiviSubContent [data-del-sched]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(t('Supprimer définitivement cet élément ?'))) return;
       try {
         await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.delSched), { method: 'DELETE' });
         loadSuiviMonitoring(selectedUrl);
@@ -1375,6 +1437,7 @@ function renderSuiviProjects(projects) {
 
   $$('#suiviSubContent [data-del-proj]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(t('Supprimer définitivement cet élément ?'))) return;
       try {
         await fetch('/api/projects/' + encodeURIComponent(btn.dataset.delProj), { method: 'DELETE' });
         loadSuiviProjects();
@@ -1530,6 +1593,7 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
 
   $$('#suiviSubContent [data-del-camp]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(t('Supprimer définitivement cet élément ?'))) return;
       try {
         await fetch('/api/campaigns/' + encodeURIComponent(btn.dataset.delCamp), { method: 'DELETE' });
         loadSuiviCampaigns();
@@ -1569,7 +1633,7 @@ function renderSuiviAdsConnector(creds) {
     $('#adsConnForm').innerHTML = `
       <div class="field">
         <label class="field-label">${isMeta ? 'Access Token Meta' : 'Access Token TikTok'}</label>
-        <input type="password" id="adsToken" placeholder="${isMeta ? 'EAAxxxxx...' : 'act_xxxxx...'}" />
+        <input type="password" id="adsToken" placeholder="${isMeta ? 'EAAxxxxx...' : t('Token TikTok Ads')}" />
       </div>
       <div class="field" style="margin-top:14px">
         <label class="field-label">${isMeta ? 'Ad Account ID' : 'Advertiser ID'}</label>
@@ -1583,14 +1647,20 @@ function renderSuiviAdsConnector(creds) {
       <div id="adsImportResults"></div>
     `;
     $('#adsSaveBtn').addEventListener('click', async () => {
+      const errBox = $('#adsConnErrorBox');
+      errBox.style.display = 'none';
       try {
         const res = await fetch('/api/ads-connector/creds', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ platform, token: $('#adsToken').value, account_id: $('#adsAccId').value }),
         });
-        if (res.ok) loadSuiviAdsConnector();
+        if (res.ok) { loadSuiviAdsConnector(); return; }
+        const data = await res.json();
+        errBox.textContent = data.detail || t('Erreur.');
+        errBox.style.display = 'block';
       } catch (err) {
-        console.error('Erreur sauvegarde identifiants API Pub :', err);
+        errBox.textContent = t('Erreur réseau : ') + err.message;
+        errBox.style.display = 'block';
       }
     });
     $('#adsImportBtn').addEventListener('click', async () => {
@@ -2371,6 +2441,7 @@ function renderSwipeFiles(swipes) {
 
   $$('#ressourcesSubContent [data-del-swipe]').forEach(btn => {
     btn.addEventListener('click', async () => {
+      if (!confirm(t('Supprimer définitivement cet élément ?'))) return;
       try {
         const [cat, idx] = btn.dataset.delSwipe.split(':');
         await fetch(`/api/swipefiles/${cat}/${idx}`, { method: 'DELETE' });

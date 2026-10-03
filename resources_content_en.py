@@ -499,7 +499,7 @@ Try it now → [Link]
 }
 
 CHANGELOG_VERSIONS = [
-    {"version": "V2.6 — Today", "items": [
+    {"version": "V2.6 — August 2026", "items": [
         "🆕 Bulk Audit: audit up to 20 URLs in 1 click + CSV import + CSV export of results",
         "🆕 Monitoring: score alerts (drop/gain ≥ 2 pts), score trend per page",
         "🆕 Automatic scheduled audits: checks every 7/14/30 days, run at startup",

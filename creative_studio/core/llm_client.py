@@ -19,22 +19,15 @@ DEFAULT_MODEL = "claude-opus-5"
 
 
 def get_anthropic_api_key() -> str:
-    """Résout la clé API Claude — variable d'env d'abord, puis st.secrets.
+    """Résout la clé API Claude depuis la variable d'environnement.
 
-    Miroir du pattern get_api_key() existant dans app.py pour OPENAI_API_KEY.
+    Plus de repli sur st.secrets : lire st.secrets fait réécrire par Streamlit
+    toutes les clés racine de .streamlit/secrets.toml dans os.environ, ce qui
+    écrasait en cours d'exécution APP_PASSWORD / OPENAI_API_KEY du pilote
+    FastAPI avec les valeurs de l'ancienne app Streamlit.
     """
     key = os.getenv("ANTHROPIC_API_KEY", "")
-    if key.startswith("sk-ant-"):
-        return key
-    try:
-        import streamlit as st
-
-        key = st.secrets.get("ANTHROPIC_API_KEY", "")
-        if key.startswith("sk-ant-"):
-            return key
-    except Exception:
-        pass
-    return ""
+    return key if key.startswith("sk-ant-") else ""
 
 
 def build_client() -> "anthropic.Anthropic":

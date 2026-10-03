@@ -12,6 +12,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import secrets as _secrets
 import sys
 import time
@@ -1173,6 +1174,11 @@ class AdsCredsRequest(BaseModel):
 
 @app.post("/api/ads-connector/creds")
 def save_ads_creds_endpoint(req: AdsCredsRequest):
+    # Refuse les champs vides : le champ token est un input password qui
+    # revient vide après rechargement, donc re-sauvegarder pour changer le
+    # seul ID de compte effaçait silencieusement le token enregistré.
+    if not req.token.strip() or not req.account_id.strip():
+        raise HTTPException(status_code=400, detail=tr("Token et ID de compte requis.", "Token and account ID required."))
     creds = _load_ads_creds()
     if req.platform == "meta":
         creds["meta_token"] = req.token.strip()
@@ -1644,6 +1650,9 @@ def list_schedule():
     return {"schedule": out}
 
 
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+
+
 class ScheduleCreateRequest(BaseModel):
     url: str = ""
     freq_days: int = Field(default=7, ge=1, le=365)
@@ -1659,6 +1668,9 @@ def create_schedule(req: ScheduleCreateRequest):
     url = req.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail=tr("URL requise.", "URL required."))
+    alert_email = req.alert_email.strip()
+    if alert_email and not _EMAIL_RE.fullmatch(alert_email):
+        raise HTTPException(status_code=400, detail=tr("Email d'alerte invalide.", "Invalid alert email."))
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     # Suffixe aléatoire : l'horodatage seul (à la seconde) faisait qu'une
     # deuxième planification créée dans la même seconde écrasait la première.
@@ -1667,7 +1679,7 @@ def create_schedule(req: ScheduleCreateRequest):
         "url": url, "freq_days": req.freq_days, "mode": req.mode,
         "platform": req.platform, "offer_type": req.offer_type, "brand_type": req.brand_type,
         "enabled": True, "last_run": "", "last_score": None, "last_error": "",
-        "alert_email": req.alert_email.strip(),
+        "alert_email": alert_email,
         "created": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"),
     }
     save_json_file(SCHEDULE_FILE(), schedule)
