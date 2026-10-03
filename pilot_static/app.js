@@ -88,11 +88,184 @@ function setupSidebar() {
 
 // ── Monitoring : vérification des audits planifiés en retard ─
 function checkDueMonitoring() {
-  fetch('/api/monitoring/check', { method: 'POST' }).catch(() => {});
+  fetch('/api/monitoring/check', { method: 'POST' })
+    .then(() => loadNotifications())
+    .catch(() => {});
+}
+
+// ── Centre de notifications (tout reste dans LRS — l'email est optionnel) ─
+function renderNotifItem(n) {
+  return `
+    <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}">
+      <div class="notif-item-title">${n.kind === 'score_drop' ? '⚠️' : '📊'} ${escapeHtml(n.title)}</div>
+      <div>${escapeHtml(n.message)}</div>
+      <div class="notif-item-meta">${escapeHtml(n.created_at)}</div>
+    </div>
+  `;
+}
+
+async function loadNotifications() {
+  try {
+    const res = await fetch('/api/notifications');
+    if (!res.ok) return;
+    const data = await res.json();
+    const list = $('#notifList');
+    list.innerHTML = data.notifications.length
+      ? data.notifications.map(renderNotifItem).join('')
+      : '<div class="notif-empty">Aucune notification pour l’instant.</div>';
+    const badge = $('#notifBadge');
+    if (data.unread_count > 0) {
+      badge.textContent = data.unread_count > 9 ? '9+' : String(data.unread_count);
+      badge.classList.add('show');
+    } else {
+      badge.classList.remove('show');
+    }
+  } catch (err) { /* silencieux — pas critique pour le reste de l'app */ }
+}
+
+async function loadNotificationPrefs() {
+  try {
+    const res = await fetch('/api/notifications/prefs');
+    if (!res.ok) return;
+    const prefs = await res.json();
+    $('#notifEmailEnabled').checked = prefs.email_enabled;
+    $('#notifEmailAddress').value = prefs.email || '';
+    $('#notifEmailAddress').style.display = prefs.email_enabled ? 'block' : 'none';
+  } catch (err) { /* silencieux */ }
+}
+
+async function saveNotificationPrefs() {
+  const email_enabled = $('#notifEmailEnabled').checked;
+  const email = $('#notifEmailAddress').value.trim();
+  try {
+    await fetch('/api/notifications/prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email_enabled, email }),
+    });
+  } catch (err) { /* silencieux */ }
+}
+
+function setupNotifications() {
+  const bell = $('#notifBell');
+  const panel = $('#notifPanel');
+
+  bell.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) loadNotifications();
+  });
+  document.addEventListener('click', (e) => {
+    if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== bell) {
+      panel.classList.remove('open');
+    }
+  });
+
+  $('#notifMarkAllRead').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/notifications/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    loadNotifications();
+  });
+
+  $('#notifList').addEventListener('click', async (e) => {
+    const item = e.target.closest('.notif-item');
+    if (!item || !item.classList.contains('unread')) return;
+    item.classList.remove('unread');
+    await fetch('/api/notifications/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [item.dataset.id] }),
+    });
+    loadNotifications();
+  });
+
+  $('#notifEmailEnabled').addEventListener('change', (e) => {
+    $('#notifEmailAddress').style.display = e.target.checked ? 'block' : 'none';
+    saveNotificationPrefs();
+  });
+  $('#notifEmailAddress').addEventListener('change', saveNotificationPrefs);
+
+  loadNotificationPrefs();
+  loadNotifications();
+}
+
+// ── Tutoriel d'onboarding ──────────────────────────────────
+const ONB_STEPS = [
+  {
+    icon: '🚦', title: 'Bienvenue sur LRS™',
+    text: "LRS audite votre page de vente et/ou votre publicité <b>avant</b> que vous ne dépensiez en pub, et vous dit exactement quoi corriger. Ce tour rapide fait le point sur l'essentiel en moins d'une minute.",
+  },
+  {
+    icon: '🔍', title: 'Lancer un audit',
+    text: "Onglet <b>Audit</b> : collez une URL et/ou un texte de pub. Trois modes — <b>Funnel Only</b> (juste la page), <b>Ads Only</b> (juste la pub), <b>Full Risk</b> (les deux, avec détection des incohérences). Pour un advertorial suivi d'une page de paiement, le mode <b>Funnel 2 étapes</b> (dans Multi-Audit) les audite ensemble.",
+  },
+  {
+    icon: '📊', title: 'Comprendre le score',
+    text: "Chaque audit donne un score <b>/20</b> sur 4 axes (Hook, Offre, Confiance, Friction) et un verdict net : Ne pas lancer / Tester petit budget / Prêt à scaler. Vous recevez aussi un plan d'action priorisé et un rewrite complet — headline, CTA, garantie, FAQ.",
+  },
+  {
+    icon: '🔔', title: 'Suivi automatique',
+    text: "Onglet <b>Suivi</b> : planifiez un audit récurrent sur une page. Si le score chute, vous êtes prévenu directement ici — cliquez la cloche en haut à droite. L'email est optionnel, à cocher dans les préférences de la cloche si vous le voulez en plus.",
+  },
+  {
+    icon: '🎨', title: 'Creative Studio',
+    text: "Onglet <b>Creative Studio</b> : générez du copy, testez des variantes en A/B avec garde-fous statistiques, construisez un funnel multi-étapes complet (formulaires, popups, séquences email).",
+  },
+  {
+    icon: '🚀', title: 'À vous de jouer',
+    text: "Vous pouvez revoir ce tutoriel à tout moment avec le bouton <b>?</b> à côté de la cloche. Lancez votre premier audit maintenant.",
+  },
+];
+let _onbStep = 0;
+
+function renderOnbStep() {
+  const step = ONB_STEPS[_onbStep];
+  $('#onbBody').innerHTML = `
+    <div class="onb-icon">${step.icon}</div>
+    <div class="onb-title">${step.title}</div>
+    <div class="onb-text">${step.text}</div>
+  `;
+  $('#onbDots').innerHTML = ONB_STEPS.map((_, i) =>
+    `<span class="onb-dot ${i === _onbStep ? 'active' : ''}"></span>`
+  ).join('');
+  $('#onbPrev').style.display = _onbStep === 0 ? 'none' : 'inline-block';
+  $('#onbNext').textContent = _onbStep === ONB_STEPS.length - 1 ? 'Terminer' : 'Suivant';
+}
+
+function openOnboarding() {
+  _onbStep = 0;
+  renderOnbStep();
+  $('#onbOverlay').classList.add('show');
+}
+
+function closeOnboarding() {
+  $('#onbOverlay').classList.remove('show');
+  fetch('/api/onboarding/complete', { method: 'POST' }).catch(() => {});
+}
+
+function setupOnboarding() {
+  $('#onbNext').addEventListener('click', () => {
+    if (_onbStep === ONB_STEPS.length - 1) { closeOnboarding(); return; }
+    _onbStep++;
+    renderOnbStep();
+  });
+  $('#onbPrev').addEventListener('click', () => {
+    if (_onbStep > 0) { _onbStep--; renderOnbStep(); }
+  });
+  $('#onbSkip').addEventListener('click', closeOnboarding);
+  $('#helpBell').addEventListener('click', openOnboarding);
+
+  fetch('/api/onboarding/status')
+    .then(res => res.json())
+    .then(data => { if (!data.onboarded) openOnboarding(); })
+    .catch(() => {});
 }
 
 function initApp() {
   setupSidebar();
+  setupNotifications();
+  setupOnboarding();
   checkDueMonitoring();
   loadDashboard();
 }
@@ -1211,10 +1384,9 @@ function renderSuiviMonitoring(selectedUrl) {
           <button data-val="Marque etablie">${t("Marque établie")}</button>
         </div>
       </div>
-      <div class="field" style="margin-top:14px">
-        <label class="field-label" for="schAlertEmail">${t("📧 Email alerte (optionnel)")}</label>
-        <input type="email" id="schAlertEmail" placeholder="${t("vous@email.com — alerte si le score chute de ≥2 pts")}" />
-      </div>
+      <p style="margin-top:14px;font-size:12.5px;color:var(--text-muted)">
+        ${t("🔔 Une chute de score ≥2 pts apparaît dans vos notifications (cloche en haut). Pour recevoir aussi un email, activez-le dans les préférences de notification.")}
+      </p>
       <button class="cta" id="schCreateBtn">${t("⏰ Planifier")}</button>
       <div class="error-box" id="schErrorBox"></div>
     </div>
@@ -1288,7 +1460,6 @@ function renderSuiviMonitoring(selectedUrl) {
           platform: $('#schPlat').value,
           offer_type: $('#schOffer').value,
           brand_type: brandBtn ? brandBtn.dataset.val : 'Nouveau lancement',
-          alert_email: $('#schAlertEmail').value.trim(),
         }),
       });
       const data = await res.json();
@@ -2568,7 +2739,7 @@ function renderCreative() {
 function renderCreativeAnglesForm() {
   $('#creativeSubContent').innerHTML = `
     <div class="card">
-      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">${t("Génère rapidement 3 angles, 5 hooks, 3 variantes de pub et un script UGC — via OpenAI, sans landing page requise.")}</p>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">${t("Génère rapidement 3 angles, 5 hooks, 3 variantes de pub et un script UGC — via Claude, sans landing page requise.")}</p>
       <div class="field">
         <label class="field-label" for="creativeOffer">${t("Décrivez votre offre")}</label>
         <textarea id="creativeOffer" placeholder="${t("Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…")}" style="min-height:120px"></textarea>

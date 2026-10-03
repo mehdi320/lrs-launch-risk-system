@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS products (
     audience            TEXT NOT NULL,
     created_at          TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_products_tenant ON products(tenant_id);
 
 CREATE TABLE IF NOT EXISTS variants (
     id               TEXT PRIMARY KEY,
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS variants (
     varied_dimension TEXT CHECK (varied_dimension IN ('hook', 'social_proof', 'urgency', 'cta')),
     created_at       TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id);
 
 CREATE TABLE IF NOT EXISTS ab_tests (
     id                TEXT PRIMARY KEY,
@@ -57,6 +59,7 @@ CREATE TABLE IF NOT EXISTS ab_tests (
     created_at        TEXT NOT NULL,
     concluded_at      TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_ab_tests_product ON ab_tests(product_id);
 
 CREATE TABLE IF NOT EXISTS ab_test_variants (
     test_id    TEXT NOT NULL REFERENCES ab_tests(id),
@@ -113,6 +116,7 @@ CREATE TABLE IF NOT EXISTS funnels (
     source_reference TEXT,
     created_at       TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_funnels_product ON funnels(product_id);
 
 CREATE TABLE IF NOT EXISTS funnel_steps (
     id          TEXT PRIMARY KEY,
@@ -190,6 +194,7 @@ CREATE TABLE IF NOT EXISTS email_sequences (
     emails_json TEXT NOT NULL,
     created_at  TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_email_sequences_product ON email_sequences(product_id);
 """
 
 
@@ -261,6 +266,12 @@ def _rebuild_variants_widen_constraints(conn: sqlite3.Connection) -> None:
     )
     conn.execute("DROP TABLE variants")
     conn.execute("ALTER TABLE variants_new RENAME TO variants")
+    # DROP TABLE supprime aussi les index de l'ancienne table — à recréer
+    # après le rename (même piège que documenté pour idx_events_* dans
+    # _rebuild_events_widen_constraint ci-dessous, corrigé ici en même
+    # temps que l'ajout de l'index lui-même, audit sécurité 2026-09-23
+    # point 11).
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_variants_product ON variants(product_id)")
 
 
 def _rebuild_events_widen_constraint(conn: sqlite3.Connection) -> None:

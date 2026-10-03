@@ -11,6 +11,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
+# Plafond défensif sur les requêtes de liste (audit sécurité 2026-09-23,
+# point 10) — aucune n'en avait jusqu'ici. Sans impact aujourd'hui (bêta,
+# faible volume par tenant/produit), mais borne un compte qui
+# accumulerait beaucoup de données pour que la requête reste rapide et
+# la réponse raisonnable.
+_LIST_QUERY_LIMIT = 500
+
 from creative_studio.core.variants import (
     ABTest,
     ConclusionReason,
@@ -68,7 +75,8 @@ class ProductRepository:
     def list(self, tenant_id: str = "local") -> list[Product]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM products WHERE tenant_id = ? ORDER BY created_at DESC", (tenant_id,)
+                "SELECT * FROM products WHERE tenant_id = ? ORDER BY created_at DESC LIMIT ?",
+                (tenant_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [self._from_row(r) for r in rows]
 
@@ -108,7 +116,8 @@ class VariantRepository:
     def list_by_product(self, product_id: str) -> list[Variant]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM variants WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+                "SELECT * FROM variants WHERE product_id = ? ORDER BY created_at DESC LIMIT ?",
+                (product_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [self._from_row(r) for r in rows]
 
@@ -171,7 +180,8 @@ class ABTestRepository:
     def list_by_product(self, product_id: str) -> list[ABTest]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM ab_tests WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+                "SELECT * FROM ab_tests WHERE product_id = ? ORDER BY created_at DESC LIMIT ?",
+                (product_id, _LIST_QUERY_LIMIT),
             ).fetchall()
             tests = []
             for row in rows:
@@ -365,14 +375,16 @@ class FunnelRepository:
     def list_by_product(self, product_id: str) -> list[Funnel]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM funnels WHERE product_id = ? ORDER BY created_at DESC", (product_id,)
+                "SELECT * FROM funnels WHERE product_id = ? ORDER BY created_at DESC LIMIT ?",
+                (product_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [self._from_row(r) for r in rows]
 
     def list_steps(self, funnel_id: str) -> list[FunnelStep]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM funnel_steps WHERE funnel_id = ? ORDER BY step_order ASC", (funnel_id,)
+                "SELECT * FROM funnel_steps WHERE funnel_id = ? ORDER BY step_order ASC LIMIT ?",
+                (funnel_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [self._step_from_row(r) for r in rows]
 
@@ -435,7 +447,8 @@ class FunnelStepMediaRepository:
     def list_by_step(self, step_id: str) -> list[FunnelStepMedia]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM funnel_step_media WHERE step_id = ? ORDER BY created_at ASC", (step_id,)
+                "SELECT * FROM funnel_step_media WHERE step_id = ? ORDER BY created_at ASC LIMIT ?",
+                (step_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [
             FunnelStepMedia(
@@ -468,7 +481,8 @@ class FunnelStepElementRepository:
     def list_by_step(self, step_id: str) -> list[FunnelStepElement]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM funnel_step_elements WHERE step_id = ? ORDER BY created_at ASC", (step_id,)
+                "SELECT * FROM funnel_step_elements WHERE step_id = ? ORDER BY created_at ASC LIMIT ?",
+                (step_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [
             FunnelStepElement(
@@ -623,8 +637,8 @@ class EmailSequenceRepository:
     def list_by_product(self, product_id: str) -> list[EmailSequence]:
         with db_session() as conn:
             rows = conn.execute(
-                "SELECT * FROM email_sequences WHERE product_id = ? ORDER BY created_at DESC",
-                (product_id,),
+                "SELECT * FROM email_sequences WHERE product_id = ? ORDER BY created_at DESC LIMIT ?",
+                (product_id, _LIST_QUERY_LIMIT),
             ).fetchall()
         return [
             EmailSequence(

@@ -11,6 +11,7 @@
 import datetime
 import os
 import smtplib
+import sys
 from email import encoders as email_encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -92,7 +93,7 @@ def send_audit_email(result, meta, to_email, pdf_bytes=None, smtp_config=None):
 <div style='max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
 
-  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,#007AFF,#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.3rem;font-weight:800'>🚦 LRS™ — Résultat d'Audit</div>
     <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{_body_text(ts)} · {_body_text(mode_m)}</div>
   </div>
@@ -201,7 +202,12 @@ def send_score_drop_alert(entry, prev_score, to_email, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        # Échec avalé silencieusement jusqu'ici — un vrai souci SMTP
+        # (host injoignable, credentials expirés) était invisible en
+        # prod. Journalisé sur stderr, jamais le mot de passe (audit
+        # sécurité 2026-09-23, point 17).
+        print(f"[email_alerts] Échec d'envoi (alerte chute de score) à {to_email}: {exc}", file=sys.stderr)
         return False
 
 
@@ -255,7 +261,7 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
 <html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,#007AFF,#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.2rem;font-weight:800'>📊 LRS™ — Digest de Monitoring</div>
     <div style='color:rgba(255,255,255,0.7);font-size:0.85rem;margin-top:4px'>{now_str} · {len(monitored_entries)} pages surveillées</div>
   </div>
@@ -292,7 +298,8 @@ def send_monitoring_digest(monitored_entries, to_email, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        print(f"[email_alerts] Échec d'envoi (digest monitoring) à {to_email}: {exc}", file=sys.stderr)
         return False
 
 
@@ -307,7 +314,7 @@ def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
 <html><body style='font-family:Inter,-apple-system,sans-serif;background:#f4f4f8;padding:24px'>
 <div style='max-width:480px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;
             box-shadow:0 2px 12px rgba(0,0,0,0.08)'>
-  <div style='background:linear-gradient(135deg,var(--accent),#4f46e5);padding:24px 28px'>
+  <div style='background:linear-gradient(135deg,#007AFF,#4f46e5);padding:24px 28px'>
     <div style='color:#fff;font-size:1.2rem;font-weight:800'>🚦 LRS™ — Votre lien de connexion</div>
   </div>
   <div style='padding:24px 28px'>
@@ -317,7 +324,7 @@ def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
     </p>
     <div style='text-align:center;margin:24px 0'>
       <a href='{escape(magic_link_url, quote=True)}'
-         style='display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+         style='display:inline-block;background:#007AFF;color:#fff;text-decoration:none;
                 padding:12px 28px;border-radius:8px;font-weight:700;font-size:0.95rem'>
         Accéder à LRS →
       </a>
@@ -341,5 +348,8 @@ def send_magic_link_email(to_email, magic_link_url, smtp_config=None):
             server.login(user, password)
             server.sendmail(user, to_email, msg.as_string())
         return True
-    except Exception:
+    except Exception as exc:
+        # Le cas le plus grave des trois : un abonné vient de payer et ne
+        # recevra jamais son lien d'accès sans que personne ne le sache.
+        print(f"[email_alerts] Échec d'envoi (lien magique) à {to_email}: {exc}", file=sys.stderr)
         return False

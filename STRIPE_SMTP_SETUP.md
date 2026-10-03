@@ -183,8 +183,9 @@ chaque variable) :
 - [ ] `STRIPE_SECRET_KEY` — étape 1.5 (`sk_test_...` puis `sk_live_...` en prod)
 - [ ] `STRIPE_WEBHOOK_SECRET` — étape 2 (le vrai, celui du Dashboard —
       pas celui de `stripe listen` une fois passé en prod)
-- [ ] `LRS_APP_URL` — URL publique de l'app Streamlit (ex :
-      `https://app.votre-domaine.com`)
+- [ ] `LRS_APP_URL` — URL publique du pilote FastAPI, seule interface
+      produit (ex : `https://app.votre-domaine.com`, ou
+      `http://localhost:8600` en local)
 - [ ] `LRS_SALES_PAGE_URL` — URL de la page de vente statique
 - [ ] `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` — étape 4
 - [ ] `LRS_USERS_DB_PATH` — laissez vide sauf besoin spécifique (défaut :

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS magic_links (
     expires_at  TEXT NOT NULL,
     used_at     TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_magic_links_email ON magic_links(email);
 
 -- Déduplication des événements webhook Stripe (Stripe retente un event tant
 -- qu'il ne reçoit pas un 200 rapide, et peut aussi le renvoyer manuellement
