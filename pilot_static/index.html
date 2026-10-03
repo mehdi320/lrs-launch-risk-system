@@ -568,7 +568,9 @@
   }
   .filter-bar input[type="text"]::placeholder { color: var(--text-muted); }
   .filter-bar input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
-  .filter-bar .segmented { flex: 1; min-width: 160px; }
+  /* fit-content : un groupe trop large passe à la ligne au lieu de déborder
+     (min-width: 160px laissait les 4 boutons sortir de l'écran) */
+  .filter-bar .segmented { flex: 1 1 auto; min-width: fit-content; }
 
   .stats-banner {
     display: flex; gap: 32px; flex-wrap: wrap;

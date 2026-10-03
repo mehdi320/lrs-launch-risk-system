@@ -594,7 +594,9 @@ def run_audit_endpoint(req: AuditRequest):
 @app.get("/api/dashboard")
 def get_dashboard():
     history = _load_history()
-    all_scores = [e.get("score", 0) for e in history if e.get("score")]
+    # `is not None` et pas un test de vérité : un audit noté 0/20 est un vrai
+    # score, l'exclure faussait moyenne / danger_count face à danger_pages.
+    all_scores = [e["score"] for e in history if e.get("score") is not None]
 
     avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
     best_score = max(all_scores) if all_scores else 0
@@ -974,7 +976,9 @@ def run_abtest(req: ABTestRunRequest):
 @app.delete("/api/abtests/{name}")
 def delete_abtest(name: str):
     abtests = load_json_file(AB_FILE(), dict)
-    abtests.pop(name, None)
+    if name not in abtests:
+        raise HTTPException(status_code=404, detail=tr("A/B test introuvable.", "A/B test not found."))
+    abtests.pop(name)
     save_json_file(AB_FILE(), abtests)
     return {"ok": True}
 
@@ -1015,7 +1019,9 @@ def create_project(req: ProjectCreateRequest):
 @app.delete("/api/projects/{name}")
 def delete_project(name: str):
     projects = load_json_file(PROJECTS_FILE(), dict)
-    projects.pop(name, None)
+    if name not in projects:
+        raise HTTPException(status_code=404, detail=tr("Projet introuvable.", "Project not found."))
+    projects.pop(name)
     save_json_file(PROJECTS_FILE(), projects)
     return {"ok": True}
 
@@ -1137,7 +1143,9 @@ def save_campaign(req: CampaignSaveRequest):
 @app.delete("/api/campaigns/{name}")
 def delete_campaign(name: str):
     campaigns = load_json_file(CAMPAIGN_FILE(), dict)
-    campaigns.pop(name, None)
+    if name not in campaigns:
+        raise HTTPException(status_code=404, detail=tr("Campagne introuvable.", "Campaign not found."))
+    campaigns.pop(name)
     save_json_file(CAMPAIGN_FILE(), campaigns)
     return {"ok": True}
 
@@ -1289,9 +1297,10 @@ def add_swipefile(req: SwipeAddRequest):
 def delete_swipefile(category: str, index: int):
     swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     items = swipes.get(category, [])
-    if 0 <= index < len(items):
-        items.pop(index)
-        save_json_file(SWIPE_FILE(), swipes)
+    if not 0 <= index < len(items):
+        raise HTTPException(status_code=404, detail=tr("Élément introuvable.", "Item not found."))
+    items.pop(index)
+    save_json_file(SWIPE_FILE(), swipes)
     return swipes
 
 
@@ -1637,7 +1646,7 @@ def list_schedule():
 
 class ScheduleCreateRequest(BaseModel):
     url: str = ""
-    freq_days: int = 7
+    freq_days: int = Field(default=7, ge=1, le=365)
     mode: str = "Funnel Only"
     platform: str = "Meta"
     offer_type: str = "Digital product"
@@ -1651,7 +1660,9 @@ def create_schedule(req: ScheduleCreateRequest):
     if not url:
         raise HTTPException(status_code=400, detail=tr("URL requise.", "URL required."))
     schedule = load_json_file(SCHEDULE_FILE(), dict)
-    sid = "sc_" + str(int(datetime.datetime.now().timestamp()))
+    # Suffixe aléatoire : l'horodatage seul (à la seconde) faisait qu'une
+    # deuxième planification créée dans la même seconde écrasait la première.
+    sid = f"sc_{int(datetime.datetime.now().timestamp())}_{_secrets.token_hex(3)}"
     schedule[sid] = {
         "url": url, "freq_days": req.freq_days, "mode": req.mode,
         "platform": req.platform, "offer_type": req.offer_type, "brand_type": req.brand_type,
@@ -1676,7 +1687,9 @@ def toggle_schedule(sid: str):
 @app.delete("/api/monitoring/schedule/{sid}")
 def delete_schedule(sid: str):
     schedule = load_json_file(SCHEDULE_FILE(), dict)
-    schedule.pop(sid, None)
+    if sid not in schedule:
+        raise HTTPException(status_code=404, detail=tr("Planification introuvable.", "Schedule not found."))
+    schedule.pop(sid)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"ok": True}
 
