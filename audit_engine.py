@@ -23,6 +23,8 @@ from urllib.parse import urljoin, urlparse
 import requests
 import trafilatura
 
+from lrs_i18n import get_lang, tr
+
 try:
     from openai import OpenAI
 except ImportError:
@@ -520,7 +522,7 @@ def get_decision(score):
 # ── PROMPT SYSTÈME ──────────────────────────────────────────────
 SYSTEM_PROMPT_BASE = (
     "Tu es LRS - Launch Risk System V2, un auditeur paid traffic senior.\n"
-    "LANGUE : Reponds TOUJOURS en francais. Tous les textes du JSON en francais.\n"
+    "OUTPUT_LANG_PLACEHOLDER\n"
     "\n"
     "CONTEXTE MARQUE :\n"
     "BRAND_CONTEXT_PLACEHOLDER\n"
@@ -654,12 +656,26 @@ def _page_type_instructions(page_type):
     return "Applique le scoring standard landing page de conversion paid traffic."
 
 
+def _output_lang_name():
+    return "francais" if get_lang() == "fr" else "anglais (English)"
+
+
+def _output_lang_rule():
+    """Langue de TOUS les textes du JSON renvoye — suit la langue choisie dans
+    l'interface (lrs_i18n), independamment de la langue de la page auditee."""
+    if get_lang() == "fr":
+        return "LANGUE : Reponds TOUJOURS en francais. Tous les textes du JSON en francais."
+    return ("LANGUAGE: ALWAYS answer in English. Every text value in the JSON must be "
+            "written in English, even though these instructions are in French.")
+
+
 def _lang_instruction(page_lang):
+    out = _output_lang_name()
     if page_lang == "en":
-        return "LANGUE : Anglais. Cite éléments en anglais, réponses JSON en français."
+        return "LANGUE DE LA PAGE : Anglais. Cite éléments en anglais, réponses JSON en " + out + "."
     if page_lang == "mixte":
-        return "LANGUE : Mixte FR+EN. Cite dans langue originale, JSON en français."
-    return "LANGUE DE LA PAGE : Français."
+        return "LANGUE DE LA PAGE : Mixte FR+EN. Cite dans langue originale, JSON en " + out + "."
+    return "LANGUE DE LA PAGE : Français. Cite éléments en français, réponses JSON en " + out + "."
 
 
 class _AuditJSONParseError(Exception):
@@ -696,17 +712,21 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     if result is None:
         if strict:
             raise _AuditJSONParseError("JSON illisible")
+        incomplete = tr("Analyse incomplete - relance l'audit", "Incomplete analysis - run the audit again")
         result = {
             "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
                     "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
-            "message_match": {"status": "N/A", "score_explication": "Analyse incomplete - relance l'audit", "mismatches": [], "fix": []},
+            "message_match": {"status": "N/A", "score_explication": incomplete, "mismatches": [], "fix": []},
             "why_this_score": {
-                "hook_detail": "Analyse incomplete - relance l'audit",
-                "offer_detail": "Analyse incomplete - relance l'audit",
-                "trust_detail": "Analyse incomplete - relance l'audit",
-                "friction_detail": "Analyse incomplete - relance l'audit",
-                "top_3_reasons": ["Analyse incomplete", "Relance l'audit", "Si erreur persiste, reduis le contenu"],
-                "critical_gaps": ["Analyse incomplete"]
+                "hook_detail": incomplete,
+                "offer_detail": incomplete,
+                "trust_detail": incomplete,
+                "friction_detail": incomplete,
+                "top_3_reasons": [tr("Analyse incomplete", "Incomplete analysis"),
+                                  tr("Relance l'audit", "Run the audit again"),
+                                  tr("Si erreur persiste, reduis le contenu",
+                                     "If the error persists, shorten the content")],
+                "critical_gaps": [tr("Analyse incomplete", "Incomplete analysis")]
             },
             "fix_plan": {"priority_actions": [], "ab_tests": []},
             "rewrite": {"headline": "", "subheadline": "", "hero_bullets": [], "cta_primary": "",
@@ -725,6 +745,8 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     tier            = get_tier(score)
     bench           = CVR_BENCHMARKS.get(offer_type, CVR_BENCHMARKS["Digital product"])
     cvr_cur, cvr_fix, cvr_up = bench[tier]
+    if get_lang() != "fr":
+        cvr_up = cvr_up.replace(" a ", " to ")
 
     result["_c"] = {
         "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
@@ -743,6 +765,7 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
 
     system = (
         SYSTEM_PROMPT_BASE
+        .replace("OUTPUT_LANG_PLACEHOLDER", _output_lang_rule())
         .replace("BRAND_CONTEXT_PLACEHOLDER", _brand_context(brand_type))
         .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
         .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + _page_type_instructions(page_type) + "\n\n" + _lang_instruction(page_lang))
@@ -769,7 +792,7 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
             user_parts += ["PUBLICITE :", ad_text, ""]
         user_parts += ["INSTRUCTIONS : Audit COMPLET. friction_message_match = coherence pub+landing. "
                        "message_match : cite texte EXACT. Pour chaque fix, donne exemple exact."]
-    user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS."]
+    user_parts += ["", "RAPPEL : JSON uniquement. Langue de sortie : " + _output_lang_name() + ". Sois PRECIS."]
     return system, "\n".join(user_parts)
 
 
@@ -1030,7 +1053,7 @@ def generate_creative_angles(offer_description, platform, offer_type, model="gpt
     system = (
         "Tu es un copywriter senior specialise en paid traffic (Meta/TikTok/Google Ads). "
         "Tu generes des angles publicitaires, hooks et un script UGC a partir d'une offre. "
-        "Reponds UNIQUEMENT en JSON, en francais, sans texte hors du JSON."
+        "Reponds UNIQUEMENT en JSON, en " + _output_lang_name() + ", sans texte hors du JSON."
     )
     user_prompt = (
         "OFFRE : " + offer_description + "\n"

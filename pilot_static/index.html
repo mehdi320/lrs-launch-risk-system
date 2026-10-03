@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -805,14 +805,27 @@
   .sched-status-row b { color: var(--text); }
   .sched-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
   .sched-actions .cta-secondary { flex: 1; min-width: 120px; }
+
+  /* ── Sélecteur de langue (EN / FR) ── */
+  .lang-switch {
+    display: inline-flex; gap: 2px; padding: 3px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 10px;
+  }
+  .lang-switch button {
+    border: none; background: transparent; color: var(--text-secondary);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 5px 10px; border-radius: 7px; cursor: pointer; font-family: inherit;
+  }
+  .lang-switch button.active { background: #ffffff; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
+  .sidebar .lang-switch { margin: auto 10px 0; align-self: flex-start; }
 </style>
 </head>
 <body>
   <div class="wrap" id="loginGate">
-    <div class="brand"><span class="dot"></span><span>LRS — Pilote</span></div>
+    <div class="brand"><span class="dot"></span><span data-i18n>LRS — Pilote</span></div>
     <div class="card">
       <div class="login-title">🚦 LRS™ — Launch Risk System</div>
-      <div class="login-sub">Entrez votre mot de passe d'accès</div>
+      <div class="login-sub" data-i18n>Entrez votre mot de passe d'accès</div>
       <div class="field">
         <label class="field-label" for="loginPwd">Password</label>
         <input type="password" id="loginPwd" placeholder="Enter your password..." autocomplete="current-password" />
@@ -821,33 +834,43 @@
       <div class="error-box" id="loginError"></div>
     </div>
     <div style="text-align:center;margin-top:20px;font-size:12px;color:var(--text-muted)">
-      <a href="/privacy.html" style="color:inherit">Confidentialité</a>
+      <a href="/privacy.html" style="color:inherit" data-i18n>Confidentialité</a>
       &nbsp;·&nbsp;
-      <a href="/terms.html" style="color:inherit">Conditions</a>
+      <a href="/terms.html" style="color:inherit" data-i18n>Conditions</a>
       &nbsp;·&nbsp;
       <a href="/faq.html" style="color:inherit">FAQ</a>
+    </div>
+    <div style="text-align:center;margin-top:14px">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="fr">FR</button>
+      </div>
     </div>
   </div>
 
   <div id="mainWrap">
     <div class="topbar">
-      <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu">☰</button>
-      <div class="sidebar-brand" style="margin:0"><span class="dot"></span><span>LRS — Pilote</span></div>
+      <button class="menu-toggle" id="menuToggle" aria-label="Ouvrir le menu" data-i18n-aria>☰</button>
+      <div class="sidebar-brand" style="margin:0"><span class="dot"></span><span data-i18n>LRS — Pilote</span></div>
     </div>
 
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
     <nav class="sidebar" id="sidebar">
-      <div class="sidebar-brand"><span class="dot"></span><span>LRS™ — Pilote</span></div>
+      <div class="sidebar-brand"><span class="dot"></span><span data-i18n>LRS™ — Pilote</span></div>
       <div class="nav-tabs" id="navTabs">
         <button class="nav-tab active" data-view="dashboard">📊 Dashboard</button>
         <button class="nav-tab" data-view="audit">🔍 Audit</button>
         <button class="nav-tab" data-view="multi">🧩 Multi-Audit</button>
-        <button class="nav-tab" data-view="suivi">📈 Suivi</button>
-        <button class="nav-tab" data-view="historique">🕓 Historique</button>
-        <button class="nav-tab" data-view="ressources">📚 Ressources</button>
+        <button class="nav-tab" data-view="suivi" data-i18n>📈 Suivi</button>
+        <button class="nav-tab" data-view="historique" data-i18n>🕓 Historique</button>
+        <button class="nav-tab" data-view="ressources" data-i18n>📚 Ressources</button>
         <button class="nav-tab" data-view="creative">🎨 Creative Studio</button>
-        <button class="nav-tab" data-view="integrations">🔗 Intégrations</button>
+        <button class="nav-tab" data-view="integrations" data-i18n>🔗 Intégrations</button>
+      </div>
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="fr">FR</button>
       </div>
     </nav>
 
@@ -863,8 +886,8 @@
 
     <div id="auditView" style="display:none">
     <div id="heroText">
-      <h1 class="hero">Votre landing page,<br/>évaluée en 15 secondes.</h1>
-      <p class="hero-sub">Collez une URL. LRS analyse le hook, l'offre, la confiance et la friction — et vous dit exactement quoi corriger avant de dépenser en pub.</p>
+      <h1 class="hero" data-i18n>Votre landing page,<br>évaluée en 15 secondes.</h1>
+      <p class="hero-sub" data-i18n>Collez une URL. LRS analyse le hook, l'offre, la confiance et la friction — et vous dit exactement quoi corriger avant de dépenser en pub.</p>
     </div>
 
     <div class="card" id="formCard">
@@ -878,18 +901,18 @@
       </div>
 
       <div class="field" id="urlField">
-        <label class="field-label" for="url">URL de la landing page</label>
-        <input type="url" id="url" placeholder="https://votre-page.com" autocomplete="off" />
+        <label class="field-label" for="url" data-i18n>URL de la landing page</label>
+        <input type="url" id="url" placeholder="https://votre-page.com" autocomplete="off" data-i18n-placeholder />
       </div>
 
       <div class="field" id="adTextField" style="display:none;margin-top:20px">
-        <label class="field-label" for="adText">Texte de la publicité</label>
-        <textarea id="adText" placeholder="Collez le texte de votre pub ici…"></textarea>
+        <label class="field-label" for="adText" data-i18n>Texte de la publicité</label>
+        <textarea id="adText" placeholder="Collez le texte de votre pub ici…" data-i18n-placeholder></textarea>
       </div>
 
       <div class="row">
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label" data-i18n>Plateforme</label>
           <div class="segmented" id="platformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -897,7 +920,7 @@
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Type d'offre</label>
+          <label class="field-label" data-i18n>Type d'offre</label>
           <div class="segmented" id="offerSeg">
             <button class="active" data-val="Digital product">Digital</button>
             <button data-val="Ecom (produit physique)">E-com</button>
@@ -907,22 +930,22 @@
 
       <div class="row">
         <div class="field">
-          <label class="field-label">Marque</label>
+          <label class="field-label" data-i18n>Marque</label>
           <div class="segmented" id="brandSeg">
-            <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
-            <button data-val="Marque etablie">Marque établie</button>
+            <button class="active" data-val="Nouveau lancement" data-i18n>Nouveau lancement</button>
+            <button data-val="Marque etablie" data-i18n>Marque établie</button>
           </div>
         </div>
       </div>
 
-      <button class="cta" id="runBtn">Lancer l'audit</button>
+      <button class="cta" id="runBtn" data-i18n>Lancer l'audit</button>
       <div class="error-box" id="errorBox"></div>
-      <a href="#" class="demo-link" id="demoLink">Voir un exemple sans lancer d'audit réel →</a>
+      <a href="#" class="demo-link" id="demoLink" data-i18n>Voir un exemple sans lancer d'audit réel →</a>
     </div>
 
     <div class="loading" id="loadingBox">
       <div class="ring"></div>
-      <div class="stage" id="loadingStage">Lecture de la page…</div>
+      <div class="stage" id="loadingStage" data-i18n>Lecture de la page…</div>
     </div>
 
     <div class="results" id="results"></div>
@@ -931,6 +954,7 @@
     </div></main>
   </div>
 
-<script src="/app.js"></script>
+<script src="/i18n.js?v=2"></script>
+<script src="/app.js?v=2"></script>
 </body>
 </html>

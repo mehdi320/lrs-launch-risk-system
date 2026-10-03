@@ -13,13 +13,13 @@ async function attemptLogin() {
     });
     const data = await res.json();
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Mot de passe invalide.';
+      errBox.textContent = data.detail || t('Mot de passe invalide.');
       errBox.style.display = 'block';
       return;
     }
     showApp();
   } catch (err) {
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -105,11 +105,11 @@ const VIEW_TITLES = {
   dashboard: 'Dashboard',
   audit: 'Audit',
   multi: 'Multi-Audit',
-  suivi: 'Suivi',
-  historique: 'Historique',
-  ressources: 'Ressources',
+  suivi: t('Suivi'),
+  historique: t('Historique'),
+  ressources: t('Ressources'),
   creative: 'Creative Studio',
-  integrations: 'Intégrations',
+  integrations: t('Intégrations'),
 };
 
 function setupNavTabs() {
@@ -123,7 +123,7 @@ function setupNavTabs() {
     Object.entries(VIEW_IDS).forEach(([v, id]) => {
       $('#' + id).style.display = (v === view) ? 'block' : 'none';
     });
-    document.title = (VIEW_TITLES[view] || 'LRS™') + ' — LRS™ Pilote';
+    document.title = (VIEW_TITLES[view] || 'LRS™') + t(' — LRS™ Pilote');
     if (view === 'dashboard') loadDashboard();
     if (view === 'multi') renderMulti();
     if (view === 'suivi') loadSuivi();
@@ -169,8 +169,8 @@ function renderDashboardEmpty() {
   $('#dashboardView').innerHTML = `
     <div class="empty-dash fade-up">
       <div class="emoji">🚀</div>
-      <div class="title">Aucun audit pour l'instant</div>
-      <div class="sub">Lancez votre premier audit dans l'onglet Audit.</div>
+      <div class="title">${t("Aucun audit pour l'instant")}</div>
+      <div class="sub">${t("Lancez votre premier audit dans l'onglet Audit.")}</div>
     </div>
   `;
 }
@@ -179,11 +179,11 @@ function renderDashboard(d) {
   if (!d.total_audits) { renderDashboardEmpty(); return; }
 
   const kpis = [
-    ['Audits total', d.total_audits, '', 'var(--text)'],
-    ['Score moyen', d.avg_score + '/20', '', scoreColor(d.avg_score)],
-    ['Meilleur score', d.best_score + '/20', '', 'var(--success)'],
-    ['Pages en danger', d.danger_count, 'score ≤ 9', 'var(--danger)'],
-    ['Prêtes à scaler', d.ready_count, 'score ≥ 15', 'var(--success)'],
+    [t('Audits total'), d.total_audits, '', 'var(--text)'],
+    [t('Score moyen'), d.avg_score + '/20', '', scoreColor(d.avg_score)],
+    [t('Meilleur score'), d.best_score + '/20', '', 'var(--success)'],
+    [t('Pages en danger'), d.danger_count, 'score ≤ 9', 'var(--danger)'],
+    [t('Prêtes à scaler'), d.ready_count, 'score ≥ 15', 'var(--success)'],
   ];
   const kpiHtml = kpis.map(([label, val, sub, color]) => `
     <div class="kpi-card">
@@ -200,14 +200,14 @@ function renderDashboard(d) {
       streakHtml += `
         <div class="streak-card">
           <div class="streak-label">Streak</div>
-          <div class="streak-val" style="color:var(--warning)">${d.streak_days >= 3 ? '🔥' : '⚡'} ${d.streak_days}j</div>
-          <div class="streak-sub">consécutifs</div>
+          <div class="streak-val" style="color:var(--warning)">${d.streak_days >= 3 ? '🔥' : '⚡'} ${t('{n}j', { n: d.streak_days })}</div>
+          <div class="streak-sub">${t("consécutifs")}</div>
         </div>`;
     }
     if (d.next_gap > 0) {
       streakHtml += `
         <div class="streak-card">
-          <div class="streak-label">Prochain objectif</div>
+          <div class="streak-label">${t("Prochain objectif")}</div>
           <div class="streak-val" style="color:var(--accent)">+${d.next_gap} pts</div>
           <div class="streak-sub">${escapeHtml(d.next_label)}</div>
         </div>`;
@@ -217,7 +217,7 @@ function renderDashboard(d) {
 
   const dangerHtml = d.danger_pages.length ? `
     <div class="dash-section fade-up">
-      <h2>🔴 Pages en danger immédiat (${d.danger_pages.length})</h2>
+      <h2>${t('🔴 Pages en danger immédiat')} (${d.danger_pages.length})</h2>
       ${d.danger_pages.map(p => `
         <div class="list-row">
           <span class="lr-score" style="color:var(--danger)">${p.score}/20</span>
@@ -231,13 +231,13 @@ function renderDashboard(d) {
 
   const evoHtml = d.evolution.length >= 3 ? `
     <div class="dash-section fade-up">
-      <h2>📈 Évolution des scores (derniers ${d.evolution.length} audits)</h2>
+      <h2>${t('📈 Évolution des scores (derniers {n} audits)', { n: d.evolution.length })}</h2>
       <div class="sparkline-wrap">${buildSparkline(d.evolution)}</div>
     </div>` : '';
 
   const recentHtml = d.recent_audits.length ? `
     <div class="dash-section fade-up">
-      <h2>🕒 Derniers audits</h2>
+      <h2>${t("🕒 Derniers audits")}</h2>
       ${d.recent_audits.map(e => `
         <div class="list-row">
           <span>${scoreEmoji(e.score)}</span>
@@ -267,7 +267,7 @@ async function loadDashboard() {
     renderDashboard(data);
   } catch (err) {
     $('#dashboardView').innerHTML =
-      `<div class="error-box" style="display:block">Impossible de charger le dashboard : ${escapeHtml(err.message)}</div>`;
+      `<div class="error-box" style="display:block">${t("Impossible de charger le dashboard : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -276,18 +276,18 @@ async function loadDashboard() {
 // ══════════════════════════════════════════════════════════
 const MULTI_SUBVIEWS = {
   bulk: { label: 'Bulk', render: renderMultiBulkShell },
-  compare: { label: 'Comparaison', render: () => renderCompareShell('multiSubContent', {
-    title: 'Mode Comparaison — 2 URLs côte à côte',
-    caption: "Auditez 2 pages en simultané pour comparer vos scores : votre page vs concurrent, avant vs après refonte, etc.",
-    labelA: 'Ma page', labelB: 'Concurrent', tagA: 'PAGE A', tagB: 'PAGE B', btnLabel: '⚔️ Lancer la comparaison',
+  compare: { label: t('Comparaison'), render: () => renderCompareShell('multiSubContent', {
+    title: t('Mode Comparaison — 2 URLs côte à côte'),
+    caption: t("Auditez 2 pages en simultané pour comparer vos scores : votre page vs concurrent, avant vs après refonte, etc."),
+    labelA: t('Ma page'), labelB: t('Concurrent'), tagA: 'PAGE A', tagB: 'PAGE B', btnLabel: t('⚔️ Lancer la comparaison'),
   }) },
-  competitor: { label: 'Concurrents', render: () => renderCompareShell('multiSubContent', {
-    title: '🥊 Audit Concurrents — Comparaison directe',
-    caption: "Comparez votre page avec celle d'un concurrent. LRS score les deux et identifie précisément où vous perdez face à lui.",
-    labelA: 'Votre page', labelB: 'Concurrent', tagA: '🔵 VOTRE PAGE', tagB: '🟡 CONCURRENT', btnLabel: '🥊 Lancer la comparaison',
+  competitor: { label: t('Concurrents'), render: () => renderCompareShell('multiSubContent', {
+    title: t('🥊 Audit Concurrents — Comparaison directe'),
+    caption: t("Comparez votre page avec celle d'un concurrent. LRS score les deux et identifie précisément où vous perdez face à lui."),
+    labelA: t('Votre page'), labelB: t('Concurrent'), tagA: t('🔵 VOTRE PAGE'), tagB: t('🟡 CONCURRENT'), btnLabel: t('🥊 Lancer la comparaison'),
   }) },
   abtest: { label: 'A/B Test', render: renderABTestShell },
-  funnel: { label: 'Funnel 2 étapes', render: renderFunnelShell },
+  funnel: { label: t('Funnel 2 étapes'), render: renderFunnelShell },
 };
 
 function renderMulti() {
@@ -312,7 +312,7 @@ function renderMultiBulkShell() {
   $('#multiSubContent').innerHTML = `
     <div class="card">
       <div class="field">
-        <label class="field-label" for="bulkUrls">URLs à auditer (une par ligne, 20 max)</label>
+        <label class="field-label" for="bulkUrls">${t("URLs à auditer (une par ligne, 20 max)")}</label>
         <textarea id="bulkUrls" placeholder="https://page1.com&#10;https://page2.com&#10;https://concurrent.com" style="min-height:140px"></textarea>
       </div>
       <div class="row">
@@ -324,7 +324,7 @@ function renderMultiBulkShell() {
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="bulkPlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -334,26 +334,26 @@ function renderMultiBulkShell() {
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label">Type d'offre</label>
+          <label class="field-label">${t("Type d'offre")}</label>
           <div class="segmented" id="bulkOfferSeg">
             <button class="active" data-val="Digital product">Digital</button>
             <button data-val="Ecom (produit physique)">E-com</button>
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Marque</label>
+          <label class="field-label">${t("Marque")}</label>
           <div class="segmented" id="bulkBrandSeg">
-            <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
-            <button data-val="Marque etablie">Marque établie</button>
+            <button class="active" data-val="Nouveau lancement">${t("Nouveau lancement")}</button>
+            <button data-val="Marque etablie">${t("Marque établie")}</button>
           </div>
         </div>
       </div>
-      <button class="cta" id="bulkRunBtn">Lancer les audits</button>
+      <button class="cta" id="bulkRunBtn">${t("Lancer les audits")}</button>
       <div class="error-box" id="bulkErrorBox"></div>
     </div>
     <div class="loading" id="bulkLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Audit des pages en cours… (peut prendre plusieurs minutes)</div>
+      <div class="stage">${t("Audit des pages en cours… (peut prendre plusieurs minutes)")}</div>
     </div>
     <div id="bulkResults"></div>
   `;
@@ -366,7 +366,7 @@ async function runBulkAudit() {
   const errBox = $('#bulkErrorBox');
   errBox.style.display = 'none';
   if (!urls.length) {
-    errBox.textContent = 'Merci de coller au moins une URL valide (commençant par http).';
+    errBox.textContent = t('Merci de coller au moins une URL valide (commençant par http).');
     errBox.style.display = 'block';
     return;
   }
@@ -390,7 +390,7 @@ async function runBulkAudit() {
     $('#bulkLoadingBox').style.display = 'none';
     $('#bulkRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -398,7 +398,7 @@ async function runBulkAudit() {
   } catch (err) {
     $('#bulkLoadingBox').style.display = 'none';
     $('#bulkRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -432,12 +432,12 @@ function renderBulkResults(results) {
 
   const errorsHtml = errors.length ? `
     <div class="dash-section">
-      <h2>⚠️ Échecs (${errors.length})</h2>
+      <h2>${t("⚠️ Échecs")} (${errors.length})</h2>
       ${errors.map(r => `
         <div class="list-row">
           <div class="lr-body">
             <div class="lr-title">${escapeHtml(r.url)}</div>
-            <div class="lr-meta" style="color:var(--danger)">${escapeHtml(r.error || 'Erreur inconnue')}</div>
+            <div class="lr-meta" style="color:var(--danger)">${escapeHtml(r.error || t('Erreur inconnue'))}</div>
           </div>
         </div>
       `).join('')}
@@ -445,7 +445,7 @@ function renderBulkResults(results) {
 
   $('#bulkResults').innerHTML = `
     <div class="dash-section fade-up">
-      <h2>Résultats — ${results.length} page(s) auditée(s)</h2>
+      <h2>${t('Résultats — {n} page(s) auditée(s)', { n: results.length })}</h2>
       ${podiumHtml}
       ${listHtml}
     </div>
@@ -481,7 +481,7 @@ function renderCompareShell(containerId, cfg) {
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="cmpPlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -494,7 +494,7 @@ function renderCompareShell(containerId, cfg) {
     </div>
     <div class="loading" id="cmpLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Audit des deux pages en cours…</div>
+      <div class="stage">${t("Audit des deux pages en cours…")}</div>
     </div>
     <div id="cmpResults"></div>
   `;
@@ -508,7 +508,7 @@ async function runCompare() {
   const errBox = $('#cmpErrorBox');
   errBox.style.display = 'none';
   if (!urlA || !urlB) {
-    errBox.textContent = 'Les deux URLs sont requises.';
+    errBox.textContent = t('Les deux URLs sont requises.');
     errBox.style.display = 'block';
     return;
   }
@@ -530,7 +530,7 @@ async function runCompare() {
     $('#cmpLoadingBox').style.display = 'none';
     $('#cmpRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -538,7 +538,7 @@ async function runCompare() {
   } catch (err) {
     $('#cmpLoadingBox').style.display = 'none';
     $('#cmpRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -564,7 +564,7 @@ function renderCompareResults(data) {
         <div class="vs-tag" style="color:var(--accent)">${escapeHtml(data.a.label)}</div>
         <div class="vs-score" style="color:${scoreColor(sa)}">${sa}<span class="vs-den">/20</span></div>
         <div class="vs-decision" style="color:${scoreColor(sa)}">${escapeHtml(ca.decision || '')}</div>
-        ${winnerIsA ? '<div class="vs-crown">👑 MEILLEUR SCORE</div>' : ''}
+        ${winnerIsA ? `<div class="vs-crown">${t('👑 MEILLEUR SCORE')}</div>` : ''}
       </div>
       <div class="vs-mid">
         <div class="vs-mid-label">VS</div>
@@ -573,13 +573,13 @@ function renderCompareResults(data) {
         <div class="vs-tag" style="color:var(--warning)">${escapeHtml(data.b.label)}</div>
         <div class="vs-score" style="color:${scoreColor(sb)}">${sb}<span class="vs-den">/20</span></div>
         <div class="vs-decision" style="color:${scoreColor(sb)}">${escapeHtml(cb.decision || '')}</div>
-        ${!winnerIsA ? '<div class="vs-crown">👑 MEILLEUR SCORE</div>' : ''}
+        ${!winnerIsA ? `<div class="vs-crown">${t('👑 MEILLEUR SCORE')}</div>` : ''}
       </div>
     </div>
     <div class="section fade-up">
-      <h2>Breakdown comparatif</h2>
+      <h2>${t("Breakdown comparatif")}</h2>
       <table class="compare-table">
-        <thead><tr><th>Critère</th><th>${escapeHtml(data.a.label)}</th><th>${escapeHtml(data.b.label)}</th></tr></thead>
+        <thead><tr><th>${t("Critère")}</th><th>${escapeHtml(data.a.label)}</th><th>${escapeHtml(data.b.label)}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -590,28 +590,28 @@ function renderCompareResults(data) {
 function renderFunnelShell() {
   $('#multiSubContent').innerHTML = `
     <div class="card">
-      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">🧭 Funnel 2 étapes</h2>
-      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Un advertorial ou une page de vente n'a pas vocation à contenir l'offre — elle est sur la page suivante. LRS audite les deux pages ensemble, avec le bon rôle pour chacune, au lieu de pénaliser à tort l'étape 1 pour l'absence de prix/garantie.</p>
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">${t("🧭 Funnel 2 étapes")}</h2>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">${t("Un advertorial ou une page de vente n'a pas vocation à contenir l'offre — elle est sur la page suivante. LRS audite les deux pages ensemble, avec le bon rôle pour chacune, au lieu de pénaliser à tort l'étape 1 pour l'absence de prix/garantie.")}</p>
       <div class="field" style="margin-bottom:16px">
-        <label class="field-label">Type de funnel</label>
+        <label class="field-label">${t("Type de funnel")}</label>
         <div class="segmented" id="funnelTypeSeg">
-          <button class="active" data-val="advertorial_to_payment">Advertorial → Paiement</button>
-          <button data-val="salespage_to_payment">Page de vente → Paiement</button>
+          <button class="active" data-val="advertorial_to_payment">${t("Advertorial → Paiement")}</button>
+          <button data-val="salespage_to_payment">${t("Page de vente → Paiement")}</button>
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label" style="color:var(--accent)">ÉTAPE 1 — avant le clic</label>
+          <label class="field-label" style="color:var(--accent)">${t("ÉTAPE 1 — avant le clic")}</label>
           <input type="url" id="funnelUrl1" placeholder="https://..." autocomplete="off" />
         </div>
         <div class="field">
-          <label class="field-label" style="color:var(--warning)">ÉTAPE 2 — page de paiement</label>
+          <label class="field-label" style="color:var(--warning)">${t("ÉTAPE 2 — page de paiement")}</label>
           <input type="url" id="funnelUrl2" placeholder="https://..." autocomplete="off" />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="funnelPlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -619,19 +619,19 @@ function renderFunnelShell() {
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Type d'offre</label>
+          <label class="field-label">${t("Type d'offre")}</label>
           <div class="segmented" id="funnelOfferSeg">
             <button class="active" data-val="Digital product">Digital</button>
             <button data-val="Ecom (produit physique)">E-com</button>
           </div>
         </div>
       </div>
-      <button class="cta" id="funnelRunBtn">🧭 Auditer le funnel</button>
+      <button class="cta" id="funnelRunBtn">${t("🧭 Auditer le funnel")}</button>
       <div class="error-box" id="funnelErrorBox"></div>
     </div>
     <div class="loading" id="funnelLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Audit des deux pages du funnel en cours…</div>
+      <div class="stage">${t("Audit des deux pages du funnel en cours…")}</div>
     </div>
     <div id="funnelResults"></div>
   `;
@@ -645,7 +645,7 @@ async function runFunnelAudit() {
   const errBox = $('#funnelErrorBox');
   errBox.style.display = 'none';
   if (!url1 || !url2) {
-    errBox.textContent = 'Les deux URLs du funnel sont requises.';
+    errBox.textContent = t('Les deux URLs du funnel sont requises.');
     errBox.style.display = 'block';
     return;
   }
@@ -668,7 +668,7 @@ async function runFunnelAudit() {
     $('#funnelLoadingBox').style.display = 'none';
     $('#funnelRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -676,7 +676,7 @@ async function runFunnelAudit() {
   } catch (err) {
     $('#funnelLoadingBox').style.display = 'none';
     $('#funnelRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -691,13 +691,13 @@ function renderFunnelStepCard(step, tag, tagColor, isWeakest) {
       <div class="vs-tag" style="color:${tagColor}">${escapeHtml(tag)}</div>
       <div class="vs-score" style="color:${scoreColor(c.score || 0)}">${c.score || 0}<span class="vs-den">/20</span></div>
       <div class="vs-decision" style="color:${scoreColor(c.score || 0)}">${escapeHtml(c.decision || '')}</div>
-      ${isWeakest ? '<div class="vs-crown" style="color:var(--danger)">⚠️ MAILLON LE PLUS FAIBLE</div>' : ''}
+      ${isWeakest ? `<div class="vs-crown" style="color:var(--danger)">${t('⚠️ MAILLON LE PLUS FAIBLE')}</div>` : ''}
       <div style="text-align:left;margin-top:12px;font-size:13px;color:var(--text-secondary);line-height:1.6">
         ${reasons.map(r => `• ${escapeHtml(r)}`).join('<br>')}
       </div>
       ${topAction ? `
         <div style="text-align:left;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-          <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px">Action prioritaire</div>
+          <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.5px">${t("Action prioritaire")}</div>
           <div style="font-size:13px;margin-top:4px">${escapeHtml(topAction.what || '')}</div>
         </div>` : ''}
     </div>
@@ -705,21 +705,21 @@ function renderFunnelStepCard(step, tag, tagColor, isWeakest) {
 }
 
 function renderFunnelResults(data) {
-  const s1Label = data.funnel_type === 'advertorial_to_payment' ? '📝 ADVERTORIAL' : '📄 PAGE DE VENTE';
+  const s1Label = data.funnel_type === 'advertorial_to_payment' ? '📝 ADVERTORIAL' : t('📄 PAGE DE VENTE');
   const weakest1 = data.weakest_link === 'step1';
   $('#funnelResults').innerHTML = `
     <div class="dash-section fade-up" style="text-align:center;margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px">Score du funnel (maillon le plus faible pondéré)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1px">${t("Score du funnel (maillon le plus faible pondéré)")}</div>
       <div class="vs-score" style="color:${scoreColor(data.funnel_score)};font-size:48px">${data.funnel_score}<span class="vs-den">/20</span></div>
-      <div class="vs-decision" style="color:${scoreColor(data.funnel_score)}">${escapeHtml(data.decision)} · Risque ${escapeHtml(data.risk)}</div>
+      <div class="vs-decision" style="color:${scoreColor(data.funnel_score)}">${escapeHtml(data.decision)} · ${t('Risque')} ${escapeHtml(data.risk)}</div>
     </div>
     <div class="vs-row fade-up">
       ${renderFunnelStepCard(data.step1, s1Label, 'var(--accent)', weakest1)}
       <div class="vs-mid"><div class="vs-mid-label">→</div></div>
-      ${renderFunnelStepCard(data.step2, '💳 PAIEMENT', 'var(--warning)', !weakest1)}
+      ${renderFunnelStepCard(data.step2, t('💳 PAIEMENT'), 'var(--warning)', !weakest1)}
     </div>
     <div class="fade-up" style="text-align:center;margin-top:16px">
-      <button class="cta-secondary" id="funnelPdfBtn" style="width:auto;padding:8px 14px;font-size:12.5px">📄 Exporter les 2 PDF (étape 1 + étape 2)</button>
+      <button class="cta-secondary" id="funnelPdfBtn" style="width:auto;padding:8px 14px;font-size:12.5px">${t("📄 Exporter les 2 PDF (étape 1 + étape 2)")}</button>
     </div>
   `;
   $('#funnelPdfBtn').addEventListener('click', (e) => downloadFunnelPdfs(data, e.target));
@@ -728,14 +728,14 @@ function renderFunnelResults(data) {
 async function downloadOneFunnelPdf(step, label) {
   const meta = {
     mode: 'Funnel Only', platform: getSegVal('funnelPlatformSeg'), offer_type: getSegVal('funnelOfferSeg'),
-    url: step.url, timestamp: new Date().toLocaleString('fr-FR'), brand_type: 'Nouveau lancement',
+    url: step.url, timestamp: new Date().toLocaleString(LANG === 'fr' ? 'fr-FR' : 'en-US'), brand_type: 'Nouveau lancement',
     page_type: step.page_type, ad_text: '', model: 'gpt-4o-mini',
   };
   const res = await fetch('/api/export/pdf', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ result: step.result, meta }),
   });
-  if (!res.ok) { const d = await res.json(); throw new Error(`${label} : ${d.detail || 'Erreur PDF'}`); }
+  if (!res.ok) { const d = await res.json(); throw new Error(`${label} : ${d.detail || t('Erreur PDF')}`); }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -749,12 +749,12 @@ async function downloadFunnelPdfs(data, btn) {
   try {
     await downloadOneFunnelPdf(data.step1, 'etape1');
     await downloadOneFunnelPdf(data.step2, 'etape2');
-    btn.textContent = '✓ Téléchargés !';
-    setTimeout(() => { btn.textContent = '📄 Exporter les 2 PDF (étape 1 + étape 2)'; }, 1800);
+    btn.textContent = t('✓ Téléchargés !');
+    setTimeout(() => { btn.textContent = t('📄 Exporter les 2 PDF (étape 1 + étape 2)'); }, 1800);
   } catch (err) {
     const errBox = $('#funnelErrorBox');
     if (errBox) { errBox.textContent = err.message; errBox.style.display = 'block'; }
-    btn.textContent = '📄 Exporter les 2 PDF (étape 1 + étape 2)';
+    btn.textContent = t('📄 Exporter les 2 PDF (étape 1 + étape 2)');
   } finally {
     btn.disabled = false;
   }
@@ -765,32 +765,32 @@ async function renderABTestShell() {
   $('#multiSubContent').innerHTML = `
     <div class="card">
       <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">🧪 A/B Test Tracker</h2>
-      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">Scorez deux variantes — d'une page de vente ou d'un advertorial. LRS identifie laquelle convertit mieux et sur quels critères.</p>
+      <p style="color:var(--text-secondary);font-size:14px;line-height:1.5;margin:0 0 20px">${t("Scorez deux variantes — d'une page de vente ou d'un advertorial. LRS identifie laquelle convertit mieux et sur quels critères.")}</p>
       <div class="field" style="margin-bottom:20px">
-        <label class="field-label">Type de test</label>
+        <label class="field-label">${t("Type de test")}</label>
         <div class="segmented" id="abTypeSeg">
-          <button class="active" data-val="page">📄 Page de vente</button>
+          <button class="active" data-val="page">${t("📄 Page de vente")}</button>
           <button data-val="advertorial">📰 Advertorial</button>
         </div>
-        <div style="color:var(--text-muted);font-size:12px;margin-top:6px">Advertorial = article/récit avant redirection vers la vraie page de vente. Le scoring s'adapte : pas de pénalité pour l'absence de stack d'offre/prix/garantie, qui sont sur la page suivante.</div>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:6px">${t("Advertorial = article/récit avant redirection vers la vraie page de vente. Le scoring s'adapte : pas de pénalité pour l'absence de stack d'offre/prix/garantie, qui sont sur la page suivante.")}</div>
       </div>
       <div class="field">
-        <label class="field-label" for="abName">Nom du test</label>
-        <input type="text" id="abName" placeholder="Ex: Headline V1 vs V2 — Juillet" />
+        <label class="field-label" for="abName">${t("Nom du test")}</label>
+        <input type="text" id="abName" placeholder="${t("Ex: Headline V1 vs V2 — Juillet")}" />
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label" style="color:var(--accent)">🔵 VARIANTE A (contrôle)</label>
+          <label class="field-label" style="color:var(--accent)">${t("🔵 VARIANTE A (contrôle)")}</label>
           <input type="url" id="abUrlA" placeholder="https://page-originale.com" />
         </div>
         <div class="field">
-          <label class="field-label" style="color:var(--warning)">🟡 VARIANTE B (challenger)</label>
+          <label class="field-label" style="color:var(--warning)">${t("🟡 VARIANTE B (challenger)")}</label>
           <input type="url" id="abUrlB" placeholder="https://page-variante.com" />
         </div>
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="abPlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -798,16 +798,16 @@ async function renderABTestShell() {
           </div>
         </div>
         <div class="field">
-          <label class="field-label" for="abHypo">Hypothèse</label>
-          <input type="text" id="abHypo" placeholder="Ex: la nouvelle headline va augmenter le Hook de 1 pt" />
+          <label class="field-label" for="abHypo">${t("Hypothèse")}</label>
+          <input type="text" id="abHypo" placeholder="${t("Ex: la nouvelle headline va augmenter le Hook de 1 pt")}" />
         </div>
       </div>
-      <button class="cta" id="abRunBtn">🧪 Lancer le test A/B</button>
+      <button class="cta" id="abRunBtn">${t("🧪 Lancer le test A/B")}</button>
       <div class="error-box" id="abErrorBox"></div>
     </div>
     <div class="loading" id="abLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Audit des deux variantes en cours…</div>
+      <div class="stage">${t("Audit des deux variantes en cours…")}</div>
     </div>
     <div id="abResults"></div>
     <div id="abExisting"></div>
@@ -825,7 +825,7 @@ async function runABTest() {
   const errBox = $('#abErrorBox');
   errBox.style.display = 'none';
   if (!name || !urlA || !urlB) {
-    errBox.textContent = 'Le nom du test et les deux URLs sont requis.';
+    errBox.textContent = t('Le nom du test et les deux URLs sont requis.');
     errBox.style.display = 'block';
     return;
   }
@@ -848,7 +848,7 @@ async function runABTest() {
     $('#abLoadingBox').style.display = 'none';
     $('#abRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -857,7 +857,7 @@ async function runABTest() {
   } catch (err) {
     $('#abLoadingBox').style.display = 'none';
     $('#abRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -871,24 +871,24 @@ function renderABTestResult(data) {
   $('#abResults').innerHTML = `
     <div class="vs-row fade-up">
       <div class="vs-card ${winnerA ? 'winner' : ''}">
-        <div class="vs-tag" style="color:var(--accent)">🔵 Variante A</div>
+        <div class="vs-tag" style="color:var(--accent)">${t("🔵 Variante A")}</div>
         <div class="vs-score" style="color:${scoreColor(data.a.score)}">${data.a.score}<span class="vs-den">/20</span></div>
         <div class="vs-decision" style="color:${scoreColor(data.a.score)}">${escapeHtml(data.a.decision)}</div>
-        ${winnerA ? '<div class="vs-crown">🏆 GAGNANTE</div>' : ''}
+        ${winnerA ? `<div class="vs-crown">${t('🏆 GAGNANTE')}</div>` : ''}
       </div>
       <div class="vs-mid">
         <div class="vs-mid-label">Δ B vs A</div>
         <div class="vs-mid-val" style="color:${delta > 0 ? 'var(--success)' : delta < 0 ? 'var(--danger)' : 'var(--text-muted)'}">${delta > 0 ? '+' : ''}${delta}</div>
       </div>
       <div class="vs-card ${winnerB ? 'winner' : ''}">
-        <div class="vs-tag" style="color:var(--warning)">🟡 Variante B</div>
+        <div class="vs-tag" style="color:var(--warning)">${t("🟡 Variante B")}</div>
         <div class="vs-score" style="color:${scoreColor(data.b.score)}">${data.b.score}<span class="vs-den">/20</span></div>
         <div class="vs-decision" style="color:${scoreColor(data.b.score)}">${escapeHtml(data.b.decision)}</div>
-        ${winnerB ? '<div class="vs-crown">🏆 GAGNANTE</div>' : ''}
+        ${winnerB ? `<div class="vs-crown">${t('🏆 GAGNANTE')}</div>` : ''}
       </div>
     </div>
     <div class="section fade-up">
-      <h2>Différences par critère</h2>
+      <h2>${t("Différences par critère")}</h2>
       ${Object.entries(critLabels).map(([k, label]) => {
         const va = data.a.crit[k] || 0, vb = data.b.crit[k] || 0;
         const diff = vb - va;
@@ -913,25 +913,25 @@ function renderExistingABTests(abtests) {
 
   $('#abExisting').innerHTML = `
     <div class="dash-section fade-up">
-      <h2>🗂️ Tests en cours (${names.length})</h2>
+      <h2>${t('🗂️ Tests en cours')} (${names.length})</h2>
       ${names.map(name => {
-        const t = abtests[name];
-        const rounds = t.rounds || [];
+        const test = abtests[name];
+        const rounds = test.rounds || [];
         const winsA = rounds.filter(r => r.winner === 'A').length;
         const winsB = rounds.filter(r => r.winner === 'B').length;
         // test_type absent = tests crees avant cette distinction, tous
         // etaient des pages de vente (seul mode disponible a l'epoque).
         // "advert" = valeur d'une version anterieure (texte de pub), corrigee
         // en "advertorial" (page de contenu avant redirection).
-        const typeBadge = (t.test_type === 'advertorial' || t.test_type === 'advert') ? '📰 Advertorial' : '📄 Page de vente';
+        const typeBadge = (test.test_type === 'advertorial' || test.test_type === 'advert') ? '📰 Advertorial' : t('📄 Page de vente');
         return `
           <div class="entity-card">
             <div class="entity-head">
               <div>
                 <div class="entity-title">🧪 ${escapeHtml(name)} — ${typeBadge}</div>
-                <div class="entity-sub">${rounds.length} round(s) · A:${winsA} vs B:${winsB} ${t.hypothesis ? '· ' + escapeHtml(t.hypothesis) : ''}</div>
+                <div class="entity-sub">${rounds.length} round(s) · A:${winsA} vs B:${winsB} ${test.hypothesis ? '· ' + escapeHtml(test.hypothesis) : ''}</div>
               </div>
-              <button class="icon-btn" data-del-ab="${escapeHtml(name)}" aria-label="Supprimer ce test A/B">🗑️</button>
+              <button class="icon-btn" data-del-ab="${escapeHtml(name)}" aria-label="${t("Supprimer ce test A/B")}">🗑️</button>
             </div>
             ${rounds.slice(-5).reverse().map(r => `
               <div class="url-progress-row">
@@ -939,7 +939,7 @@ function renderExistingABTests(abtests) {
                 <span style="color:var(--accent)">A:${r.score_a}</span>
                 <span style="color:var(--text-muted)">vs</span>
                 <span style="color:var(--warning)">B:${r.score_b}</span>
-                <span style="font-weight:700;color:${r.winner === 'A' ? 'var(--accent)' : r.winner === 'B' ? 'var(--warning)' : 'var(--text-muted)'}">→ ${r.winner} gagne</span>
+                <span style="font-weight:700;color:${r.winner === 'A' ? 'var(--accent)' : r.winner === 'B' ? 'var(--warning)' : 'var(--text-muted)'}">→ ${t('{w} gagne', { w: r.winner })}</span>
               </div>
             `).join('')}
           </div>
@@ -963,11 +963,11 @@ function renderExistingABTests(abtests) {
 // ── Suivi : Alertes / Projets / Campagnes / API Pub ─────────
 // ══════════════════════════════════════════════════════════
 const SUIVI_SUBVIEWS = {
-  alertes: { label: 'Alertes', render: loadSuiviAlertes },
+  alertes: { label: t('Alertes'), render: loadSuiviAlertes },
   monitoring: { label: 'Monitoring', render: loadSuiviMonitoring },
-  projets: { label: 'Projets', render: loadSuiviProjects },
-  campagnes: { label: 'Campagnes', render: loadSuiviCampaigns },
-  api: { label: 'API Pub', render: loadSuiviAdsConnector },
+  projets: { label: t('Projets'), render: loadSuiviProjects },
+  campagnes: { label: t('Campagnes'), render: loadSuiviCampaigns },
+  api: { label: t('API Pub'), render: loadSuiviAdsConnector },
 };
 
 function loadSuivi() {
@@ -989,13 +989,13 @@ function loadSuivi() {
 }
 
 async function loadSuiviAlertes() {
-  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/alerts');
     const data = await res.json();
     renderSuiviAlertes(data.alerts || []);
   } catch (err) {
-    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Impossible de charger les alertes : ${escapeHtml(err.message)}</div>`;
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Impossible de charger les alertes : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1004,15 +1004,15 @@ function renderSuiviAlertes(alerts) {
     $('#suiviSubContent').innerHTML = `
       <div class="empty-dash fade-up">
         <div class="emoji">📡</div>
-        <div class="title">Aucune alerte pour l'instant</div>
-        <div class="sub">Les alertes apparaissent quand le score d'une même URL varie d'au moins 2 points entre deux audits.</div>
+        <div class="title">${t("Aucune alerte pour l'instant")}</div>
+        <div class="sub">${t("Les alertes apparaissent quand le score d'une même URL varie d'au moins 2 points entre deux audits.")}</div>
       </div>
     `;
     return;
   }
   $('#suiviSubContent').innerHTML = `
     <div class="dash-section fade-up" style="margin-top:0">
-      <h2>📡 Variations de score significatives (${alerts.length})</h2>
+      <h2>${t('📡 Variations de score significatives')} (${alerts.length})</h2>
       ${alerts.map(a => `
         <div class="alert-row ${a.direction}">
           <span class="alert-icon">${a.direction === 'up' ? '📈' : '📉'}</span>
@@ -1032,7 +1032,7 @@ let _monitoringHistory = [];
 let _monitoringSchedule = {};
 
 async function loadSuiviMonitoring(selectedUrl) {
-  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const [histRes, schedRes] = await Promise.all([fetch('/api/history'), fetch('/api/monitoring/schedule')]);
     const histData = await histRes.json();
@@ -1044,7 +1044,7 @@ async function loadSuiviMonitoring(selectedUrl) {
     _monitoringSchedule = schedData.schedule || {};
     renderSuiviMonitoring(selectedUrl);
   } catch (err) {
-    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1068,11 +1068,11 @@ function renderSuiviMonitoring(selectedUrl) {
 
   let trendHtml = `
     <div class="dash-section fade-up" style="margin-top:0">
-      <h2>📈 Score Trend par page</h2>
+      <h2>${t("📈 Score Trend par page")}</h2>
       <div class="empty-dash" style="padding:32px 24px">
         <div class="emoji">📈</div>
-        <div class="title">Pas encore de tendance</div>
-        <div class="sub">Auditez la même URL plusieurs fois pour voir son évolution ici.</div>
+        <div class="title">${t("Pas encore de tendance")}</div>
+        <div class="sub">${t("Auditez la même URL plusieurs fois pour voir son évolution ici.")}</div>
       </div>
     </div>
   `;
@@ -1085,18 +1085,18 @@ function renderSuiviMonitoring(selectedUrl) {
     const sign = delta >= 0 ? '+' : '';
     trendHtml = `
       <div class="dash-section fade-up" style="margin-top:0">
-        <h2>📈 Score Trend par page</h2>
+        <h2>${t("📈 Score Trend par page")}</h2>
         <div class="field">
-          <label class="field-label" for="trendUrlSel">Choisir une page suivie</label>
+          <label class="field-label" for="trendUrlSel">${t("Choisir une page suivie")}</label>
           <select id="trendUrlSel" style="${SEL_STYLE}">
             ${urls.map(u => `<option value="${escapeHtml(u)}" ${u === selectedUrl ? 'selected' : ''}>${escapeHtml(u.replace(/^https?:\/\//, '').slice(0, 60))}</option>`).join('')}
           </select>
         </div>
         <div class="sparkline-wrap" style="margin-top:16px">${buildSparkline(points)}</div>
         <div class="trend-metrics">
-          <div class="tm-card"><div class="tm-label">Premier audit</div><div class="tm-val">${first}/20</div></div>
-          <div class="tm-card"><div class="tm-label">Dernier audit</div><div class="tm-val">${last}/20</div></div>
-          <div class="tm-card"><div class="tm-label">Progression</div><div class="tm-val" style="color:${deltaColor}">${sign}${delta} pts</div></div>
+          <div class="tm-card"><div class="tm-label">${t("Premier audit")}</div><div class="tm-val">${first}/20</div></div>
+          <div class="tm-card"><div class="tm-label">${t("Dernier audit")}</div><div class="tm-val">${last}/20</div></div>
+          <div class="tm-card"><div class="tm-label">${t("Progression")}</div><div class="tm-val" style="color:${deltaColor}">${sign}${delta} pts</div></div>
         </div>
       </div>
     `;
@@ -1104,18 +1104,18 @@ function renderSuiviMonitoring(selectedUrl) {
 
   const schedFormHtml = `
     <div class="card" style="margin-top:20px">
-      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">⏰ Planifier un audit</h2>
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">${t("⏰ Planifier un audit")}</h2>
       <div class="field">
-        <label class="field-label" for="schUrl">URL à surveiller</label>
+        <label class="field-label" for="schUrl">${t("URL à surveiller")}</label>
         <input type="url" id="schUrl" placeholder="https://ma-landing.com" />
       </div>
       <div class="row" style="margin-top:14px">
         <div class="field">
-          <label class="field-label" for="schFreq">Fréquence</label>
+          <label class="field-label" for="schFreq">${t("Fréquence")}</label>
           <select id="schFreq" style="${SEL_STYLE}">
-            <option value="7">7 jours</option>
-            <option value="14">14 jours</option>
-            <option value="30">30 jours</option>
+            <option value="7">${t("7 jours")}</option>
+            <option value="14">${t("14 jours")}</option>
+            <option value="30">${t("30 jours")}</option>
           </select>
         </div>
         <div class="field">
@@ -1128,7 +1128,7 @@ function renderSuiviMonitoring(selectedUrl) {
       </div>
       <div class="row" style="margin-top:14px">
         <div class="field">
-          <label class="field-label" for="schPlat">Plateforme</label>
+          <label class="field-label" for="schPlat">${t("Plateforme")}</label>
           <select id="schPlat" style="${SEL_STYLE}">
             <option value="Meta">Meta</option>
             <option value="TikTok">TikTok</option>
@@ -1136,25 +1136,25 @@ function renderSuiviMonitoring(selectedUrl) {
           </select>
         </div>
         <div class="field">
-          <label class="field-label" for="schOffer">Offre</label>
+          <label class="field-label" for="schOffer">${t("Offre")}</label>
           <select id="schOffer" style="${SEL_STYLE}">
             <option value="Digital product">Digital product</option>
-            <option value="Ecom (produit physique)">Ecom (produit physique)</option>
+            <option value="Ecom (produit physique)">${t("Ecom (produit physique)")}</option>
           </select>
         </div>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label">Marque</label>
+        <label class="field-label">${t("Marque")}</label>
         <div class="segmented" id="schBrandSeg">
-          <button class="active" data-val="Nouveau lancement">Nouveau lancement</button>
-          <button data-val="Marque etablie">Marque établie</button>
+          <button class="active" data-val="Nouveau lancement">${t("Nouveau lancement")}</button>
+          <button data-val="Marque etablie">${t("Marque établie")}</button>
         </div>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="schAlertEmail">📧 Email alerte (optionnel)</label>
-        <input type="text" id="schAlertEmail" placeholder="vous@email.com — alerte si le score chute de ≥2 pts" />
+        <label class="field-label" for="schAlertEmail">${t("📧 Email alerte (optionnel)")}</label>
+        <input type="text" id="schAlertEmail" placeholder="${t("vous@email.com — alerte si le score chute de ≥2 pts")}" />
       </div>
-      <button class="cta" id="schCreateBtn">⏰ Planifier</button>
+      <button class="cta" id="schCreateBtn">${t("⏰ Planifier")}</button>
       <div class="error-box" id="schErrorBox"></div>
     </div>
   `;
@@ -1162,7 +1162,7 @@ function renderSuiviMonitoring(selectedUrl) {
   const sids = Object.keys(_monitoringSchedule);
   const schedListHtml = sids.length ? `
     <div class="dash-section fade-up">
-      <h2>Audits en cours de surveillance (${sids.length})</h2>
+      <h2>${t('Audits en cours de surveillance')} (${sids.length})</h2>
       ${sids.map(sid => {
         const s = _monitoringSchedule[sid];
         const urlShort = (s.url || '').replace(/^https?:\/\//, '').slice(0, 50);
@@ -1174,19 +1174,19 @@ function renderSuiviMonitoring(selectedUrl) {
             <div class="entity-head">
               <div>
                 <div class="entity-title">${statusIcon} ${escapeHtml(urlShort)}</div>
-                <div class="entity-sub">Toutes les ${s.freq_days}j · ${scIcon} ${lastSc != null ? lastSc + '/20' : 'pas encore audité'}</div>
+                <div class="entity-sub">${t('Toutes les {n}j', { n: s.freq_days })} · ${scIcon} ${lastSc != null ? lastSc + '/20' : t('pas encore audité')}</div>
               </div>
-              <button class="icon-btn" data-del-sched="${sid}" aria-label="Supprimer cet audit planifié">🗑️</button>
+              <button class="icon-btn" data-del-sched="${sid}" aria-label="${t("Supprimer cet audit planifié")}">🗑️</button>
             </div>
             <div class="sched-status-row">
-              <span><b>Dernier audit :</b> ${escapeHtml(s.last_run || 'Jamais')}</span>
-              <span><b>Prochain :</b> ${escapeHtml(s.next_run_hint || '')}</span>
-              <span><b>Mode :</b> ${escapeHtml(s.mode || '')}</span>
+              <span><b>${t('Dernier audit :')}</b> ${escapeHtml(s.last_run || t('Jamais'))}</span>
+              <span><b>${t('Prochain :')}</b> ${escapeHtml(s.next_run_hint || '')}</span>
+              <span><b>${t('Mode :')}</b> ${escapeHtml(s.mode || '')}</span>
             </div>
-            ${s.last_error ? `<div class="error-box" style="display:block">Erreur : ${escapeHtml(String(s.last_error).slice(0, 120))}</div>` : ''}
+            ${s.last_error ? `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(String(s.last_error).slice(0, 120))}</div>` : ''}
             <div class="sched-actions">
-              <button class="cta-secondary" data-run-sched="${sid}">▶️ Lancer maintenant</button>
-              <button class="cta-secondary" data-tog-sched="${sid}">${s.enabled ? '⏸️ Désactiver' : '▶️ Activer'}</button>
+              <button class="cta-secondary" data-run-sched="${sid}">${t("▶️ Lancer maintenant")}</button>
+              <button class="cta-secondary" data-tog-sched="${sid}">${s.enabled ? t('⏸️ Désactiver') : t('▶️ Activer')}</button>
             </div>
           </div>
         `;
@@ -1195,8 +1195,8 @@ function renderSuiviMonitoring(selectedUrl) {
   ` : `
     <div class="empty-dash fade-up" style="margin-top:20px">
       <div class="emoji">⏰</div>
-      <div class="title">Aucun audit planifié</div>
-      <div class="sub">Planifiez un audit récurrent ci-dessus pour être alerté automatiquement des variations de score.</div>
+      <div class="title">${t("Aucun audit planifié")}</div>
+      <div class="sub">${t("Planifiez un audit récurrent ci-dessus pour être alerté automatiquement des variations de score.")}</div>
     </div>
   `;
 
@@ -1212,7 +1212,7 @@ function renderSuiviMonitoring(selectedUrl) {
     const errBox = $('#schErrorBox');
     errBox.style.display = 'none';
     if (!url) {
-      errBox.textContent = 'Renseignez une URL.';
+      errBox.textContent = t('Renseignez une URL.');
       errBox.style.display = 'block';
       return;
     }
@@ -1231,10 +1231,10 @@ function renderSuiviMonitoring(selectedUrl) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      if (!res.ok) { errBox.textContent = data.detail || t('Erreur.'); errBox.style.display = 'block'; return; }
       loadSuiviMonitoring(selectedUrl);
     } catch (err) {
-      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.textContent = t('Erreur réseau : ') + err.message;
       errBox.style.display = 'block';
     }
   });
@@ -1262,13 +1262,13 @@ function renderSuiviMonitoring(selectedUrl) {
   $$('#suiviSubContent [data-run-sched]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      btn.textContent = '⏳ Audit en cours…';
+      btn.textContent = t('⏳ Audit en cours…');
       try {
         await fetch('/api/monitoring/schedule/' + encodeURIComponent(btn.dataset.runSched) + '/run', { method: 'POST' });
         loadSuiviMonitoring(selectedUrl);
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Erreur — réessayer';
+        btn.textContent = t('Erreur — réessayer');
       }
     });
   });
@@ -1276,13 +1276,13 @@ function renderSuiviMonitoring(selectedUrl) {
 
 // ── Projets multi-pages ──────────────────────────────────────
 async function loadSuiviProjects() {
-  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/projects');
     const data = await res.json();
     renderSuiviProjects(data.projects || {});
   } catch (err) {
-    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1290,20 +1290,20 @@ function renderSuiviProjects(projects) {
   const names = Object.keys(projects);
   const formHtml = `
     <div class="card">
-      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">➕ Créer un nouveau projet</h2>
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">${t("➕ Créer un nouveau projet")}</h2>
       <div class="field">
-        <label class="field-label" for="projName">Nom du projet</label>
-        <input type="text" id="projName" placeholder="Ex: Funnel Produit X" />
+        <label class="field-label" for="projName">${t("Nom du projet")}</label>
+        <input type="text" id="projName" placeholder="${t("Ex: Funnel Produit X")}" />
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="projNotes">Notes (optionnel)</label>
-        <input type="text" id="projNotes" placeholder="Contexte, objectifs, budget..." />
+        <label class="field-label" for="projNotes">${t("Notes (optionnel)")}</label>
+        <input type="text" id="projNotes" placeholder="${t("Contexte, objectifs, budget...")}" />
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="projUrls">URLs du funnel (une par ligne)</label>
+        <label class="field-label" for="projUrls">${t("URLs du funnel (une par ligne)")}</label>
         <textarea id="projUrls" placeholder="https://ma-pub.com&#10;https://ma-landing.com&#10;https://ma-page-commande.com" style="min-height:100px"></textarea>
       </div>
-      <button class="cta" id="projCreateBtn">💾 Créer le projet</button>
+      <button class="cta" id="projCreateBtn">${t("💾 Créer le projet")}</button>
       <div class="error-box" id="projErrorBox"></div>
     </div>
   `;
@@ -1320,9 +1320,9 @@ function renderSuiviProjects(projects) {
         <div class="entity-head">
           <div>
             <div class="entity-title">🗂️ ${escapeHtml(name)}</div>
-            <div class="entity-sub">${nDone}/${urls.length} audités ${avg !== null ? '· Moy ' + avg + '/20' : '· Non audité'}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
+            <div class="entity-sub">${t('{done}/{total} audités', { done: nDone, total: urls.length })} ${avg !== null ? t('· Moy {avg}/20', { avg }) : t('· Non audité')}${p.notes ? ' · ' + escapeHtml(p.notes) : ''}</div>
           </div>
-          <button class="icon-btn" data-del-proj="${escapeHtml(name)}" aria-label="Supprimer ce projet">🗑️</button>
+          <button class="icon-btn" data-del-proj="${escapeHtml(name)}" aria-label="${t("Supprimer ce projet")}">🗑️</button>
         </div>
         ${urls.map(u => {
           const a = audits[u];
@@ -1330,11 +1330,11 @@ function renderSuiviProjects(projects) {
           return `<div class="url-progress-row">
             <span class="up-url">${escapeHtml(uShort)}</span>
             ${a ? `<span class="up-score" style="color:${scoreColor(a.score)}">${a.score}/20</span><span style="color:var(--text-muted);font-size:12px">${escapeHtml(a.decision)}</span>`
-                : `<span style="color:var(--text-muted);font-size:12px">— non audité</span>`}
+                : `<span style="color:var(--text-muted);font-size:12px">${t("— non audité")}</span>`}
           </div>`;
         }).join('')}
         <button class="cta-secondary" data-audit-proj="${escapeHtml(name)}" style="width:100%;margin-top:12px">
-          ${nDone < urls.length ? `▶️ Auditer les ${urls.length - nDone} pages restantes` : '🔁 Re-auditer toutes les pages'}
+          ${nDone < urls.length ? t('▶️ Auditer les {n} pages restantes', { n: urls.length - nDone }) : t('🔁 Re-auditer toutes les pages')}
         </button>
       </div>
     `;
@@ -1343,8 +1343,8 @@ function renderSuiviProjects(projects) {
   $('#suiviSubContent').innerHTML = formHtml + (names.length ? `<div class="dash-section">${listHtml}</div>` : `
     <div class="empty-dash fade-up" style="margin-top:20px">
       <div class="emoji">🗂️</div>
-      <div class="title">Aucun projet créé</div>
-      <div class="sub">Créez votre premier projet ci-dessus pour grouper un funnel multi-pages.</div>
+      <div class="title">${t("Aucun projet créé")}</div>
+      <div class="sub">${t("Créez votre premier projet ci-dessus pour grouper un funnel multi-pages.")}</div>
     </div>
   `);
 
@@ -1355,7 +1355,7 @@ function renderSuiviProjects(projects) {
     const errBox = $('#projErrorBox');
     errBox.style.display = 'none';
     if (!name || !urls.length) {
-      errBox.textContent = 'Nom du projet et au moins une URL sont requis.';
+      errBox.textContent = t('Nom du projet et au moins une URL sont requis.');
       errBox.style.display = 'block';
       return;
     }
@@ -1365,10 +1365,10 @@ function renderSuiviProjects(projects) {
         body: JSON.stringify({ name, notes, urls }),
       });
       const data = await res.json();
-      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      if (!res.ok) { errBox.textContent = data.detail || t('Erreur.'); errBox.style.display = 'block'; return; }
       renderSuiviProjects(data.projects);
     } catch (err) {
-      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.textContent = t('Erreur réseau : ') + err.message;
       errBox.style.display = 'block';
     }
   });
@@ -1387,17 +1387,17 @@ function renderSuiviProjects(projects) {
   $$('#suiviSubContent [data-audit-proj]').forEach(btn => {
     btn.addEventListener('click', async () => {
       btn.disabled = true;
-      btn.textContent = '⏳ Audit en cours… (peut prendre plusieurs minutes)';
+      btn.textContent = t('⏳ Audit en cours… (peut prendre plusieurs minutes)');
       try {
         const res = await fetch('/api/projects/' + encodeURIComponent(btn.dataset.auditProj) + '/audit', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}),
         });
         const data = await res.json();
         if (res.ok) renderSuiviProjects(data.projects);
-        else { btn.disabled = false; btn.textContent = 'Erreur — réessayer'; }
+        else { btn.disabled = false; btn.textContent = t('Erreur — réessayer'); }
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = 'Erreur réseau — réessayer';
+        btn.textContent = t('Erreur réseau — réessayer');
       }
     });
   });
@@ -1405,14 +1405,14 @@ function renderSuiviProjects(projects) {
 
 // ── Campagnes en cours ───────────────────────────────────────
 async function loadSuiviCampaigns() {
-  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const [campRes, histRes] = await Promise.all([fetch('/api/campaigns'), fetch('/api/history')]);
     const campData = await campRes.json();
     const histData = await histRes.json();
     renderSuiviCampaigns(campData.campaigns || {}, histData.entries || []);
   } catch (err) {
-    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1423,15 +1423,15 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
 
   const formHtml = `
     <div class="card">
-      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">📡 Nouvelle campagne — Diagnostic live</h2>
-      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 14px">Entrez vos stats pub. LRS croise vos métriques avec le score de votre page pour identifier où votre funnel perd de l'argent.</p>
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">${t("📡 Nouvelle campagne — Diagnostic live")}</h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 14px">${t("Entrez vos stats pub. LRS croise vos métriques avec le score de votre page pour identifier où votre funnel perd de l'argent.")}</p>
       <div class="row">
         <div class="field">
-          <label class="field-label" for="campName">Nom de la campagne</label>
-          <input type="text" id="campName" placeholder="Ex: Meta — Produit X — Juillet" />
+          <label class="field-label" for="campName">${t("Nom de la campagne")}</label>
+          <input type="text" id="campName" placeholder="${t("Ex: Meta — Produit X — Juillet")}" />
         </div>
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="campPlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -1440,14 +1440,14 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
         </div>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="campLinkedUrl">Page liée (audit LRS, optionnel)</label>
+        <label class="field-label" for="campLinkedUrl">${t("Page liée (audit LRS, optionnel)")}</label>
         <select id="campLinkedUrl" style="width:100%;background:var(--surface-2);border:1px solid var(--border-strong);border-radius:12px;padding:12px 14px;color:var(--text);font-size:14px;font-family:inherit">
-          <option value="">— Aucune —</option>
+          <option value="">${t("— Aucune —")}</option>
           ${urlOptions}
         </select>
       </div>
       <div class="row" style="margin-top:14px">
-        <div class="field"><label class="field-label" for="campBudget">Budget journalier (€)</label><input type="number" id="campBudget" min="0" step="5" value="0" /></div>
+        <div class="field"><label class="field-label" for="campBudget">${t("Budget journalier (€)")}</label><input type="number" id="campBudget" min="0" step="5" value="0" /></div>
         <div class="field"><label class="field-label" for="campCtr">CTR (%)</label><input type="number" id="campCtr" min="0" step="0.1" value="0" /></div>
       </div>
       <div class="row" style="margin-top:14px">
@@ -1456,9 +1456,9 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
       </div>
       <div class="row" style="margin-top:14px">
         <div class="field"><label class="field-label" for="campCpa">CPA (€)</label><input type="number" id="campCpa" min="0" step="1" value="0" /></div>
-        <div class="field"><label class="field-label" for="campNotes">Notes</label><input type="text" id="campNotes" placeholder="Audience, créa testée..." /></div>
+        <div class="field"><label class="field-label" for="campNotes">Notes</label><input type="text" id="campNotes" placeholder="${t("Audience, créa testée...")}" /></div>
       </div>
-      <button class="cta" id="campSaveBtn">💾 Sauvegarder & Analyser</button>
+      <button class="cta" id="campSaveBtn">${t("💾 Sauvegarder & Analyser")}</button>
       <div class="error-box" id="campErrorBox"></div>
     </div>
   `;
@@ -1476,9 +1476,9 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
         <div class="entity-head">
           <div>
             <div class="entity-title">${badge} ${escapeHtml(name)}</div>
-            <div class="entity-sub">${escapeHtml(c.platform)} · ${c.budget_daily}€/j · màj ${escapeHtml(c.updated)}</div>
+            <div class="entity-sub">${escapeHtml(c.platform)} · ${t('{b}€/j · màj {d}', { b: c.budget_daily, d: escapeHtml(c.updated) })}</div>
           </div>
-          <button class="icon-btn" data-del-camp="${escapeHtml(name)}" aria-label="Supprimer cette campagne">🗑️</button>
+          <button class="icon-btn" data-del-camp="${escapeHtml(name)}" aria-label="${t("Supprimer cette campagne")}">🗑️</button>
         </div>
         <div class="kpi-grid" style="margin-bottom:12px">
           <div class="kpi-card"><div class="kpi-label">CTR</div><div class="kpi-val" style="font-size:18px">${c.ctr || '—'}%</div></div>
@@ -1486,25 +1486,25 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
           <div class="kpi-card"><div class="kpi-label">ROAS</div><div class="kpi-val" style="font-size:18px">${c.roas || '—'}x</div></div>
           <div class="kpi-card"><div class="kpi-label">CPA</div><div class="kpi-val" style="font-size:18px">${c.cpa || '—'}€</div></div>
         </div>
-        ${c.lrs_score !== null && c.lrs_score !== undefined ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">Score LRS page liée : <strong style="color:var(--text)">${c.lrs_score}/20</strong></p>` : `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">⚠️ Non reliée à un audit LRS.</p>`}
+        ${c.lrs_score !== null && c.lrs_score !== undefined ? `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">${t("Score LRS page liée : ")}<strong style="color:var(--text)">${c.lrs_score}/20</strong></p>` : `<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 10px">${t("⚠️ Non reliée à un audit LRS.")}</p>`}
         ${diags.length ? diags.map(d => `
           <div class="diag-row" style="border-left-color:${levelColor[d.level] || '#888'}">
             <span class="diag-crit" style="color:${levelColor[d.level] || '#888'}">${levelIcon[d.level] || '⚪'} ${escapeHtml(d.crit)}</span>
             <div class="diag-msg">${escapeHtml(d.msg)}</div>
           </div>
-        `).join('') : '<p style="font-size:13px;color:var(--success)">✅ Aucun problème détecté — campagne saine.</p>'}
+        `).join('') : `<p style="font-size:13px;color:var(--success)">${t('✅ Aucun problème détecté — campagne saine.')}</p>`}
       </div>
     `;
   }).join('');
 
-  $('#suiviSubContent').innerHTML = formHtml + (names.length ? `<div class="dash-section"><h2>🔍 Diagnostics actifs</h2>${listHtml}</div>` : '');
+  $('#suiviSubContent').innerHTML = formHtml + (names.length ? `<div class="dash-section"><h2>${t('🔍 Diagnostics actifs')}</h2>${listHtml}</div>` : '');
   setupSegmented('campPlatformSeg');
 
   $('#campSaveBtn').addEventListener('click', async () => {
     const name = $('#campName').value.trim();
     const errBox = $('#campErrorBox');
     errBox.style.display = 'none';
-    if (!name) { errBox.textContent = 'Nom de la campagne requis.'; errBox.style.display = 'block'; return; }
+    if (!name) { errBox.textContent = t('Nom de la campagne requis.'); errBox.style.display = 'block'; return; }
     try {
       const res = await fetch('/api/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1520,10 +1520,10 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { errBox.textContent = data.detail || 'Erreur.'; errBox.style.display = 'block'; return; }
+      if (!res.ok) { errBox.textContent = data.detail || t('Erreur.'); errBox.style.display = 'block'; return; }
       loadSuiviCampaigns();
     } catch (err) {
-      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.textContent = t('Erreur réseau : ') + err.message;
       errBox.style.display = 'block';
     }
   });
@@ -1542,21 +1542,21 @@ function renderSuiviCampaigns(campaigns, historyEntries) {
 
 // ── Connexion API Pub (Meta / TikTok) ────────────────────────
 async function loadSuiviAdsConnector() {
-  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#suiviSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/ads-connector/creds');
     const data = await res.json();
     renderSuiviAdsConnector(data);
   } catch (err) {
-    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#suiviSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
 function renderSuiviAdsConnector(creds) {
   $('#suiviSubContent').innerHTML = `
     <div class="card">
-      <h2 style="font-size:15px;font-weight:700;margin:0 0 6px">🔗 Connexion API Pub — Import automatique</h2>
-      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Connectez vos comptes publicitaires pour importer CTR, CPC, ROAS et CPA. Nécessite vos identifiants Meta/TikTok Ads (à configurer par vous-même).</p>
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 6px">${t("🔗 Connexion API Pub — Import automatique")}</h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">${t("Connectez vos comptes publicitaires pour importer CTR, CPC, ROAS et CPA. Nécessite vos identifiants Meta/TikTok Ads (à configurer par vous-même).")}</p>
       <div class="sub-tabs" id="adsConnPlatSeg">
         <button class="sub-tab active" data-val="meta">🔵 Meta Ads ${creds.meta_configured ? '✓' : ''}</button>
         <button class="sub-tab" data-val="tiktok">🎵 TikTok Ads ${creds.tt_configured ? '✓' : ''}</button>
@@ -1576,8 +1576,8 @@ function renderSuiviAdsConnector(creds) {
         <input type="text" id="adsAccId" placeholder="${isMeta ? 'act_123456789' : '7123456789012345678'}" value="${isMeta ? escapeHtml(creds.meta_acc_id) : escapeHtml(creds.tt_adv_id)}" />
       </div>
       <div class="row" style="margin-top:16px">
-        <button class="cta-secondary" id="adsSaveBtn" style="flex:1">💾 Sauvegarder les identifiants</button>
-        <button class="cta-secondary" id="adsImportBtn" style="flex:1;color:var(--accent);border-color:var(--accent)">📥 Importer les campagnes</button>
+        <button class="cta-secondary" id="adsSaveBtn" style="flex:1">${t("💾 Sauvegarder les identifiants")}</button>
+        <button class="cta-secondary" id="adsImportBtn" style="flex:1;color:var(--accent);border-color:var(--accent)">${t("📥 Importer les campagnes")}</button>
       </div>
       <div class="error-box" id="adsConnErrorBox"></div>
       <div id="adsImportResults"></div>
@@ -1597,7 +1597,7 @@ function renderSuiviAdsConnector(creds) {
       const errBox = $('#adsConnErrorBox');
       errBox.style.display = 'none';
       $('#adsImportBtn').disabled = true;
-      $('#adsImportBtn').textContent = '⏳ Connexion...';
+      $('#adsImportBtn').textContent = t('⏳ Connexion...');
       try {
         const res = await fetch('/api/ads-connector/import', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1605,22 +1605,22 @@ function renderSuiviAdsConnector(creds) {
         });
         const data = await res.json();
         $('#adsImportBtn').disabled = false;
-        $('#adsImportBtn').textContent = '📥 Importer les campagnes';
-        if (!res.ok) { errBox.textContent = data.detail || 'Erreur import.'; errBox.style.display = 'block'; return; }
+        $('#adsImportBtn').textContent = t('📥 Importer les campagnes');
+        if (!res.ok) { errBox.textContent = data.detail || t('Erreur import.'); errBox.style.display = 'block'; return; }
         const camps = data.campaigns || [];
         $('#adsImportResults').innerHTML = camps.length ? `
-          <div class="dash-section"><h2>${camps.length} campagne(s) importée(s)</h2>
+          <div class="dash-section"><h2>${t('{n} campagne(s) importée(s)', { n: camps.length })}</h2>
             ${camps.map(c => `
               <div class="list-row">
                 <div class="lr-body"><div class="lr-title">${escapeHtml(c.name)}</div>
                 <div class="lr-meta">Spend ${c.spend}€ · CTR ${c.ctr}% · CPC ${c.cpc}€ · ROAS ${c.roas}x · CPA ${c.cpa}€</div></div>
               </div>
             `).join('')}
-          </div>` : `<p style="color:var(--text-muted);font-size:13px;margin-top:12px">Aucune campagne trouvée sur cette période.</p>`;
+          </div>` : `<p style="color:var(--text-muted);font-size:13px;margin-top:12px">${t("Aucune campagne trouvée sur cette période.")}</p>`;
       } catch (err) {
         $('#adsImportBtn').disabled = false;
-        $('#adsImportBtn').textContent = '📥 Importer les campagnes';
-        errBox.textContent = 'Erreur réseau : ' + err.message;
+        $('#adsImportBtn').textContent = t('📥 Importer les campagnes');
+        errBox.textContent = t('Erreur réseau : ') + err.message;
         errBox.style.display = 'block';
       }
     });
@@ -1643,15 +1643,15 @@ let _histFilterTimer = null;
 function renderHistoriqueShell() {
   $('#historiqueView').innerHTML = `
     <div class="filter-bar">
-      <input type="text" id="histSearch" placeholder="🔍 Rechercher — URL, plateforme, score…" autocomplete="off" />
+      <input type="text" id="histSearch" placeholder="${t("🔍 Rechercher — URL, plateforme, score…")}" autocomplete="off" />
       <div class="segmented" id="histRiskSeg">
-        <button class="active" data-val="Tous">Tous</button>
+        <button class="active" data-val="Tous">${t("Tous")}</button>
         <button data-val="Low">Low</button>
         <button data-val="Moderate">Moderate</button>
         <button data-val="High">High</button>
       </div>
       <div class="segmented" id="histPlatformSeg">
-        <button class="active" data-val="Toutes">Toutes</button>
+        <button class="active" data-val="Toutes">${t("Toutes")}</button>
         <button data-val="Meta">Meta</button>
         <button data-val="TikTok">TikTok</button>
         <button data-val="Google">Google</button>
@@ -1673,14 +1673,14 @@ async function loadHistorique() {
   const q = $('#histSearch').value;
   const risk = getSegVal('histRiskSeg');
   const platform = getSegVal('histPlatformSeg');
-  $('#histContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#histContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const params = new URLSearchParams({ q, risk, platform });
     const res = await fetch('/api/history?' + params.toString());
     const data = await res.json();
     renderHistorique(data);
   } catch (err) {
-    $('#histContent').innerHTML = `<div class="error-box" style="display:block">Impossible de charger l'historique : ${escapeHtml(err.message)}</div>`;
+    $('#histContent').innerHTML = `<div class="error-box" style="display:block">${t("Impossible de charger l'historique : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1690,8 +1690,8 @@ function renderHistorique(data) {
     $('#histContent').innerHTML = `
       <div class="empty-dash fade-up">
         <div class="emoji">🗂️</div>
-        <div class="title">Aucun audit ne correspond</div>
-        <div class="sub">Essayez d'autres filtres, ou lancez votre premier audit.</div>
+        <div class="title">${t("Aucun audit ne correspond")}</div>
+        <div class="sub">${t("Essayez d'autres filtres, ou lancez votre premier audit.")}</div>
       </div>
     `;
     return;
@@ -1704,12 +1704,12 @@ function renderHistorique(data) {
     statsHtml = `
       <div class="stats-banner fade-up">
         <div>
-          <div class="stat-label">Progression globale</div>
+          <div class="stat-label">${t("Progression globale")}</div>
           <div class="stat-val" style="color:${dColor}">${d >= 0 ? '+' : ''}${d} pts</div>
-          <div class="stat-sub">depuis le premier audit (filtré)</div>
+          <div class="stat-sub">${t("depuis le premier audit (filtré)")}</div>
         </div>
         <div>
-          <div class="stat-label">Score moyen</div>
+          <div class="stat-label">${t("Score moyen")}</div>
           <div class="stat-val" style="color:var(--accent)">${data.stats.avg_score}<span style="color:var(--text-muted);font-size:16px">/20</span></div>
         </div>
         <div>
@@ -1742,10 +1742,10 @@ function renderHistorique(data) {
         <span class="hist-chevron">▶</span>
       </div>
       <div class="hist-detail">
-        <div><div class="hd-label">Décision</div><div class="hd-val" style="color:${scoreColor(e.score)}">${escapeHtml(e.decision)}</div></div>
-        <div><div class="hd-label">Plateforme</div><div class="hd-val">${escapeHtml(e.platform)}</div></div>
-        <div><div class="hd-label">Risque</div><div class="hd-val">${escapeHtml(e.risk)}</div></div>
-        <div><div class="hd-label">vs précédent</div><div class="hd-val">${e.delta !== null ? (e.delta > 0 ? '+' : '') + e.delta + ' pts' : '—'}</div></div>
+        <div><div class="hd-label">${t("Décision")}</div><div class="hd-val" style="color:${scoreColor(e.score)}">${escapeHtml(e.decision)}</div></div>
+        <div><div class="hd-label">${t("Plateforme")}</div><div class="hd-val">${escapeHtml(e.platform)}</div></div>
+        <div><div class="hd-label">${t("Risque")}</div><div class="hd-val">${escapeHtml(e.risk)}</div></div>
+        <div><div class="hd-label">${t("vs précédent")}</div><div class="hd-val">${e.delta !== null ? (e.delta > 0 ? '+' : '') + e.delta + ' pts' : '—'}</div></div>
       </div>
       <div class="hist-extra" style="display:none;grid-column:1/-1;margin-top:14px"></div>
     </div>
@@ -1784,7 +1784,7 @@ function downloadBlob(filename, content, mime) {
 }
 
 function exportHistoryCsv(entries) {
-  const header = ['Timestamp', 'URL', 'Mode', 'Plateforme', 'Score', 'Décision', 'Risque'];
+  const header = ['Timestamp', 'URL', 'Mode', t('Plateforme'), 'Score', t('Décision'), t('Risque')];
   const rows = entries.map(e => [e.timestamp, e.url, e.mode, e.platform, e.score, e.decision, e.risk]);
   const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
   downloadBlob('LRS_historique.csv', csv, 'text/csv;charset=utf-8');
@@ -1801,10 +1801,10 @@ function buildExportTxt(result, meta) {
   const mm = result.message_match || {};
   const fp = result.fix_plan || {};
   const L = [];
-  L.push('='.repeat(60), 'LRS - LAUNCH RISK SYSTEM', 'Audit du ' + (meta.timestamp || ''), '='.repeat(60), '');
+  L.push('='.repeat(60), 'LRS - LAUNCH RISK SYSTEM', t('Audit du ') + (meta.timestamp || ''), '='.repeat(60), '');
   L.push('MODE         : ' + (meta.mode || ''));
-  L.push('PLATEFORME   : ' + (meta.platform || ''));
-  L.push("TYPE D'OFFRE : " + (meta.offer_type || ''));
+  L.push(t('PLATEFORME   : ') + (meta.platform || ''));
+  L.push(t("TYPE D'OFFRE : ") + (meta.offer_type || ''));
   L.push('URL          : ' + (meta.url || 'N/A'));
   L.push('', '-'.repeat(40), 'SCORE', '-'.repeat(40));
   L.push('Total   : ' + (c.score || 0) + ' / 20');
@@ -1815,31 +1815,31 @@ function buildExportTxt(result, meta) {
   L.push('  Offer    : ' + (c.offer || 0) + '/5');
   L.push('  Trust    : ' + (c.trust || 0) + '/5');
   L.push('  Friction : ' + (c.friction || 0) + '/5');
-  L.push('', '-'.repeat(40), 'ANALYSE', '-'.repeat(40));
+  L.push('', '-'.repeat(40), t('ANALYSE'), '-'.repeat(40));
   L.push('Hook     : ' + (why.hook_detail || ''), '');
   L.push('Offer    : ' + (why.offer_detail || ''), '');
   L.push('Trust    : ' + (why.trust_detail || ''), '');
   L.push('Friction : ' + (why.friction_detail || ''), '');
-  L.push('Top 3 raisons :');
+  L.push(t('Top 3 raisons :'));
   (why.top_3_reasons || []).forEach((r, i) => L.push('  ' + (i + 1) + '. ' + r));
   if (mm.status && mm.status !== 'N/A') {
     L.push('', '-'.repeat(40), 'MESSAGE MATCH', '-'.repeat(40));
-    L.push('Statut : ' + mm.status);
+    L.push(t('Statut : ') + mm.status);
   }
-  L.push('', '-'.repeat(40), "PLAN D'ACTION", '-'.repeat(40));
+  L.push('', '-'.repeat(40), t("PLAN D'ACTION"), '-'.repeat(40));
   const top = fp.top_priority_action || {};
   if (top.what) {
-    L.push('>>> ACTION PRIORITAIRE #1 <<<');
-    L.push('  Quoi          : ' + top.what);
-    L.push('  Comment exact : ' + (top.how_exactly || ''));
-    L.push('  Temps estimé  : ' + (top.time_estimate || ''), '');
+    L.push(t('>>> ACTION PRIORITAIRE #1 <<<'));
+    L.push(t('  Quoi          : ') + top.what);
+    L.push(t('  Comment exact : ') + (top.how_exactly || ''));
+    L.push(t('  Temps estimé  : ') + (top.time_estimate || ''), '');
   }
   const qws = fp.quick_wins || [];
   if (qws.length) {
     L.push('Quick wins :');
     qws.forEach(qw => L.push('  - ' + (qw.what || '') + ' — ' + (qw.how_exactly || '')));
   }
-  L.push('', 'Généré par LRS™ — Launch Risk System');
+  L.push('', t('Généré par LRS™ — Launch Risk System'));
   return L.join('\n');
 }
 
@@ -1848,7 +1848,7 @@ function buildShareText(result, meta) {
   const why = result.why_this_score || {};
   const fp = result.fix_plan || {};
   const lines = [
-    '═══ 🚦 LRS™ — RÉSULTAT D\'AUDIT ═══',
+    t("═══ 🚦 LRS™ — RÉSULTAT D'AUDIT ═══"),
     `📅 ${meta.timestamp || ''}  |  ${meta.mode || ''}`,
     `🔗 ${meta.url || meta.offer_type || ''}`,
     '',
@@ -1857,24 +1857,24 @@ function buildShareText(result, meta) {
     '',
   ];
   const top3 = (why.top_3_reasons || []).slice(0, 3);
-  if (top3.length) { lines.push('📋 Raisons du score :'); top3.forEach(r => lines.push('   • ' + r)); lines.push(''); }
+  if (top3.length) { lines.push(t('📋 Raisons du score :')); top3.forEach(r => lines.push('   • ' + r)); lines.push(''); }
   const top = fp.top_priority_action || {};
   if (top.what) { lines.push('🎯 Action #1 : ' + top.what, ''); }
   const qws = (fp.quick_wins || []).slice(0, 3);
   if (qws.length) { lines.push('⚡ Quick Wins :'); qws.forEach(qw => lines.push('   • ' + (qw.what || ''))); lines.push(''); }
-  lines.push('Généré par LRS™ — Launch Risk System');
+  lines.push(t('Généré par LRS™ — Launch Risk System'));
   return lines.join('\n');
 }
 
 async function loadHistoryRowExtra(url, ts, container) {
-  container.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">Chargement…</div>`;
+  container.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text-muted);font-size:13px">${t("Chargement…")}</div>`;
   try {
     const res = await fetch('/api/history/entry?' + new URLSearchParams({ url, timestamp: ts }));
-    if (!res.ok) throw new Error('introuvable');
+    if (!res.ok) throw new Error(t('introuvable'));
     const data = await res.json();
     renderHistoryRowExtra(data, container);
   } catch (err) {
-    container.innerHTML = `<div style="color:var(--danger);font-size:12.5px">Impossible de charger le détail : ${escapeHtml(err.message)}</div>`;
+    container.innerHTML = `<div style="color:var(--danger);font-size:12.5px">${t("Impossible de charger le détail : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -1892,7 +1892,7 @@ function renderHistoryRowExtra(data, container) {
 
   const trackerHtml = recs.length ? `
     <div style="margin-bottom:16px">
-      <div class="field-label" style="margin-bottom:8px">📋 Suivi des recommandations</div>
+      <div class="field-label" style="margin-bottom:8px">${t("📋 Suivi des recommandations")}</div>
       ${recs.map(([label, id]) => `
         <label class="checklist-item" style="padding:6px 0">
           <input type="checkbox" data-tracker-id="${id}" ${trackerState[id] ? 'checked' : ''} />
@@ -1908,7 +1908,7 @@ function renderHistoryRowExtra(data, container) {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="cta-secondary" data-export-txt style="width:auto;padding:8px 14px;font-size:12.5px">📥 .txt</button>
       <button class="cta-secondary" data-export-pdf style="width:auto;padding:8px 14px;font-size:12.5px">📄 PDF</button>
-      <button class="cta-secondary" data-copy-share style="width:auto;padding:8px 14px;font-size:12.5px">🔗 Copier le résumé</button>
+      <button class="cta-secondary" data-copy-share style="width:auto;padding:8px 14px;font-size:12.5px">${t("🔗 Copier le résumé")}</button>
       <button class="cta-secondary" data-send-slack style="width:auto;padding:8px 14px;font-size:12.5px">📤 Slack</button>
       <button class="cta-secondary" data-send-sheets style="width:auto;padding:8px 14px;font-size:12.5px">📊 Sheets</button>
       <button class="cta-secondary" data-send-notion style="width:auto;padding:8px 14px;font-size:12.5px">📝 Notion</button>
@@ -1948,7 +1948,7 @@ function renderHistoryRowExtra(data, container) {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ result, meta }),
       });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Erreur PDF'); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || t('Erreur PDF')); }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1966,10 +1966,10 @@ function renderHistoryRowExtra(data, container) {
     const txt = buildShareText(result, meta);
     try {
       await navigator.clipboard.writeText(txt);
-      e.target.textContent = '✓ Copié !';
-      setTimeout(() => { e.target.textContent = '🔗 Copier le résumé'; }, 1800);
+      e.target.textContent = t('✓ Copié !');
+      setTimeout(() => { e.target.textContent = t('🔗 Copier le résumé'); }, 1800);
     } catch (err) {
-      showErr('Impossible de copier automatiquement — sélectionnez le texte manuellement.');
+      showErr(t('Impossible de copier automatiquement — sélectionnez le texte manuellement.'));
     }
   });
 
@@ -1981,8 +1981,8 @@ function renderHistoryRowExtra(data, container) {
         body: JSON.stringify({ result, meta }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Erreur Slack');
-      e.target.textContent = '✓ Envoyé !';
+      if (!res.ok) throw new Error(d.detail || t('Erreur Slack'));
+      e.target.textContent = t('✓ Envoyé !');
       setTimeout(() => { e.target.textContent = '📤 Slack'; }, 1800);
     } catch (err) {
       showErr(err.message);
@@ -1999,8 +1999,8 @@ function renderHistoryRowExtra(data, container) {
         body: JSON.stringify({ result, meta }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Erreur Google Sheets');
-      e.target.textContent = '✓ Exporté !';
+      if (!res.ok) throw new Error(d.detail || t('Erreur Google Sheets'));
+      e.target.textContent = t('✓ Exporté !');
       setTimeout(() => { e.target.textContent = '📊 Sheets'; }, 1800);
     } catch (err) {
       showErr(err.message);
@@ -2017,8 +2017,8 @@ function renderHistoryRowExtra(data, container) {
         body: JSON.stringify({ result, meta }),
       });
       const d = await res.json();
-      if (!res.ok) throw new Error(d.detail || 'Erreur Notion');
-      e.target.textContent = '✓ Exporté !';
+      if (!res.ok) throw new Error(d.detail || t('Erreur Notion'));
+      e.target.textContent = t('✓ Exporté !');
       setTimeout(() => { e.target.textContent = '📝 Notion'; }, 1800);
     } catch (err) {
       showErr(err.message);
@@ -2112,13 +2112,13 @@ function renderChecklistShell() {
 
   const catsHtml = CHECKLIST_DATA.map(([cat, items]) => `
     <div class="checklist-cat">
-      <h3>${escapeHtml(cat)}</h3>
+      <h3>${escapeHtml(t(cat))}</h3>
       ${items.map(item => {
         const checked = !!state[item];
         return `
           <label class="checklist-item ${checked ? 'checked' : ''}">
             <input type="checkbox" data-item="${escapeHtml(item)}" ${checked ? 'checked' : ''} />
-            <span>${escapeHtml(item)}</span>
+            <span>${escapeHtml(t(item))}</span>
           </label>
         `;
       }).join('')}
@@ -2127,7 +2127,7 @@ function renderChecklistShell() {
 
   $('#ressourcesSubContent').innerHTML = `
     <div class="checklist-progress-wrap">
-      <div class="field-label" style="margin-bottom:0">Checklist pré-lancement</div>
+      <div class="field-label" style="margin-bottom:0">${t("Checklist pré-lancement")}</div>
       <div id="checklistProgressBody"></div>
     </div>
     <div class="card">${catsHtml}</div>
@@ -2205,13 +2205,13 @@ function mdLite(src) {
 }
 
 async function loadAdsLibrary() {
-  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/resources/ads-library');
     const data = await res.json();
     renderAdsLibrary(data);
   } catch (err) {
-    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -2239,11 +2239,11 @@ function renderAdsLibrary(data) {
     `).join('')}</div>`;
 
     $('#libPlatContent').innerHTML = `
-      <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:0 0 14px">Frameworks rapides</h2>
+      <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:0 0 14px">${t("Frameworks rapides")}</h2>
       ${cardsHtml(p.cards || [])}
       ${p.cards2 ? cardsHtml(p.cards2) : ''}
       ${(p.guides || []).length ? `
-        <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:24px 0 14px">Guide complet</h2>
+        <h2 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin:24px 0 14px">${t("Guide complet")}</h2>
         ${p.guides.map(g => `
           <div class="section" style="margin-top:10px">
             <h2 style="text-transform:none;font-size:15px;color:var(--text);letter-spacing:0">${escapeHtml(g.title)}</h2>
@@ -2265,13 +2265,13 @@ function renderAdsLibrary(data) {
 
 // ── Swipe Files ───────────────────────────────────────────────
 async function loadSwipeFiles() {
-  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/swipefiles');
     const data = await res.json();
     renderSwipeFiles(data);
   } catch (err) {
-    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -2295,7 +2295,7 @@ function renderSwipeFiles(swipes) {
               <div class="lr-title" style="white-space:normal">${escapeHtml(it.text)}</div>
               <div class="lr-meta">${escapeHtml(it.platform || '')} · ${escapeHtml(it.offer || '')} · ${escapeHtml(it.ts || '')}${it.notes ? ' · ' + escapeHtml(it.notes) : ''}</div>
             </div>
-            <button class="icon-btn" data-del-swipe="${cat}:${i}" aria-label="Supprimer ce swipe file">🗑️</button>
+            <button class="icon-btn" data-del-swipe="${cat}:${i}" aria-label="${t("Supprimer ce swipe file")}">🗑️</button>
           </div>
         `).join('')}
       </div>
@@ -2305,7 +2305,7 @@ function renderSwipeFiles(swipes) {
   $('#ressourcesSubContent').innerHTML = `
     <div class="kpi-grid fade-up">${kpiHtml}</div>
     <div class="card" style="margin-top:16px">
-      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">➕ Ajouter un swipe file</h2>
+      <h2 style="font-size:15px;font-weight:700;margin:0 0 14px">${t("➕ Ajouter un swipe file")}</h2>
       <div class="row">
         <div class="field">
           <label class="field-label">Type</label>
@@ -2317,9 +2317,9 @@ function renderSwipeFiles(swipes) {
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="swipePlatSeg">
-            <button class="active" data-val="Tous">Tous</button>
+            <button class="active" data-val="Tous">${t("Tous")}</button>
             <button data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
             <button data-val="Google">Google</button>
@@ -2327,21 +2327,21 @@ function renderSwipeFiles(swipes) {
         </div>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="swipeText">Texte</label>
-        <textarea id="swipeText" placeholder="Collez votre hook, headline ou CTA ici..." style="min-height:80px"></textarea>
+        <label class="field-label" for="swipeText">${t("Texte")}</label>
+        <textarea id="swipeText" placeholder="${t("Collez votre hook, headline ou CTA ici...")}" style="min-height:80px"></textarea>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="swipeNotes">Notes (pourquoi ça marche ?)</label>
-        <input type="text" id="swipeNotes" placeholder="Ex: testé sur audience froide, CTR 3.2%" />
+        <label class="field-label" for="swipeNotes">${t("Notes (pourquoi ça marche ?)")}</label>
+        <input type="text" id="swipeNotes" placeholder="${t("Ex: testé sur audience froide, CTR 3.2%")}" />
       </div>
-      <button class="cta" id="swipeSaveBtn">💾 Sauvegarder</button>
+      <button class="cta" id="swipeSaveBtn">${t("💾 Sauvegarder")}</button>
       <div class="error-box" id="swipeErrorBox"></div>
     </div>
     ${total ? listHtml : `
       <div class="empty-dash fade-up" style="margin-top:20px">
         <div class="emoji">🗂️</div>
-        <div class="title">Aucun swipe file pour l'instant</div>
-        <div class="sub">Ils s'ajoutent automatiquement après chaque audit, ou manuellement ci-dessus.</div>
+        <div class="title">${t("Aucun swipe file pour l'instant")}</div>
+        <div class="sub">${t("Ils s'ajoutent automatiquement après chaque audit, ou manuellement ci-dessus.")}</div>
       </div>
     `}
   `;
@@ -2351,7 +2351,7 @@ function renderSwipeFiles(swipes) {
     const text = $('#swipeText').value.trim();
     const errBox = $('#swipeErrorBox');
     errBox.style.display = 'none';
-    if (!text) { errBox.textContent = 'Le texte est vide.'; errBox.style.display = 'block'; return; }
+    if (!text) { errBox.textContent = t('Le texte est vide.'); errBox.style.display = 'block'; return; }
     try {
       const res = await fetch('/api/swipefiles', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2362,9 +2362,9 @@ function renderSwipeFiles(swipes) {
         }),
       });
       if (res.ok) loadSwipeFiles();
-      else { const d = await res.json(); errBox.textContent = d.detail || 'Erreur.'; errBox.style.display = 'block'; }
+      else { const d = await res.json(); errBox.textContent = d.detail || t('Erreur.'); errBox.style.display = 'block'; }
     } catch (err) {
-      errBox.textContent = 'Erreur réseau : ' + err.message;
+      errBox.textContent = t('Erreur réseau : ') + err.message;
       errBox.style.display = 'block';
     }
   });
@@ -2384,22 +2384,22 @@ function renderSwipeFiles(swipes) {
 
 // ── Benchmark ─────────────────────────────────────────────────
 async function loadBenchmark() {
-  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/resources/benchmark');
     const data = await res.json();
     renderBenchmark(data);
   } catch (err) {
-    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
 function renderBenchmark(data) {
   $('#ressourcesSubContent').innerHTML = `
     <div class="card fade-up">
-      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">📊 Rapport Benchmark — État des Landing Pages 2025</h2>
+      <h2 style="font-size:17px;font-weight:700;margin:0 0 6px">${t("📊 Rapport Benchmark — État des Landing Pages 2025")}</h2>
       <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin:0 0 18px">${escapeHtml(data.intro)}</p>
-      <a href="/api/resources/benchmark/pdf" class="cta" style="display:block">⬇️ Télécharger le rapport PDF</a>
+      <a href="/api/resources/benchmark/pdf" class="cta" style="display:block">${t("⬇️ Télécharger le rapport PDF")}</a>
     </div>
     <div class="kpi-grid fade-up" style="margin-top:20px">
       ${data.stats.map(s => `
@@ -2415,13 +2415,13 @@ function renderBenchmark(data) {
 
 // ── Changelog ─────────────────────────────────────────────────
 async function loadChangelog() {
-  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#ressourcesSubContent').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const res = await fetch('/api/resources/changelog');
     const data = await res.json();
     renderChangelog(data.versions || []);
   } catch (err) {
-    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#ressourcesSubContent').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -2453,14 +2453,14 @@ function updateChecklistProgress() {
   const pct = totalItems ? Math.round(checked / totalItems * 100) : 0;
   const color = pct < 50 ? 'var(--danger)' : pct < 80 ? 'var(--warning)' : 'var(--success)';
   const msg = pct < 50
-    ? "Moins de 50% — ne lancez pas encore."
+    ? t("Moins de 50% — ne lancez pas encore.")
     : pct < 80
-    ? "Entre 50 et 80% — testez en petit budget."
-    : "80%+ — fondamentaux solides, vous pouvez lancer.";
+    ? t("Entre 50 et 80% — testez en petit budget.")
+    : t("80%+ — fondamentaux solides, vous pouvez lancer.");
 
   $('#checklistProgressBody').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">
-      <span style="font-size:14px;color:var(--text-secondary)">${checked}/${totalItems} complétés</span>
+      <span style="font-size:14px;color:var(--text-secondary)">${t('{c}/{n} complétés', { c: checked, n: totalItems })}</span>
       <span style="font-size:20px;font-weight:800;color:${color}">${pct}%</span>
     </div>
     <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${color}"></div></div>
@@ -2472,8 +2472,8 @@ function updateChecklistProgress() {
 // ── Creative Studio (génération d'angles) ───────────────────
 // ══════════════════════════════════════════════════════════
 const CREATIVE_SUBVIEWS = {
-  angles: { label: 'Angles rapides', render: renderCreativeAnglesForm },
-  studio: { label: 'Studio avancé (Claude)', render: renderCreativeStudioForm },
+  angles: { label: t('Angles rapides'), render: renderCreativeAnglesForm },
+  studio: { label: t('Studio avancé (Claude)'), render: renderCreativeStudioForm },
 };
 
 function renderCreative() {
@@ -2497,14 +2497,14 @@ function renderCreative() {
 function renderCreativeAnglesForm() {
   $('#creativeSubContent').innerHTML = `
     <div class="card">
-      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Génère rapidement 3 angles, 5 hooks, 3 variantes de pub et un script UGC — via OpenAI, sans landing page requise.</p>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">${t("Génère rapidement 3 angles, 5 hooks, 3 variantes de pub et un script UGC — via OpenAI, sans landing page requise.")}</p>
       <div class="field">
-        <label class="field-label" for="creativeOffer">Décrivez votre offre</label>
-        <textarea id="creativeOffer" placeholder="Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…" style="min-height:120px"></textarea>
+        <label class="field-label" for="creativeOffer">${t("Décrivez votre offre")}</label>
+        <textarea id="creativeOffer" placeholder="${t("Ex : Formation en ligne pour apprendre à investir en bourse, 97€, cible débutants 30-50 ans…")}" style="min-height:120px"></textarea>
       </div>
       <div class="row">
         <div class="field">
-          <label class="field-label">Plateforme</label>
+          <label class="field-label">${t("Plateforme")}</label>
           <div class="segmented" id="creativePlatformSeg">
             <button class="active" data-val="Meta">Meta</button>
             <button data-val="TikTok">TikTok</button>
@@ -2512,19 +2512,19 @@ function renderCreativeAnglesForm() {
           </div>
         </div>
         <div class="field">
-          <label class="field-label">Type d'offre</label>
+          <label class="field-label">${t("Type d'offre")}</label>
           <div class="segmented" id="creativeOfferSeg">
             <button class="active" data-val="Digital product">Digital</button>
             <button data-val="Ecom (produit physique)">E-com</button>
           </div>
         </div>
       </div>
-      <button class="cta" id="creativeRunBtn">Générer des angles créatifs</button>
+      <button class="cta" id="creativeRunBtn">${t("Générer des angles créatifs")}</button>
       <div class="error-box" id="creativeErrorBox"></div>
     </div>
     <div class="loading" id="creativeLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Génération des angles créatifs…</div>
+      <div class="stage">${t("Génération des angles créatifs…")}</div>
     </div>
     <div id="creativeResults"></div>
   `;
@@ -2536,31 +2536,31 @@ function renderCreativeAnglesForm() {
 function renderCreativeStudioForm() {
   $('#creativeSubContent').innerHTML = `
     <div class="card">
-      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">Génère une page complète (headline, hook, corps, CTA) structurée par framework, via le module Creative Studio réel (Claude). Nécessite <code>ANTHROPIC_API_KEY</code> dans <code>.env</code>.</p>
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">${t("Génère une page complète (headline, hook, corps, CTA) structurée par framework, via le module Creative Studio réel (Claude). Nécessite <code>ANTHROPIC_API_KEY</code> dans <code>.env</code>.")}</p>
       <div class="row">
         <div class="field">
-          <label class="field-label" for="studioName">Nom du produit</label>
-          <input type="text" id="studioName" placeholder="Ex: Formation Bourse Débutant" />
+          <label class="field-label" for="studioName">${t("Nom du produit")}</label>
+          <input type="text" id="studioName" placeholder="${t("Ex: Formation Bourse Débutant")}" />
         </div>
         <div class="field">
-          <label class="field-label" for="studioPrice">Prix (€)</label>
+          <label class="field-label" for="studioPrice">${t("Prix (€)")}</label>
           <input type="number" id="studioPrice" min="0" step="1" value="97" />
         </div>
       </div>
       <div class="field" style="margin-top:14px">
         <label class="field-label" for="studioDescription">Description</label>
-        <textarea id="studioDescription" placeholder="Ce que le produit fait, pour qui, le résultat obtenu…" style="min-height:100px"></textarea>
+        <textarea id="studioDescription" placeholder="${t("Ce que le produit fait, pour qui, le résultat obtenu…")}" style="min-height:100px"></textarea>
       </div>
       <div class="field" style="margin-top:14px">
-        <label class="field-label" for="studioAudience">Audience cible</label>
-        <input type="text" id="studioAudience" placeholder="Ex: débutants 30-50 ans, envie d'investir sans expérience" />
+        <label class="field-label" for="studioAudience">${t("Audience cible")}</label>
+        <input type="text" id="studioAudience" placeholder="${t("Ex: débutants 30-50 ans, envie d'investir sans expérience")}" />
       </div>
       <div class="row" style="margin-top:14px">
         <div class="field">
-          <label class="field-label">Type de page</label>
+          <label class="field-label">${t("Type de page")}</label>
           <div class="segmented" id="studioKindSeg">
             <button class="active" data-val="advertorial">Advertorial</button>
-            <button data-val="sales_page">Page de vente</button>
+            <button data-val="sales_page">${t("Page de vente")}</button>
             <button data-val="capture">Capture</button>
           </div>
         </div>
@@ -2573,12 +2573,12 @@ function renderCreativeStudioForm() {
           </div>
         </div>
       </div>
-      <button class="cta" id="studioRunBtn">Générer avec Claude</button>
+      <button class="cta" id="studioRunBtn">${t("Générer avec Claude")}</button>
       <div class="error-box" id="studioErrorBox"></div>
     </div>
     <div class="loading" id="studioLoadingBox" style="display:none">
       <div class="ring"></div>
-      <div class="stage">Génération en cours (Claude)…</div>
+      <div class="stage">${t("Génération en cours (Claude)…")}</div>
     </div>
     <div id="studioResults"></div>
   `;
@@ -2592,7 +2592,7 @@ async function runCreativeStudio() {
   const errBox = $('#studioErrorBox');
   errBox.style.display = 'none';
   if (!name || !description) {
-    errBox.textContent = 'Nom et description du produit sont requis.';
+    errBox.textContent = t('Nom et description du produit sont requis.');
     errBox.style.display = 'block';
     return;
   }
@@ -2615,7 +2615,7 @@ async function runCreativeStudio() {
     $('#studioLoadingBox').style.display = 'none';
     $('#studioRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -2623,7 +2623,7 @@ async function runCreativeStudio() {
   } catch (err) {
     $('#studioLoadingBox').style.display = 'none';
     $('#studioRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -2644,14 +2644,14 @@ function renderCreativeStudioResults(data) {
 // ── Intégrations ───────────────────────────────────────────
 // ══════════════════════════════════════════════════════════
 async function loadIntegrations() {
-  $('#integrationsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">Chargement…</div></div>`;
+  $('#integrationsView').innerHTML = `<div class="empty-dash"><div class="emoji">⏳</div><div class="title">${t("Chargement…")}</div></div>`;
   try {
     const [plansRes, integRes] = await Promise.all([fetch('/api/plans'), fetch('/api/integrations/status')]);
     const plansData = await plansRes.json();
     const integData = await integRes.json();
     renderIntegrations(plansData, integData);
   } catch (err) {
-    $('#integrationsView').innerHTML = `<div class="error-box" style="display:block">Erreur : ${escapeHtml(err.message)}</div>`;
+    $('#integrationsView').innerHTML = `<div class="error-box" style="display:block">${t("Erreur : ")}${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -2664,16 +2664,16 @@ function renderIntegrations(data, integrations) {
 
   $('#integrationsView').innerHTML = `
     <div class="fade-up" style="margin-bottom:8px">
-      <p style="color:var(--text-secondary);font-size:14px">Usage ce mois-ci : <strong style="color:var(--text)">${data.usage_this_month}</strong> audit(s).</p>
+      <p style="color:var(--text-secondary);font-size:14px">${t("Usage ce mois-ci : ")}<strong style="color:var(--text)">${data.usage_this_month}</strong> ${t("audit(s).")}</p>
     </div>
     <div class="dash-section fade-up">
-      <h2>🔗 Intégrations</h2>
+      <h2>${t("🔗 Intégrations")}</h2>
       ${integStatus.map(([label, ok, envVars]) => `
         <div class="list-row">
           <span style="font-size:16px">${ok ? '✅' : '⚪'}</span>
           <div class="lr-body">
             <div class="lr-title">${escapeHtml(label)}</div>
-            <div class="lr-meta">${ok ? 'Configuré' : 'Non configuré — variables : ' + escapeHtml(envVars)}</div>
+            <div class="lr-meta">${ok ? t('Configuré') : t('Non configuré — variables : ') + escapeHtml(envVars)}</div>
           </div>
         </div>
       `).join('')}
@@ -2686,7 +2686,7 @@ async function runCreativeAngles() {
   const errBox = $('#creativeErrorBox');
   errBox.style.display = 'none';
   if (!offerDescription) {
-    errBox.textContent = 'Merci de décrire votre offre.';
+    errBox.textContent = t('Merci de décrire votre offre.');
     errBox.style.display = 'block';
     return;
   }
@@ -2708,7 +2708,7 @@ async function runCreativeAngles() {
     $('#creativeLoadingBox').style.display = 'none';
     $('#creativeRunBtn').disabled = false;
     if (!res.ok) {
-      errBox.textContent = data.detail || 'Erreur inconnue.';
+      errBox.textContent = data.detail || t('Erreur inconnue.');
       errBox.style.display = 'block';
       return;
     }
@@ -2716,7 +2716,7 @@ async function runCreativeAngles() {
   } catch (err) {
     $('#creativeLoadingBox').style.display = 'none';
     $('#creativeRunBtn').disabled = false;
-    errBox.textContent = 'Erreur réseau : ' + err.message;
+    errBox.textContent = t('Erreur réseau : ') + err.message;
     errBox.style.display = 'block';
   }
 }
@@ -2729,7 +2729,7 @@ function renderCreativeResults(data) {
   $('#creativeResults').innerHTML = `
     ${angles.length ? `
     <div class="section fade-up">
-      <h2>Angles publicitaires</h2>
+      <h2>${t("Angles publicitaires")}</h2>
       ${angles.map(a => `
         <div class="angle-card">
           <div class="angle-title">${escapeHtml(a.angle || '')}</div>
@@ -2751,13 +2751,13 @@ function renderCreativeResults(data) {
 
     ${variants.length ? `
     <div class="section fade-up" style="animation-delay:0.1s">
-      <h2>Variantes publicité</h2>
+      <h2>${t("Variantes publicité")}</h2>
       ${variants.map(v => `
         <div class="rewrite-field">
           <div class="rw-label">Headline</div><div class="rw-val">${escapeHtml(v.headline || '')}</div>
         </div>
         <div class="rewrite-field">
-          <div class="rw-label">Texte principal</div><div class="rw-val">${escapeHtml(v.primary_text || '')}</div>
+          <div class="rw-label">${t("Texte principal")}</div><div class="rw-val">${escapeHtml(v.primary_text || '')}</div>
         </div>
         <div class="rewrite-field" style="margin-bottom:24px">
           <div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(v.cta || '')}</div>
@@ -2767,7 +2767,7 @@ function renderCreativeResults(data) {
 
     ${data.script_ugc_20s ? `
     <div class="section fade-up" style="animation-delay:0.15s">
-      <h2>Script UGC (20s)</h2>
+      <h2>${t("Script UGC (20s)")}</h2>
       <div class="rewrite-field"><div class="rw-val">${escapeHtml(data.script_ugc_20s)}</div></div>
     </div>` : ''}
   `;
@@ -2786,12 +2786,12 @@ $('#modeSeg').addEventListener('click', updateFieldsForMode);
 updateFieldsForMode();
 
 const LOADING_STAGES_BY_MODE = {
-  "Funnel Only": ["Lecture de la page…", "Analyse du hook…", "Évaluation de l'offre…",
-                  "Vérification des preuves de confiance…", "Calcul du score final…"],
-  "Ads Only": ["Lecture de la publicité…", "Analyse du hook…", "Évaluation de l'offre…",
-               "Vérification de la cohérence…", "Calcul du score final…"],
-  "Full Risk": ["Lecture de la page et de la publicité…", "Analyse du hook…", "Évaluation de l'offre…",
-                "Vérification du message match…", "Calcul du score final…"],
+  "Funnel Only": [t("Lecture de la page…"), t("Analyse du hook…"), t("Évaluation de l'offre…"),
+                  t("Vérification des preuves de confiance…"), t("Calcul du score final…")],
+  "Ads Only": [t("Lecture de la publicité…"), t("Analyse du hook…"), t("Évaluation de l'offre…"),
+               t("Vérification de la cohérence…"), t("Calcul du score final…")],
+  "Full Risk": [t("Lecture de la page et de la publicité…"), t("Analyse du hook…"), t("Évaluation de l'offre…"),
+                t("Vérification du message match…"), t("Calcul du score final…")],
 };
 
 let loadingTimer = null;
@@ -2867,7 +2867,7 @@ function renderResults(data) {
     </div>
 
     <div class="section fade-up" style="animation-delay:0.05s">
-      <h2>Score détaillé</h2>
+      <h2>${t("Score détaillé")}</h2>
       ${bars.map(([label, val]) => `
         <div class="bar-row">
           <div class="bar-top">
@@ -2881,15 +2881,15 @@ function renderResults(data) {
 
     ${reasonsHtml ? `
     <div class="section fade-up" style="animation-delay:0.1s">
-      <h2>Pourquoi ce score</h2>
+      <h2>${t("Pourquoi ce score")}</h2>
       <ul class="reasons">${reasonsHtml}</ul>
     </div>` : ''}
 
     ${topAction.what ? `
     <div class="section fade-up" style="animation-delay:0.15s">
-      <h2>Action prioritaire</h2>
+      <h2>${t("Action prioritaire")}</h2>
       <div class="priority-card">
-        <div class="tag">Impact maximal</div>
+        <div class="tag">${t("Impact maximal")}</div>
         <div class="what">${escapeHtml(topAction.what)}</div>
         <div class="how">${escapeHtml(topAction.how_exactly || '')}</div>
         ${topAction.time_estimate ? `<div class="meta">⏱ ${escapeHtml(topAction.time_estimate)}</div>` : ''}
@@ -2904,14 +2904,14 @@ function renderResults(data) {
 
     ${(rw.headline || rw.cta_primary) ? `
     <div class="section fade-up" style="animation-delay:0.25s">
-      <h2>Rewrite suggéré</h2>
+      <h2>${t("Rewrite suggéré")}</h2>
       ${rw.headline ? `<div class="rewrite-field"><div class="rw-label">Headline</div><div class="rw-val">${escapeHtml(rw.headline)}</div></div>` : ''}
-      ${rw.subheadline ? `<div class="rewrite-field"><div class="rw-label">Sous-titre</div><div class="rw-val">${escapeHtml(rw.subheadline)}</div></div>` : ''}
+      ${rw.subheadline ? `<div class="rewrite-field"><div class="rw-label">${t("Sous-titre")}</div><div class="rw-val">${escapeHtml(rw.subheadline)}</div></div>` : ''}
       ${rw.cta_primary ? `<div class="rewrite-field"><div class="rw-label">CTA</div><div class="rw-val">${escapeHtml(rw.cta_primary)}</div></div>` : ''}
-      ${rw.guarantee ? `<div class="rewrite-field"><div class="rw-label">Garantie</div><div class="rw-val">${escapeHtml(rw.guarantee)}</div></div>` : ''}
+      ${rw.guarantee ? `<div class="rewrite-field"><div class="rw-label">${t("Garantie")}</div><div class="rw-val">${escapeHtml(rw.guarantee)}</div></div>` : ''}
     </div>` : ''}
 
-    <button class="restart-link" id="restartBtn">← Nouvel audit</button>
+    <button class="restart-link" id="restartBtn">${t("← Nouvel audit")}</button>
   `;
 
   $('#results').style.display = 'block';
@@ -2940,8 +2940,8 @@ async function runAudit() {
   const url = $('#url').value.trim();
   const adText = $('#adText').value.trim();
 
-  if (mode !== 'Ads Only' && !url) { showError('Merci de renseigner une URL.'); return; }
-  if (mode !== 'Funnel Only' && !adText) { showError('Merci de coller le texte de votre publicité.'); return; }
+  if (mode !== 'Ads Only' && !url) { showError(t('Merci de renseigner une URL.')); return; }
+  if (mode !== 'Funnel Only' && !adText) { showError(t('Merci de coller le texte de votre publicité.')); return; }
   hideError();
 
   $('#formCard').style.display = 'none';
@@ -2969,7 +2969,7 @@ async function runAudit() {
     if (!res.ok) {
       $('#formCard').style.display = 'block';
       $('#heroText').style.display = 'block';
-      showError(data.detail || 'Erreur inconnue.');
+      showError(data.detail || t('Erreur inconnue.'));
       return;
     }
     renderResults(data);
@@ -2978,7 +2978,7 @@ async function runAudit() {
     $('#loadingBox').style.display = 'none';
     $('#formCard').style.display = 'block';
     $('#heroText').style.display = 'block';
-    showError('Erreur réseau : ' + err.message);
+    showError(t('Erreur réseau : ') + err.message);
   }
 }
 
@@ -2989,7 +2989,7 @@ $('#demoLink').addEventListener('click', (e) => {
   e.preventDefault();
   $('#formCard').style.display = 'none';
   $('#heroText').style.display = 'none';
-  renderResults(DEMO_RESULT);
+  renderResults(LANG === 'fr' ? DEMO_RESULT : DEMO_RESULT_EN);
 });
 
 const DEMO_RESULT = {
@@ -3028,6 +3028,44 @@ const DEMO_RESULT = {
     "guarantee": "Remboursé intégralement sous 30 jours si vous ne voyez aucune amélioration."
   },
   "_meta": { "url": "https://exemple.com", "page_type": "Sales Page / Landing Page (offre unique)", "page_lang": "fr" }
+};
+
+const DEMO_RESULT_EN = {
+  "_c": {
+    "score": 11, "hook": 2, "offer": 3, "trust": 2, "friction": 2,
+    "decision": "Test small budget", "risk": "Moderate",
+    "cvr_cur": "0.8-1.5%", "cvr_fix": "1.5-2.5%", "cvr_up": "+0.5 to +1.5 pts"
+  },
+  "why_this_score": {
+    "hook_detail": "The headline names the product without creating tension or promising a specific result.",
+    "offer_detail": "The price is visible, but there's no value anchor or urgency to push the purchase.",
+    "trust_detail": "A few customer reviews are there but barely highlighted, and there's no hard number as proof.",
+    "friction_detail": "The CTA shows up only once, at the bottom of the page.",
+    "top_3_reasons": [
+      "The hook creates no tension and says nothing specific about the result",
+      "The offer lacks price anchoring and urgency",
+      "The CTA isn't repeated often enough along the page"
+    ],
+    "critical_gaps": ["No visible guarantee near the CTA"]
+  },
+  "fix_plan": {
+    "top_priority_action": {
+      "what": "Rewrite the hook with a hard number and a timeframe",
+      "how_exactly": "Swap the generic headline for a [Specific result] + [Timeframe] + [No friction] formula, for example: 'Double your conversions in 30 days without touching your design'.",
+      "time_estimate": "20 min"
+    },
+    "quick_wins": [
+      { "what": "Repeat the CTA 3 times on the page", "how_exactly": "Add the main button right after the hero and mid-page, not only at the bottom.", "time_estimate": "10 min" },
+      { "what": "Add a visible guarantee under the CTA", "how_exactly": "Put a 'Full refund within 30 days if you're not satisfied' line right under every buy button.", "time_estimate": "15 min" }
+    ]
+  },
+  "rewrite": {
+    "headline": "Double your conversions in 30 days without touching your design",
+    "subheadline": "The method 200+ brands use to turn paid traffic into customers, without starting from scratch.",
+    "cta_primary": "Start my free audit",
+    "guarantee": "Full refund within 30 days if you see no improvement."
+  },
+  "_meta": { "url": "https://example.com", "page_type": "Sales Page / Landing Page (offre unique)", "page_lang": "en" }
 };
 
 bootstrapAuth();

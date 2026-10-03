@@ -13,6 +13,8 @@ from reportlab.platypus import (
     TableStyle, PageBreak, HRFlowable, KeepTogether
 )
 
+from lrs_i18n import tr
+
 PAGE_W, PAGE_H = A4
 
 # ── Palette LRS ─────────────────────────────────────────────
@@ -103,7 +105,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         # texte footer
         canvas.setFillColor(C_GRAY)
         canvas.setFont("Helvetica", 7)
-        canvas.drawString(1.5*cm, 1.1*cm, f"LRS™ Launch Risk System V{version} — Rapport confidentiel")
+        canvas.drawString(1.5*cm, 1.1*cm, f"LRS™ Launch Risk System V{version} — " + tr("Rapport confidentiel", "Confidential report"))
         canvas.drawRightString(PAGE_W - 1.5*cm, 1.1*cm, f"Page {doc_obj.page}")
         canvas.restoreState()
 
@@ -115,8 +117,8 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     client_name  = meta.get("client_name", "")
     report_mode  = meta.get("report_mode", "")
     if client_name and report_mode == "client":
-        title_str = "<b>🚦 LRS™</b> — Rapport d'Audit Confidentiel"
-        sub_str   = f"Préparé pour : <b>{client_name}</b>"
+        title_str = "<b>🚦 LRS™</b> — " + tr("Rapport d'Audit Confidentiel", "Confidential Audit Report")
+        sub_str   = tr("Préparé pour", "Prepared for") + f" : <b>{client_name}</b>"
     else:
         title_str = "<b>🚦 LRS™</b> — Launch Risk System"
         sub_str   = ""
@@ -195,17 +197,17 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
 
     meta_rows = []
     if client_name and report_mode == "client":
-        meta_rows.append(["Préparé pour", client_name])
+        meta_rows.append([tr("Préparé pour", "Prepared for"), client_name])
     meta_rows += [
-        ["URL analysée", url],
-        ["Mode d'audit", meta.get("mode","")],
-        ["Plateforme", meta.get("platform","")],
-        ["Type d'offre", meta.get("offer_type","")],
-        ["Type de marque", meta.get("brand_type","")],
-        ["Type de page", page_type],
-        ["CVR actuel estimé", c_.get("cvr_cur","")],
-        ["CVR post-fix estimé", c_.get("cvr_fix","")],
-        ["Uplift potentiel", c_.get("cvr_up","")],
+        [tr("URL analysée", "Analyzed URL"), url],
+        [tr("Mode d'audit", "Audit mode"), meta.get("mode","")],
+        [tr("Plateforme", "Platform"), meta.get("platform","")],
+        [tr("Type d'offre", "Offer type"), meta.get("offer_type","")],
+        [tr("Type de marque", "Brand type"), meta.get("brand_type","")],
+        [tr("Type de page", "Page type"), page_type],
+        [tr("CVR actuel estimé", "Estimated current CVR"), c_.get("cvr_cur","")],
+        [tr("CVR post-fix estimé", "Estimated post-fix CVR"), c_.get("cvr_fix","")],
+        [tr("Uplift potentiel", "Potential uplift"), c_.get("cvr_up","")],
     ]
     t_meta = Table(
         [[Paragraph(f"<b>{r}</b>", _s("mk", fontSize=8, textColor=C_GRAY)),
@@ -226,7 +228,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     # ════════════════════════════════════════════════════════
 
     story += [
-        Paragraph("Analyse Détaillée", _s("h1", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
+        Paragraph(tr("Analyse Détaillée", "Detailed Analysis"), _s("h1", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
         HRFlowable(width=W, thickness=1, color=C_ACCENT, spaceAfter=10),
     ]
 
@@ -254,7 +256,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
         top3_txt = "<br/>".join([f"• {r}" for r in top3])
         gaps_txt = "<br/>".join([f"⚠ {g}" for g in gaps])
         t_2col = Table([[
-            Paragraph(f"<b><font color='#FF8C00'>Top 3 Raisons</font></b><br/><br/>"
+            Paragraph(f"<b><font color='#FF8C00'>{tr('Top 3 Raisons', 'Top 3 Reasons')}</font></b><br/><br/>"
                       f"<font color='#cccccc'>{top3_txt}</font>",
                       _s("t3", fontSize=9, leading=14)),
             Paragraph(f"<b><font color='#FF4444'>Critical Gaps</font></b><br/><br/>"
@@ -274,7 +276,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     # ════════════════════════════════════════════════════════
 
     story += [
-        Paragraph("Plan d'Action Priorisé", _s("h1p", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
+        Paragraph(tr("Plan d'Action Priorisé", "Prioritized Action Plan"), _s("h1p", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
         HRFlowable(width=W, thickness=1, color=C_ACCENT, spaceAfter=10),
     ]
 
@@ -283,14 +285,14 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     if tp and tp.get("what"):
         story.append(KeepTogether([
             _card([
-                [Paragraph("🎯  ACTION PRIORITAIRE #1",
+                [Paragraph(tr("🎯  ACTION PRIORITAIRE #1", "🎯  PRIORITY ACTION #1"),
                            _s("tph", fontSize=11, fontName="Helvetica-Bold", textColor=C_RED))],
                 [Paragraph(f"<b>{tp.get('what','')}</b>",
                            _s("tpw", fontSize=10, textColor=C_WHITE))],
-                [Paragraph(f"<b>Comment exactement :</b> {tp.get('how_exactly','')}",
+                [Paragraph(f"<b>{tr('Comment exactement', 'How exactly')} :</b> {tp.get('how_exactly','')}",
                            _s("tph2", fontSize=9, textColor=C_LIGHT, leading=13))],
                 [Paragraph(f"<b>Impact :</b> {tp.get('expected_impact','')}   "
-                           f"<b>Temps :</b> {tp.get('time_estimate','')}",
+                           f"<b>{tr('Temps', 'Time')} :</b> {tp.get('time_estimate','')}",
                            _s("tpt", fontSize=8, textColor=C_GRAY))],
             ], left_border_color=C_RED, bg=colors.HexColor("#1f0808")),
             Spacer(1, 0.35*cm),
@@ -299,7 +301,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     # Quick Wins
     qws = fp.get("quick_wins", [])
     if qws:
-        story += [Paragraph("⚡  Quick Wins  (moins d'1h)",
+        story += [Paragraph(tr("⚡  Quick Wins  (moins d'1h)", "⚡  Quick Wins  (under 1h)"),
                             _s("qwh", fontSize=12, fontName="Helvetica-Bold", textColor=C_GREEN, spaceAfter=5))]
         for qw in qws:
             story.append(KeepTogether([
@@ -308,7 +310,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
                                _s("qwt", fontSize=10, textColor=C_GREEN))],
                     [Paragraph(qw.get("how_exactly",""),
                                _s("qwb", fontSize=9, textColor=C_LIGHT, leading=13))],
-                    [Paragraph(f"Impact : {qw.get('expected_impact','')}  |  Temps : {qw.get('time_estimate','<1h')}",
+                    [Paragraph(f"Impact : {qw.get('expected_impact','')}  |  {tr('Temps', 'Time')} : {qw.get('time_estimate','<1h')}",
                                _s("qwm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_GREEN, bg=colors.HexColor("#0a1f0a")),
                 Spacer(1, 0.2*cm),
@@ -318,7 +320,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     lts = fp.get("long_term", [])
     if lts:
         story += [Spacer(1, 0.2*cm),
-                  Paragraph("🏗️  Améliorations Long Terme",
+                  Paragraph(tr("🏗️  Améliorations Long Terme", "🏗️  Long-Term Improvements"),
                             _s("lth", fontSize=12, fontName="Helvetica-Bold", textColor=C_ORANGE, spaceAfter=5))]
         for lt in lts:
             story.append(KeepTogether([
@@ -327,7 +329,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
                                _s("ltt", fontSize=10, textColor=C_ORANGE))],
                     [Paragraph(lt.get("how_exactly",""),
                                _s("ltb", fontSize=9, textColor=C_LIGHT, leading=13))],
-                    [Paragraph(f"Impact : {lt.get('expected_impact','')}  |  Temps : {lt.get('time_estimate','')}",
+                    [Paragraph(f"Impact : {lt.get('expected_impact','')}  |  {tr('Temps', 'Time')} : {lt.get('time_estimate','')}",
                                _s("ltm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_ORANGE, bg=colors.HexColor("#1f1000")),
                 Spacer(1, 0.2*cm),
@@ -337,7 +339,7 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     abt = fp.get("ab_tests", [])
     if abt:
         story += [Spacer(1, 0.2*cm),
-                  Paragraph("🧪  Tests A/B",
+                  Paragraph(tr("🧪  Tests A/B", "🧪  A/B Tests"),
                             _s("abh2", fontSize=12, fontName="Helvetica-Bold", textColor=C_ACCENT, spaceAfter=5))]
         for ab in abt:
             ab_inner = Table([[
@@ -349,10 +351,10 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
             ab_inner.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4)]))
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>Hypothèse :</b> {ab.get('hypothesis','')}",
+                    [Paragraph(f"<b>{tr('Hypothèse', 'Hypothesis')} :</b> {ab.get('hypothesis','')}",
                                _s("abhy", fontSize=9, textColor=C_WHITE))],
                     [ab_inner],
-                    [Paragraph(f"Métrique : {ab.get('success_metric','')}",
+                    [Paragraph(f"{tr('Métrique', 'Metric')} : {ab.get('success_metric','')}",
                                _s("abm", fontSize=8, textColor=C_GRAY))],
                 ], left_border_color=C_ACCENT),
                 Spacer(1, 0.2*cm),
@@ -365,15 +367,15 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
     # ════════════════════════════════════════════════════════
 
     story += [
-        Paragraph("Rewrite Recommandations", _s("h1r", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
+        Paragraph(tr("Rewrite Recommandations", "Rewrite Recommendations"), _s("h1r", fontSize=16, fontName="Helvetica-Bold", textColor=C_WHITE, spaceAfter=4)),
         HRFlowable(width=W, thickness=1, color=C_ACCENT, spaceAfter=10),
     ]
 
     rw_items = [
         ("Headline",       rw.get("headline","")),
         ("Subheadline",    rw.get("subheadline","")),
-        ("CTA Principal",  rw.get("cta_primary","")),
-        ("Garantie",       rw.get("guarantee","")),
+        (tr("CTA Principal", "Primary CTA"),  rw.get("cta_primary","")),
+        (tr("Garantie", "Guarantee"),       rw.get("guarantee","")),
         ("Proof Block",    rw.get("proof_block","")),
     ]
     for label, val in rw_items:
@@ -431,11 +433,11 @@ def generate_pdf_report(result: dict, meta: dict) -> bytes:
 
     variants = ads.get("variants", [])
     if variants:
-        story += [Spacer(1,0.2*cm), Paragraph("<b>Variantes Créatives</b>", _s("varh", fontSize=10, textColor=C_GRAY))]
+        story += [Spacer(1,0.2*cm), Paragraph("<b>" + tr("Variantes Créatives", "Creative Variants") + "</b>", _s("varh", fontSize=10, textColor=C_GRAY))]
         for i, v in enumerate(variants, 1):
             story.append(KeepTogether([
                 _card([
-                    [Paragraph(f"<b>Variante {i} — {v.get('platform','')}</b>",
+                    [Paragraph(f"<b>{tr('Variante', 'Variant')} {i} — {v.get('platform','')}</b>",
                                _s(f"vh{i}", fontSize=9, fontName="Helvetica-Bold", textColor=C_ACCENT))],
                     [Paragraph(f"<b>Headline :</b> {v.get('headline','')}",   _s(f"vhl{i}", fontSize=9, textColor=C_WHITE))],
                     [Paragraph(f"<b>Text :</b> {v.get('primary_text','')}",   _s(f"vpt{i}", fontSize=9, textColor=C_LIGHT, leading=12))],
