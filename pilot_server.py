@@ -14,6 +14,7 @@ import json
 import os
 import secrets as _secrets
 import sys
+import threading
 import time
 import urllib.parse
 from contextlib import asynccontextmanager
@@ -1787,7 +1788,7 @@ def get_notification_prefs_endpoint():
 def set_notification_prefs(req: NotificationPrefsRequest):
     email = req.email.strip().lower()
     if req.email_enabled and email and not user_accounts.is_valid_email(email):
-        raise HTTPException(status_code=400, detail="Adresse email invalide.")
+        raise HTTPException(status_code=400, detail=tr("Adresse email invalide.", "Invalid email address."))
     save_json_file(NOTIFICATION_PREFS_FILE(), {"email_enabled": req.email_enabled, "email": email})
     return {"ok": True}
 
@@ -1833,8 +1834,9 @@ def _run_one_scheduled_audit(sid, sched, schedule):
                 decision = result.get("_c", {}).get("decision", "")
                 _add_notification(
                     "score_drop",
-                    f"Chute de score — {url}",
-                    f"Score passé de {prev_score}/20 à {new_score}/20 ({decision}).",
+                    tr(f"Chute de score — {url}", f"Score drop — {url}"),
+                    tr(f"Score passé de {prev_score}/20 à {new_score}/20 ({decision}).",
+                       f"Score went from {prev_score}/20 to {new_score}/20 ({decision})."),
                     url=url,
                 )
                 _maybe_email_notification(lambda email: email_alerts.send_score_drop_alert(
@@ -1859,10 +1861,31 @@ def run_schedule_now(sid: str):
     return {"schedule": schedule}
 
 
+# Un seul passage à la fois par utilisateur : le frontend appelle cette route
+# à chaque ouverture du pilote, sans attendre la réponse. Deux onglets (ou un
+# rechargement) ouverts pendant qu'un audit planifié tournait relançaient le
+# même audit en parallèle, avec un double appel LLM.
+_monitoring_check_lock = threading.Lock()
+_monitoring_check_running: set[str] = set()
+
+
 @app.post("/api/monitoring/check")
 def check_due_schedules():
     """Vérifie les audits planifiés en retard et les exécute — équivalent de
     app.py::run_scheduled_audits(), appelé une fois par le frontend à l'ouverture."""
+    ns = _current_user_ns()
+    with _monitoring_check_lock:
+        if ns in _monitoring_check_running:
+            return {"ran": 0, "busy": True}
+        _monitoring_check_running.add(ns)
+    try:
+        return _run_due_schedules()
+    finally:
+        with _monitoring_check_lock:
+            _monitoring_check_running.discard(ns)
+
+
+def _run_due_schedules():
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     if not schedule:
         return {"ran": 0}
@@ -1898,11 +1921,11 @@ def check_due_schedules():
             for s in schedule.values()
         ]
         danger_count = sum(1 for e in digest_entries if (e["score"] or 0) <= 9)
-        danger_note = f" — {danger_count} en danger (≤9/20)" if danger_count else ""
+        danger_note = tr(f" — {danger_count} en danger (≤9/20)", f" — {danger_count} at risk (≤9/20)") if danger_count else ""
         _add_notification(
             "digest",
-            f"{ran} audit(s) planifié(s) exécuté(s)",
-            f"{len(digest_entries)} page(s) suivie(s){danger_note}.",
+            tr(f"{ran} audit(s) planifié(s) exécuté(s)", f"{ran} scheduled audit(s) run"),
+            tr(f"{len(digest_entries)} page(s) suivie(s){danger_note}.", f"{len(digest_entries)} tracked page(s){danger_note}."),
         )
         _maybe_email_notification(lambda email: email_alerts.send_monitoring_digest(digest_entries, email))
     return {"ran": ran, "schedule": schedule}

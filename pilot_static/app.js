@@ -112,7 +112,7 @@ async function loadNotifications() {
     const list = $('#notifList');
     list.innerHTML = data.notifications.length
       ? data.notifications.map(renderNotifItem).join('')
-      : '<div class="notif-empty">Aucune notification pour l’instant.</div>';
+      : `<div class="notif-empty">${t("Aucune notification pour l’instant.")}</div>`;
     const badge = $('#notifBadge');
     if (data.unread_count > 0) {
       badge.textContent = data.unread_count > 9 ? '9+' : String(data.unread_count);
@@ -136,12 +136,21 @@ async function loadNotificationPrefs() {
 
 async function saveNotificationPrefs() {
   const email_enabled = $('#notifEmailEnabled').checked;
-  const email = $('#notifEmailAddress').value.trim();
+  const input = $('#notifEmailAddress');
+  const email = input.value.trim();
+  input.setCustomValidity('');
   try {
-    await fetch('/api/notifications/prefs', {
+    const res = await fetch('/api/notifications/prefs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email_enabled, email }),
     });
+    // Le serveur refuse une adresse invalide : sans ce retour, l'email
+    // n'était simplement pas enregistré, sans que l'utilisateur le sache.
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      input.setCustomValidity(data.detail || t('Adresse email invalide.'));
+      input.reportValidity();
+    }
   } catch (err) { /* silencieux */ }
 }
 
@@ -193,28 +202,28 @@ function setupNotifications() {
 // ── Tutoriel d'onboarding ──────────────────────────────────
 const ONB_STEPS = [
   {
-    icon: '🚦', title: 'Bienvenue sur LRS™',
-    text: "LRS audite votre page de vente et/ou votre publicité <b>avant</b> que vous ne dépensiez en pub, et vous dit exactement quoi corriger. Ce tour rapide fait le point sur l'essentiel en moins d'une minute.",
+    icon: '🚦', title: t('Bienvenue sur LRS™'),
+    text: t("LRS audite votre page de vente et/ou votre publicité <b>avant</b> que vous ne dépensiez en pub, et vous dit exactement quoi corriger. Ce tour rapide fait le point sur l'essentiel en moins d'une minute."),
   },
   {
-    icon: '🔍', title: 'Lancer un audit',
-    text: "Onglet <b>Audit</b> : collez une URL et/ou un texte de pub. Trois modes — <b>Funnel Only</b> (juste la page), <b>Ads Only</b> (juste la pub), <b>Full Risk</b> (les deux, avec détection des incohérences). Pour un advertorial suivi d'une page de paiement, le mode <b>Funnel 2 étapes</b> (dans Multi-Audit) les audite ensemble.",
+    icon: '🔍', title: t('Lancer un audit'),
+    text: t("Onglet <b>Audit</b> : collez une URL et/ou un texte de pub. Trois modes — <b>Funnel Only</b> (juste la page), <b>Ads Only</b> (juste la pub), <b>Full Risk</b> (les deux, avec détection des incohérences). Pour un advertorial suivi d'une page de paiement, le mode <b>Funnel 2 étapes</b> (dans Multi-Audit) les audite ensemble."),
   },
   {
-    icon: '📊', title: 'Comprendre le score',
-    text: "Chaque audit donne un score <b>/20</b> sur 4 axes (Hook, Offre, Confiance, Friction) et un verdict net : Ne pas lancer / Tester petit budget / Prêt à scaler. Vous recevez aussi un plan d'action priorisé et un rewrite complet — headline, CTA, garantie, FAQ.",
+    icon: '📊', title: t('Comprendre le score'),
+    text: t("Chaque audit donne un score <b>/20</b> sur 4 axes (Hook, Offre, Confiance, Friction) et un verdict net : Ne pas lancer / Tester petit budget / Prêt à scaler. Vous recevez aussi un plan d'action priorisé et un rewrite complet — headline, CTA, garantie, FAQ."),
   },
   {
-    icon: '🔔', title: 'Suivi automatique',
-    text: "Onglet <b>Suivi</b> : planifiez un audit récurrent sur une page. Si le score chute, vous êtes prévenu directement ici — cliquez la cloche en haut à droite. L'email est optionnel, à cocher dans les préférences de la cloche si vous le voulez en plus.",
+    icon: '🔔', title: t('Suivi automatique'),
+    text: t("Onglet <b>Suivi</b> : planifiez un audit récurrent sur une page. Si le score chute, vous êtes prévenu directement ici — cliquez la cloche en haut à droite. L'email est optionnel, à cocher dans les préférences de la cloche si vous le voulez en plus."),
   },
   {
-    icon: '🎨', title: 'Creative Studio',
-    text: "Onglet <b>Creative Studio</b> : générez du copy, testez des variantes en A/B avec garde-fous statistiques, construisez un funnel multi-étapes complet (formulaires, popups, séquences email).",
+    icon: '🎨', title: t('Creative Studio'),
+    text: t("Onglet <b>Creative Studio</b> : générez du copy, testez des variantes en A/B avec garde-fous statistiques, construisez un funnel multi-étapes complet (formulaires, popups, séquences email)."),
   },
   {
-    icon: '🚀', title: 'À vous de jouer',
-    text: "Vous pouvez revoir ce tutoriel à tout moment avec le bouton <b>?</b> à côté de la cloche. Lancez votre premier audit maintenant.",
+    icon: '🚀', title: t('À vous de jouer'),
+    text: t("Vous pouvez revoir ce tutoriel à tout moment avec le bouton <b>?</b> à côté de la cloche. Lancez votre premier audit maintenant."),
   },
 ];
 let _onbStep = 0;
@@ -230,7 +239,7 @@ function renderOnbStep() {
     `<span class="onb-dot ${i === _onbStep ? 'active' : ''}"></span>`
   ).join('');
   $('#onbPrev').style.display = _onbStep === 0 ? 'none' : 'inline-block';
-  $('#onbNext').textContent = _onbStep === ONB_STEPS.length - 1 ? 'Terminer' : 'Suivant';
+  $('#onbNext').textContent = _onbStep === ONB_STEPS.length - 1 ? t('Terminer') : t('Suivant');
 }
 
 function openOnboarding() {

@@ -247,7 +247,7 @@ def _dns_pinned_to(hostname, safe_ips):
 def extract_page(url):
     hostname, safe_ips = _validate_fetch_target(url)
     if hostname is None:
-        return "", "URL invalide ou pointant vers une adresse non autorisee.", False
+        return "", tr("URL invalide ou pointant vers une adresse non autorisée.", "Invalid URL or pointing to a disallowed address."), False
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -271,14 +271,14 @@ def extract_page(url):
                 next_url = urljoin(current_url, location)
                 hostname, safe_ips = _validate_fetch_target(next_url)
                 if hostname is None:
-                    return "", "Redirection vers une adresse non autorisee.", False
+                    return "", tr("Redirection vers une adresse non autorisée.", "Redirect to a disallowed address."), False
                 current_url = next_url
                 continue
             break
         r.raise_for_status()
         html = r.text
     except requests.exceptions.ConnectionError:
-        return "", "Impossible de se connecter.", False
+        return "", tr("Impossible de se connecter.", "Could not connect."), False
     except requests.exceptions.Timeout:
         return "", "Timeout.", False
     except Exception as e:
@@ -336,15 +336,17 @@ def extract_page(url):
     if trafilatura_text and len(trafilatura_text) > 200 and not use_fallback:
         full = trafilatura_text
         prioritized = _head_and_tail(full)
-        status = f"Contenu extrait ({min(len(full), MAX_PAGE_CHARS)}/{len(full)} caracteres)"
+        n_kept, n_total = min(len(full), MAX_PAGE_CHARS), len(full)
+        status = tr(f"Contenu extrait ({n_kept}/{n_total} caractères)", f"Content extracted ({n_kept}/{n_total} characters)")
         return clamp(prioritized, n=len(prioritized)), status, is_js
 
     if len(fallback) > 100:
         prioritized = _head_and_tail(fallback)
-        status = f"Extraction partielle ({min(len(fallback), MAX_PAGE_CHARS)}/{len(fallback)} caracteres)"
+        n_kept, n_total = min(len(fallback), MAX_PAGE_CHARS), len(fallback)
+        status = tr(f"Extraction partielle ({n_kept}/{n_total} caractères)", f"Partial extraction ({n_kept}/{n_total} characters)")
         return clamp(prioritized, n=len(prioritized)), status, is_js
 
-    return html[:2000], "Extraction faible.", True
+    return html[:2000], tr("Extraction faible.", "Weak extraction."), True
 
 
 def _strip_accents(s: str) -> str:
@@ -834,12 +836,11 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
 
 
 # ── APPEL OLLAMA (local, dev uniquement — meme contrat) ──────────
-def _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
-                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
-    # API native /api/chat plutot que l'endpoint compatible OpenAI : seule
-    # la native accepte num_ctx par requete.
-    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
-                                               market_context, brand_type, page_type, page_lang)
+def _ollama_chat_json(system, user_prompt, temperature, num_predict):
+    """Un appel /api/chat en mode JSON, renvoie le texte brut de la reponse.
+
+    API native plutot que l'endpoint compatible OpenAI : seule la native
+    accepte num_ctx par requete."""
     payload = {
         "model": OLLAMA_MODEL,
         "messages": [
@@ -848,22 +849,28 @@ def _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, mark
         ],
         "format": "json",
         "stream": False,
-        "options": {"temperature": 0.15, "num_ctx": OLLAMA_NUM_CTX, "num_predict": 4500},
+        "options": {"temperature": temperature, "num_ctx": OLLAMA_NUM_CTX, "num_predict": num_predict},
     }
+    try:
+        resp = requests.post(OLLAMA_HOST + "/api/chat", json=payload, timeout=600)
+    except requests.ConnectionError:
+        raise ValueError("Ollama injoignable sur " + OLLAMA_HOST + ". Lancez l'app Ollama (ou `ollama serve`).")
+    except requests.Timeout:
+        raise ValueError("Ollama n'a pas repondu en 10 min. Modele trop lourd pour la machine ?")
+    if resp.status_code == 404:
+        raise ValueError("Modele Ollama '" + OLLAMA_MODEL + "' absent. Lancez : ollama pull " + OLLAMA_MODEL)
+    if resp.status_code != 200:
+        raise ValueError("Erreur Ollama " + str(resp.status_code) + " : " + resp.text[:300])
+    return (resp.json().get("message") or {}).get("content", "")
 
+
+def _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
+                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
+                                               market_context, brand_type, page_type, page_lang)
     raw = ""
     for attempt in range(3):
-        try:
-            resp = requests.post(OLLAMA_HOST + "/api/chat", json=payload, timeout=600)
-        except requests.ConnectionError:
-            raise ValueError("Ollama injoignable sur " + OLLAMA_HOST + ". Lancez l'app Ollama (ou `ollama serve`).")
-        except requests.Timeout:
-            raise ValueError("Ollama n'a pas repondu en 10 min. Modele trop lourd pour la machine ?")
-        if resp.status_code == 404:
-            raise ValueError("Modele Ollama '" + OLLAMA_MODEL + "' absent. Lancez : ollama pull " + OLLAMA_MODEL)
-        if resp.status_code != 200:
-            raise ValueError("Erreur Ollama " + str(resp.status_code) + " : " + resp.text[:300])
-        raw = (resp.json().get("message") or {}).get("content", "")
+        raw = _ollama_chat_json(system, user_prompt, temperature=0.15, num_predict=4500)
         try:
             return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
         except _AuditJSONParseError:
@@ -968,15 +975,8 @@ def run_funnel_audit(funnel_type, platform, offer_type, url_step1, url_step2, ma
 def generate_creative_angles(offer_description, platform, offer_type, model=None):
     """Anthropic (Claude) exclusivement depuis le 2026-09-23 — OpenAI retire.
     `model` accepte pour compatibilite avec pilot_server.py mais ignore
-    (toujours DEFAULT_ANTHROPIC_MODEL), meme convention que run_audit()."""
-    if anthropic is None:
-        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
-
-    api_key = get_anthropic_api_key()
-    if not api_key:
-        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
-
-    client = anthropic.Anthropic(api_key=api_key)
+    (toujours DEFAULT_ANTHROPIC_MODEL), meme convention que run_audit().
+    LLM_BACKEND=ollama (hors production) passe par Ollama, comme l'audit."""
     system = (
         "Tu es un copywriter senior specialise en paid traffic (Meta/TikTok/Google Ads). "
         "Tu generes des angles publicitaires, hooks et un script UGC a partir d'une offre. "
@@ -996,6 +996,18 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
         '"variants":[{"primary_text":"X","headline":"X","cta":"X"}],'
         '"script_ugc_20s":"X"}'
     )
+
+    if use_ollama():
+        return _angles_from_raw(_ollama_chat_json(system, user_prompt, temperature=0.7, num_predict=2000))
+
+    if anthropic is None:
+        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
+
+    api_key = get_anthropic_api_key()
+    if not api_key:
+        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
+
+    client = anthropic.Anthropic(api_key=api_key)
 
     raw = ""
     last_err = None
@@ -1025,6 +1037,10 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
                 raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
             raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
 
+    return _angles_from_raw(raw)
+
+
+def _angles_from_raw(raw):
     try:
         data = json.loads(raw)
     except Exception:
