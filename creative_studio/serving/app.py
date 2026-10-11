@@ -187,6 +187,15 @@ def _get_or_create_visitor_id(request: Request) -> tuple[str, bool]:
     return uuid.uuid4().hex, True
 
 
+# Même variable que pilot_server.py::APP_HTTPS_ONLY (même .env, même
+# docker-compose.yml : env_file partagé entre les deux services) — pas de
+# détection dynamique via request.url.scheme : uvicorn est lancé ici sans
+# --proxy-headers (voir docker-compose.yml), donc le scheme vu par ce
+# process reste "http" même derrière Caddy en TLS, ce qui rendrait une
+# détection dynamique silencieusement inopérante en production.
+_HTTPS_ONLY = os.environ.get("APP_HTTPS_ONLY", "").strip().lower() in ("1", "true", "yes")
+
+
 def _set_visitor_cookie(response, visitor_id: str) -> None:
     response.set_cookie(
         VISITOR_COOKIE,
@@ -194,6 +203,7 @@ def _set_visitor_cookie(response, visitor_id: str) -> None:
         max_age=60 * 60 * 24 * 90,
         httponly=True,
         samesite="lax",
+        secure=_HTTPS_ONLY,
     )
 
 
