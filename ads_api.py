@@ -9,6 +9,8 @@ import datetime
 
 import requests
 
+from lrs_i18n import tr
+
 
 def fetch_meta_campaigns(access_token, ad_account_id, date_preset="last_7d"):
     """
@@ -164,52 +166,64 @@ def correlate_stats(lrs_score, ctr, cpc, roas, cpa):
     if ctr is not None and ctr < 1.0:
         diags.append({
             "level": "danger", "crit": "Hook",
-            "msg": f"CTR {ctr:.2f}% est très faible (< 1%). Ton hook pub ne capte pas l'attention. "
-                   "Teste 3 nouvelles accroches et change le visuel.",
+            "msg": tr(f"CTR {ctr:.2f}% est très faible (< 1%). Ton hook pub ne capte pas l'attention. "
+                      "Teste 3 nouvelles accroches et change le visuel.",
+                      f"CTR {ctr:.2f}% is very low (< 1%). Your ad hook isn't grabbing attention. "
+                      "Test 3 new hooks and change the visual."),
         })
     elif ctr is not None and ctr < 2.0:
         diags.append({
             "level": "warning", "crit": "Hook",
-            "msg": f"CTR {ctr:.2f}% est perfectible. Un bon CTR Meta est > 2%. Revois ton angle créatif.",
+            "msg": tr(f"CTR {ctr:.2f}% est perfectible. Un bon CTR Meta est > 2%. Revois ton angle créatif.",
+                      f"CTR {ctr:.2f}% has room to grow. A good Meta CTR is > 2%. Rework your creative angle."),
         })
 
     if cpc is not None and cpc > 1.5:
         diags.append({
             "level": "warning", "crit": "Hook",
-            "msg": f"CPC {cpc:.2f}€ est élevé. Soit ta niche est très compétitive, soit ton Quality Score pub souffre d'un CTR bas.",
+            "msg": tr(f"CPC {cpc:.2f}€ est élevé. Soit ta niche est très compétitive, soit ton Quality Score pub souffre d'un CTR bas.",
+                      f"CPC €{cpc:.2f} is high. Either your niche is very competitive, or a low CTR is hurting your ad Quality Score."),
         })
 
     if roas is not None and roas < 2.0:
         diags.append({
             "level": "danger", "crit": "Offer / Trust",
-            "msg": f"ROAS {roas:.1f}x est sous le seuil de rentabilité. "
-                   "Le trafic arrive mais ne convertit pas — ton Offer Stack ou tes preuves sociales sont insuffisants.",
+            "msg": tr(f"ROAS {roas:.1f}x est sous le seuil de rentabilité. "
+                      "Le trafic arrive mais ne convertit pas — ton Offer Stack ou tes preuves sociales sont insuffisants.",
+                      f"ROAS {roas:.1f}x is below break-even. "
+                      "Traffic lands but doesn't convert: your offer stack or social proof falls short."),
         })
     elif roas is not None and roas < 3.0:
         diags.append({
             "level": "warning", "crit": "Offer",
-            "msg": f"ROAS {roas:.1f}x est rentable mais optimisable. "
-                   "Renforce ta garantie et ton offer stack pour augmenter la valeur perçue.",
+            "msg": tr(f"ROAS {roas:.1f}x est rentable mais optimisable. "
+                      "Renforce ta garantie et ton offer stack pour augmenter la valeur perçue.",
+                      f"ROAS {roas:.1f}x is profitable but can improve. "
+                      "Strengthen your guarantee and offer stack to raise perceived value."),
         })
 
     if cpa is not None and lrs_score is not None:
         if cpa > 50 and lrs_score < 12:
             diags.append({
                 "level": "danger", "crit": "Friction",
-                "msg": f"CPA {cpa:.0f}€ avec un score LRS de {lrs_score}/20 — le problème est clairement sur ta page. "
-                       "Améliore ton score d'au moins 3 pts pour réduire significativement ton CPA.",
+                "msg": tr(f"CPA {cpa:.0f}€ avec un score LRS de {lrs_score}/20 — le problème est clairement sur ta page. "
+                          "Améliore ton score d'au moins 3 pts pour réduire significativement ton CPA.",
+                          f"CPA €{cpa:.0f} with an LRS score of {lrs_score}/20: the problem is clearly your page. "
+                          "Raise your score by at least 3 pts to cut your CPA."),
             })
 
     if lrs_score is not None:
         if lrs_score >= 15:
             diags.append({
-                "level": "ok", "crit": "Score LRS",
-                "msg": f"Score LRS {lrs_score}/20 — page bien optimisée. Si le ROAS reste bas, le problème est dans la qualité du trafic (audience, créa pub), pas dans la page.",
+                "level": "ok", "crit": tr("Score LRS", "LRS score"),
+                "msg": tr(f"Score LRS {lrs_score}/20 — page bien optimisée. Si le ROAS reste bas, le problème est dans la qualité du trafic (audience, créa pub), pas dans la page.",
+                          f"LRS score {lrs_score}/20: the page is well optimized. If ROAS stays low, the problem is traffic quality (audience, ad creative), not the page."),
             })
         elif lrs_score < 10:
             diags.append({
-                "level": "danger", "crit": "Score LRS",
-                "msg": f"Score LRS {lrs_score}/20 — ta page est le goulot d'étranglement principal. Corriger les quick wins LRS avant d'augmenter le budget.",
+                "level": "danger", "crit": tr("Score LRS", "LRS score"),
+                "msg": tr(f"Score LRS {lrs_score}/20 — ta page est le goulot d'étranglement principal. Corriger les quick wins LRS avant d'augmenter le budget.",
+                          f"LRS score {lrs_score}/20: your page is the main bottleneck. Fix the LRS quick wins before raising the budget."),
             })
 
     return diags

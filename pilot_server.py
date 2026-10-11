@@ -14,6 +14,7 @@ import json
 import os
 import secrets as _secrets
 import sys
+import threading
 import time
 import urllib.parse
 from contextlib import asynccontextmanager
@@ -30,9 +31,12 @@ import ads_api
 import audit_engine
 import email_alerts
 import integrations
+import lrs_i18n
 import resources_content
+import resources_content_en
 import user_accounts
 from jsonstore import load_json_file, save_json_file
+from lrs_i18n import tr
 
 try:
     from lrs_pdf_report import generate_pdf_report
@@ -254,6 +258,7 @@ async def _csrf_protect(request: Request, call_next):
 
 @app.middleware("http")
 async def _require_auth(request: Request, call_next):
+    lrs_i18n.set_lang(request.headers.get("x-lrs-lang"))
     subscriber_email = _active_subscriber_email(request)
     _current_user_email.set(subscriber_email or "")
 
@@ -267,7 +272,7 @@ async def _require_auth(request: Request, call_next):
         return await call_next(request)
     if request.session.get("authenticated") or subscriber_email:
         return await call_next(request)
-    return JSONResponse({"detail": "Authentification requise."}, status_code=401)
+    return JSONResponse({"detail": tr("Authentification requise.", "Authentication required.")}, status_code=401)
 
 
 # Clé de session : fixe si fournie (recommandé en prod pour survivre aux
@@ -334,11 +339,16 @@ async def _security_headers(request: Request, call_next):
     response = await call_next(request)
     for name, value in _SECURITY_HEADERS.items():
         response.headers[name] = value
+    # Front statique (index.html, app.js, i18n.js) : revalidation à chaque
+    # chargement (304 via ETag si inchangé), sinon le navigateur garde une
+    # ancienne version après une mise à jour de l'interface.
+    if not request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
     return response
 
 
 # ── Budget anti-abus sur les appels LLM ─────────────────────────
-# Chaque audit/génération de copy appelle un LLM payant (OpenAI/Anthropic).
+# Chaque audit/génération de copy appelle un LLM payant (Anthropic).
 # Passée l'authentification (mot de passe admin OU abonnement Stripe actif,
 # voir _require_auth), rien ne bornait le nombre d'appels qu'un compte pouvait
 # déclencher — un compte compromis ou un script qui boucle sur /api/audit
@@ -366,7 +376,8 @@ def _consume_llm_budget(units: int = 1) -> None:
         retry_after = max(1, int(LLM_RATE_WINDOW_SECONDS - (now - window_start)))
         raise HTTPException(
             status_code=429,
-            detail=f"Trop de requêtes IA sur les {LLM_RATE_WINDOW_SECONDS // 60} dernières minutes — réessayez dans {retry_after}s.",
+            detail=tr(f"Trop de requêtes IA sur les {LLM_RATE_WINDOW_SECONDS // 60} dernières minutes — réessayez dans {retry_after}s.",
+                      f"Too many AI requests in the last {LLM_RATE_WINDOW_SECONDS // 60} minutes. Try again in {retry_after}s."),
             headers={"Retry-After": str(retry_after)},
         )
     _llm_calls[ns] = (count + units, window_start)
@@ -474,9 +485,9 @@ def run_funnel_audit_endpoint(req: FunnelAuditRequest):
     url_step1 = req.url_step1.strip()
     url_step2 = req.url_step2.strip()
     if not url_step1 or not url_step2:
-        raise HTTPException(status_code=400, detail="Les deux URLs du funnel sont requises.")
+        raise HTTPException(status_code=400, detail=tr("Les deux URLs du funnel sont requises.", "Both funnel URLs are required."))
     if req.funnel_type not in audit_engine.FUNNEL_TYPES:
-        raise HTTPException(status_code=400, detail="funnel_type invalide.")
+        raise HTTPException(status_code=400, detail=tr("funnel_type invalide.", "Invalid funnel_type."))
 
     _consume_llm_budget()
     try:
@@ -527,9 +538,9 @@ def run_audit_endpoint(req: AuditRequest):
     ad_text = req.ad_text.strip()
 
     if mode in ("Funnel Only", "Full Risk") and not url:
-        raise HTTPException(status_code=400, detail="URL de la landing page requise pour ce mode.")
+        raise HTTPException(status_code=400, detail=tr("URL de la landing page requise pour ce mode.", "A landing page URL is required for this mode."))
     if mode in ("Ads Only", "Full Risk") and not ad_text:
-        raise HTTPException(status_code=400, detail="Texte de la publicité requis pour ce mode.")
+        raise HTTPException(status_code=400, detail=tr("Texte de la publicité requis pour ce mode.", "Ad text is required for this mode."))
 
     landing_content, status, is_js_page = "", "", False
     page_lang, page_type = "fr", "Non applicable (mode Ads Only)"
@@ -537,7 +548,7 @@ def run_audit_endpoint(req: AuditRequest):
     if mode in ("Funnel Only", "Full Risk") and url:
         landing_content, status, is_js_page = audit_engine.extract_page(url)
         if not landing_content:
-            raise HTTPException(status_code=422, detail=f"Impossible d'extraire le contenu de la page : {status}")
+            raise HTTPException(status_code=422, detail=tr(f"Impossible d'extraire le contenu de la page : {status}", f"Could not extract the page content: {status}"))
         page_lang = audit_engine.detect_language(landing_content)
         page_type = audit_engine.detect_page_type(landing_content, url)
 
@@ -586,7 +597,9 @@ def run_audit_endpoint(req: AuditRequest):
 @app.get("/api/dashboard")
 def get_dashboard():
     history = _load_history()
-    all_scores = [e.get("score", 0) for e in history if e.get("score")]
+    # `is not None` et pas un test de vérité : un audit noté 0/20 est un vrai
+    # score, l'exclure faussait moyenne / danger_count face à danger_pages.
+    all_scores = [e["score"] for e in history if e.get("score") is not None]
 
     avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
     best_score = max(all_scores) if all_scores else 0
@@ -615,7 +628,7 @@ def get_dashboard():
         elif latest_score <= 14:
             next_thresh, next_label = 15, "Ready to scale"
         else:
-            next_thresh, next_label = 20, "Score parfait"
+            next_thresh, next_label = 20, tr("Score parfait", "Perfect score")
         next_gap = max(0, next_thresh - latest_score)
 
     danger_pages = [
@@ -762,7 +775,7 @@ def run_bulk_audit(req: BulkAuditRequest):
     mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
     urls = [u.strip() for u in req.urls if u.strip().startswith("http")][:BULK_MAX_URLS]
     if not urls:
-        raise HTTPException(status_code=400, detail="Aucune URL valide fournie.")
+        raise HTTPException(status_code=400, detail=tr("Aucune URL valide fournie.", "No valid URL provided."))
     _consume_llm_budget(len(urls))
 
     results = []
@@ -823,7 +836,7 @@ def run_bulk_audit(req: BulkAuditRequest):
 def get_creative_angles(req: CreativeAnglesRequest):
     offer_description = req.offer_description.strip()
     if not offer_description:
-        raise HTTPException(status_code=400, detail="Merci de décrire votre offre.")
+        raise HTTPException(status_code=400, detail=tr("Merci de décrire votre offre.", "Please describe your offer."))
     _consume_llm_budget()
     try:
         result = audit_engine.generate_creative_angles(
@@ -858,14 +871,14 @@ def run_compare(req: CompareRequest):
     mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not url_a or not url_b:
-        raise HTTPException(status_code=400, detail="Les deux URLs sont requises.")
+        raise HTTPException(status_code=400, detail=tr("Les deux URLs sont requises.", "Both URLs are required."))
     _consume_llm_budget(2)
 
     sides = []
     for url, label in [(url_a, req.label_a or "Page A"), (url_b, req.label_b or "Page B")]:
         content, status, is_js = audit_engine.extract_page(url)
         if not content:
-            raise HTTPException(status_code=422, detail=f"{label} : impossible d'extraire le contenu ({status}).")
+            raise HTTPException(status_code=422, detail=tr(f"{label} : impossible d'extraire le contenu ({status}).", f"{label}: could not extract the content ({status})."))
         page_type = audit_engine.detect_page_type(content, url)
         page_lang = audit_engine.detect_language(content)
         try:
@@ -914,14 +927,14 @@ def run_abtest(req: ABTestRunRequest):
     is_advertorial = req.test_type == "advertorial"
     url_a, url_b = req.url_a.strip(), req.url_b.strip()
     if not name or not url_a or not url_b:
-        raise HTTPException(status_code=400, detail="Nom du test et les deux URLs sont requis.")
+        raise HTTPException(status_code=400, detail=tr("Nom du test et les deux URLs sont requis.", "Test name and both URLs are required."))
     _consume_llm_budget(2)
 
     variant_results = {}
     for variant, url in [("A", url_a), ("B", url_b)]:
         content, status, is_js = audit_engine.extract_page(url)
         if not content:
-            raise HTTPException(status_code=422, detail=f"Variante {variant} : impossible d'extraire le contenu ({status}).")
+            raise HTTPException(status_code=422, detail=tr(f"Variante {variant} : impossible d'extraire le contenu ({status}).", f"Variant {variant}: could not extract the content ({status})."))
         page_lang = audit_engine.detect_language(content)
         # Advertorial : force explicitement le page_type plutot que de se fier a
         # detect_page_type(), qui ne connait pas cette categorie et classerait la
@@ -935,7 +948,7 @@ def run_abtest(req: ABTestRunRequest):
                 model=req.model, page_type=page_type, page_lang=page_lang,
             )
         except ValueError as e:
-            raise HTTPException(status_code=502, detail=f"Variante {variant} : {e}")
+            raise HTTPException(status_code=502, detail=tr(f"Variante {variant} : {e}", f"Variant {variant}: {e}"))
         variant_results[variant] = result
 
     ca = variant_results["A"].get("_c", {})
@@ -966,7 +979,9 @@ def run_abtest(req: ABTestRunRequest):
 @app.delete("/api/abtests/{name}")
 def delete_abtest(name: str):
     abtests = load_json_file(AB_FILE(), dict)
-    abtests.pop(name, None)
+    if name not in abtests:
+        raise HTTPException(status_code=404, detail=tr("A/B test introuvable.", "A/B test not found."))
+    abtests.pop(name)
     save_json_file(AB_FILE(), abtests)
     return {"ok": True}
 
@@ -991,9 +1006,9 @@ def create_project(req: ProjectCreateRequest):
     name = req.name.strip()
     urls = [u.strip() for u in req.urls if u.strip()]
     if not name:
-        raise HTTPException(status_code=400, detail="Nom du projet requis.")
+        raise HTTPException(status_code=400, detail=tr("Nom du projet requis.", "Project name required."))
     if not urls:
-        raise HTTPException(status_code=400, detail="Ajoutez au moins une URL.")
+        raise HTTPException(status_code=400, detail=tr("Ajoutez au moins une URL.", "Add at least one URL."))
     projects = load_json_file(PROJECTS_FILE(), dict)
     projects[name] = {
         "name": name, "notes": req.notes.strip(), "urls": urls,
@@ -1007,7 +1022,9 @@ def create_project(req: ProjectCreateRequest):
 @app.delete("/api/projects/{name}")
 def delete_project(name: str):
     projects = load_json_file(PROJECTS_FILE(), dict)
-    projects.pop(name, None)
+    if name not in projects:
+        raise HTTPException(status_code=404, detail=tr("Projet introuvable.", "Project not found."))
+    projects.pop(name)
     save_json_file(PROJECTS_FILE(), projects)
     return {"ok": True}
 
@@ -1026,7 +1043,7 @@ def audit_project(name: str, req: ProjectAuditRequest):
     projects = load_json_file(PROJECTS_FILE(), dict)
     proj = projects.get(name)
     if not proj:
-        raise HTTPException(status_code=404, detail="Projet introuvable.")
+        raise HTTPException(status_code=404, detail=tr("Projet introuvable.", "Project not found."))
     mode = req.mode if req.mode in ("Funnel Only", "Full Risk") else "Funnel Only"
     urls = proj.get("urls", [])
     targets = [u for u in urls if u not in proj.get("audits", {})] if req.only_remaining else urls
@@ -1099,7 +1116,7 @@ class CampaignSaveRequest(BaseModel):
 def save_campaign(req: CampaignSaveRequest):
     name = req.name.strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Nom de la campagne requis.")
+        raise HTTPException(status_code=400, detail=tr("Nom de la campagne requis.", "Campaign name required."))
     campaigns = load_json_file(CAMPAIGN_FILE(), dict)
     history = _load_history()
 
@@ -1129,7 +1146,9 @@ def save_campaign(req: CampaignSaveRequest):
 @app.delete("/api/campaigns/{name}")
 def delete_campaign(name: str):
     campaigns = load_json_file(CAMPAIGN_FILE(), dict)
-    campaigns.pop(name, None)
+    if name not in campaigns:
+        raise HTTPException(status_code=404, detail=tr("Campagne introuvable.", "Campaign not found."))
+    campaigns.pop(name)
     save_json_file(CAMPAIGN_FILE(), campaigns)
     return {"ok": True}
 
@@ -1157,6 +1176,11 @@ class AdsCredsRequest(BaseModel):
 
 @app.post("/api/ads-connector/creds")
 def save_ads_creds_endpoint(req: AdsCredsRequest):
+    # Refuse les champs vides : le champ token est un input password qui
+    # revient vide après rechargement, donc re-sauvegarder pour changer le
+    # seul ID de compte effaçait silencieusement le token enregistré.
+    if not req.token.strip() or not req.account_id.strip():
+        raise HTTPException(status_code=400, detail=tr("Token et ID de compte requis.", "Token and account ID required."))
     creds = _load_ads_creds()
     if req.platform == "meta":
         creds["meta_token"] = req.token.strip()
@@ -1165,7 +1189,7 @@ def save_ads_creds_endpoint(req: AdsCredsRequest):
         creds["tt_token"] = req.token.strip()
         creds["tt_adv_id"] = req.account_id.strip()
     else:
-        raise HTTPException(status_code=400, detail="Plateforme inconnue.")
+        raise HTTPException(status_code=400, detail=tr("Plateforme inconnue.", "Unknown platform."))
     _save_ads_creds(creds)
     return {"ok": True}
 
@@ -1182,16 +1206,16 @@ def import_ads_campaigns(req: AdsImportRequest):
         if req.platform == "meta":
             token, acc_id = creds.get("meta_token", ""), creds.get("meta_acc_id", "")
             if not token or not acc_id:
-                raise HTTPException(status_code=400, detail="Identifiants Meta manquants — enregistrez-les d'abord.")
+                raise HTTPException(status_code=400, detail=tr("Identifiants Meta manquants — enregistrez-les d'abord.", "Meta credentials missing. Save them first."))
             camps = ads_api.fetch_meta_campaigns(token, acc_id, req.period)
         elif req.platform == "tiktok":
             token, adv_id = creds.get("tt_token", ""), creds.get("tt_adv_id", "")
             if not token or not adv_id:
-                raise HTTPException(status_code=400, detail="Identifiants TikTok manquants — enregistrez-les d'abord.")
+                raise HTTPException(status_code=400, detail=tr("Identifiants TikTok manquants — enregistrez-les d'abord.", "TikTok credentials missing. Save them first."))
             days = {"7": 7, "14": 14, "30": 30}.get(str(req.period), 7)
             camps = ads_api.fetch_tiktok_campaigns(token, adv_id, days)
         else:
-            raise HTTPException(status_code=400, detail="Plateforme inconnue.")
+            raise HTTPException(status_code=400, detail=tr("Plateforme inconnue.", "Unknown platform."))
     except ValueError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return {"campaigns": camps}
@@ -1207,26 +1231,31 @@ def get_history_entry(url: str = "", timestamp: str = ""):
     for e in history:
         if e.get("url") == url and e.get("timestamp") == timestamp:
             return {"meta": e, "result": _full_result(e)}
-    raise HTTPException(status_code=404, detail="Audit introuvable.")
+    raise HTTPException(status_code=404, detail=tr("Audit introuvable.", "Audit not found."))
 
 
 # ══════════════════════════════════════════════════════════════
 # ── Ressources : Ads Library / Changelog / Benchmark / Swipe Files ──
 # ══════════════════════════════════════════════════════════════
 
+def _resources():
+    return resources_content if lrs_i18n.get_lang() == "fr" else resources_content_en
+
+
 @app.get("/api/resources/ads-library")
 def get_ads_library():
-    return resources_content.ADS_LIBRARY
+    return _resources().ADS_LIBRARY
 
 
 @app.get("/api/resources/changelog")
 def get_changelog():
-    return {"versions": resources_content.CHANGELOG_VERSIONS}
+    return {"versions": _resources().CHANGELOG_VERSIONS}
 
 
 @app.get("/api/resources/benchmark")
 def get_benchmark():
-    return {"intro": resources_content.BENCHMARK_INTRO, "stats": resources_content.BENCHMARK_STATS}
+    res = _resources()
+    return {"intro": res.BENCHMARK_INTRO, "stats": res.BENCHMARK_STATS}
 
 
 @app.get("/api/resources/benchmark/pdf")
@@ -1238,7 +1267,7 @@ def get_benchmark_pdf():
         from generate_benchmark_report import generate as gen_benchmark
         pdf_bytes = gen_benchmark()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Rapport temporairement indisponible : {e}")
+        raise HTTPException(status_code=500, detail=tr(f"Rapport temporairement indisponible : {e}", f"Report temporarily unavailable: {e}"))
     return Response(content=pdf_bytes, media_type="application/pdf",
                      headers={"Content-Disposition": "attachment; filename=LRS_Benchmark_Report_2025.pdf"})
 
@@ -1259,9 +1288,9 @@ class SwipeAddRequest(BaseModel):
 @app.post("/api/swipefiles")
 def add_swipefile(req: SwipeAddRequest):
     if req.category not in ("hooks", "headlines", "ctas", "angles"):
-        raise HTTPException(status_code=400, detail="Catégorie inconnue.")
+        raise HTTPException(status_code=400, detail=tr("Catégorie inconnue.", "Unknown category."))
     if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Le texte est vide.")
+        raise HTTPException(status_code=400, detail=tr("Le texte est vide.", "The text is empty."))
     swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     swipes.setdefault(req.category, []).insert(0, {
         "text": req.text.strip(), "platform": req.platform, "offer": req.offer,
@@ -1276,9 +1305,10 @@ def add_swipefile(req: SwipeAddRequest):
 def delete_swipefile(category: str, index: int):
     swipes = load_json_file(SWIPE_FILE(), _default_swipes)
     items = swipes.get(category, [])
-    if 0 <= index < len(items):
-        items.pop(index)
-        save_json_file(SWIPE_FILE(), swipes)
+    if not 0 <= index < len(items):
+        raise HTTPException(status_code=404, detail=tr("Élément introuvable.", "Item not found."))
+    items.pop(index)
+    save_json_file(SWIPE_FILE(), swipes)
     return swipes
 
 
@@ -1296,7 +1326,7 @@ class ExportPdfRequest(BaseModel):
 @app.post("/api/export/pdf")
 def export_pdf(req: ExportPdfRequest):
     if not PDF_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Génération PDF indisponible (reportlab non installé).")
+        raise HTTPException(status_code=500, detail=tr("Génération PDF indisponible (reportlab non installé).", "PDF generation unavailable (reportlab not installed)."))
     meta = {**req.meta, "version": "3.5"}
     if req.client_name:
         meta["client_name"] = req.client_name
@@ -1305,7 +1335,7 @@ def export_pdf(req: ExportPdfRequest):
     try:
         pdf_bytes = generate_pdf_report(req.result, meta)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur génération PDF : {e}")
+        raise HTTPException(status_code=500, detail=tr(f"Erreur génération PDF : {e}", f"PDF generation error: {e}"))
     fname = "LRS_audit_client.pdf" if req.report_mode == "client" else "LRS_audit.pdf"
     return Response(content=pdf_bytes, media_type="application/pdf",
                      headers={"Content-Disposition": f"attachment; filename={fname}"})
@@ -1410,18 +1440,18 @@ def studio_generate(req: StudioGenerateRequest):
         from creative_studio.core.variants import Framework, Product, VariantKind
         from creative_studio.core.copy_generation import DEFAULT_MODEL, generate_variant
     except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"Module Creative Studio indisponible : {e}")
+        raise HTTPException(status_code=500, detail=tr(f"Module Creative Studio indisponible : {e}", f"Creative Studio module unavailable: {e}"))
 
     if not req.product_name.strip() or not req.description.strip():
-        raise HTTPException(status_code=400, detail="Nom et description du produit requis.")
+        raise HTTPException(status_code=400, detail=tr("Nom et description du produit requis.", "Product name and description required."))
     try:
         kind = VariantKind(req.kind)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Type de page inconnu : {req.kind}")
+        raise HTTPException(status_code=400, detail=tr(f"Type de page inconnu : {req.kind}", f"Unknown page type: {req.kind}"))
     try:
         framework = Framework(req.framework)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Framework inconnu : {req.framework}")
+        raise HTTPException(status_code=400, detail=tr(f"Framework inconnu : {req.framework}", f"Unknown framework: {req.framework}"))
     _consume_llm_budget()
 
     product = Product(
@@ -1433,7 +1463,7 @@ def studio_generate(req: StudioGenerateRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Erreur génération : {e}")
+        raise HTTPException(status_code=502, detail=tr(f"Erreur génération : {e}", f"Generation error: {e}"))
 
     copy = variant.copy
     return {
@@ -1497,14 +1527,14 @@ def login(req: LoginRequest, request: Request):
     client_ip = request.client.host if request.client else "unknown"
     retry_after = _login_rate_limited(client_ip)
     if retry_after:
-        raise HTTPException(status_code=429, detail=f"Trop de tentatives. Reessayez dans {retry_after}s.")
+        raise HTTPException(status_code=429, detail=tr(f"Trop de tentatives. Reessayez dans {retry_after}s.", f"Too many attempts. Try again in {retry_after}s."))
 
     if _secrets.compare_digest(req.password, pwd_required):
         _login_attempts.pop(client_ip, None)
         request.session["authenticated"] = True
         return {"ok": True}
     _login_record_failure(client_ip)
-    raise HTTPException(status_code=401, detail="Mot de passe invalide.")
+    raise HTTPException(status_code=401, detail=tr("Mot de passe invalide.", "Invalid password."))
 
 
 @app.get("/api/auth/status")
@@ -1540,10 +1570,10 @@ class ConsumeMagicLinkRequest(BaseModel):
 def consume_magic_link(req: ConsumeMagicLinkRequest, request: Request):
     token = req.token.strip()
     if not token:
-        raise HTTPException(status_code=400, detail="Token manquant.")
+        raise HTTPException(status_code=400, detail=tr("Token manquant.", "Missing token."))
     email = user_accounts.consume_magic_link(token)
     if not email:
-        raise HTTPException(status_code=400, detail="Ce lien est invalide ou a expiré.")
+        raise HTTPException(status_code=400, detail=tr("Ce lien est invalide ou a expiré.", "This link is invalid or has expired."))
     request.session["subscriber_email"] = email
     return {"ok": True, "email": email}
 
@@ -1608,14 +1638,14 @@ def list_schedule():
     for sid, sched in schedule.items():
         last_run = sched.get("last_run", "")
         freq = int(sched.get("freq_days", 7))
-        next_str = "à la prochaine vérification"
+        next_str = tr("à la prochaine vérification", "at the next check")
         try:
             if last_run:
                 lr_dt = datetime.datetime.strptime(last_run, "%d/%m/%Y %H:%M")
                 next_run = lr_dt + datetime.timedelta(days=freq)
                 days_left = (next_run - now).days
                 if days_left > 0:
-                    next_str = f"dans {days_left}j"
+                    next_str = tr(f"dans {days_left}j", f"in {days_left}d")
         except Exception:
             pass
         out[sid] = {**sched, "next_run_hint": next_str}
@@ -1624,7 +1654,7 @@ def list_schedule():
 
 class ScheduleCreateRequest(BaseModel):
     url: str = ""
-    freq_days: int = 7
+    freq_days: int = Field(default=7, ge=1, le=365)
     mode: str = "Funnel Only"
     platform: str = "Meta"
     offer_type: str = "Digital product"
@@ -1635,9 +1665,11 @@ class ScheduleCreateRequest(BaseModel):
 def create_schedule(req: ScheduleCreateRequest):
     url = req.url.strip()
     if not url:
-        raise HTTPException(status_code=400, detail="URL requise.")
+        raise HTTPException(status_code=400, detail=tr("URL requise.", "URL required."))
     schedule = load_json_file(SCHEDULE_FILE(), dict)
-    sid = "sc_" + str(int(datetime.datetime.now().timestamp()))
+    # Suffixe aléatoire : l'horodatage seul (à la seconde) faisait qu'une
+    # deuxième planification créée dans la même seconde écrasait la première.
+    sid = f"sc_{int(datetime.datetime.now().timestamp())}_{_secrets.token_hex(3)}"
     schedule[sid] = {
         "url": url, "freq_days": req.freq_days, "mode": req.mode,
         "platform": req.platform, "offer_type": req.offer_type, "brand_type": req.brand_type,
@@ -1652,7 +1684,7 @@ def create_schedule(req: ScheduleCreateRequest):
 def toggle_schedule(sid: str):
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     if sid not in schedule:
-        raise HTTPException(status_code=404, detail="Planification introuvable.")
+        raise HTTPException(status_code=404, detail=tr("Planification introuvable.", "Schedule not found."))
     schedule[sid]["enabled"] = not schedule[sid].get("enabled", True)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
@@ -1661,7 +1693,9 @@ def toggle_schedule(sid: str):
 @app.delete("/api/monitoring/schedule/{sid}")
 def delete_schedule(sid: str):
     schedule = load_json_file(SCHEDULE_FILE(), dict)
-    schedule.pop(sid, None)
+    if sid not in schedule:
+        raise HTTPException(status_code=404, detail=tr("Planification introuvable.", "Schedule not found."))
+    schedule.pop(sid)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"ok": True}
 
@@ -1754,7 +1788,7 @@ def get_notification_prefs_endpoint():
 def set_notification_prefs(req: NotificationPrefsRequest):
     email = req.email.strip().lower()
     if req.email_enabled and email and not user_accounts.is_valid_email(email):
-        raise HTTPException(status_code=400, detail="Adresse email invalide.")
+        raise HTTPException(status_code=400, detail=tr("Adresse email invalide.", "Invalid email address."))
     save_json_file(NOTIFICATION_PREFS_FILE(), {"email_enabled": req.email_enabled, "email": email})
     return {"ok": True}
 
@@ -1800,8 +1834,9 @@ def _run_one_scheduled_audit(sid, sched, schedule):
                 decision = result.get("_c", {}).get("decision", "")
                 _add_notification(
                     "score_drop",
-                    f"Chute de score — {url}",
-                    f"Score passé de {prev_score}/20 à {new_score}/20 ({decision}).",
+                    tr(f"Chute de score — {url}", f"Score drop — {url}"),
+                    tr(f"Score passé de {prev_score}/20 à {new_score}/20 ({decision}).",
+                       f"Score went from {prev_score}/20 to {new_score}/20 ({decision})."),
                     url=url,
                 )
                 _maybe_email_notification(lambda email: email_alerts.send_score_drop_alert(
@@ -1819,17 +1854,38 @@ def run_schedule_now(sid: str):
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     sched = schedule.get(sid)
     if not sched:
-        raise HTTPException(status_code=404, detail="Planification introuvable.")
+        raise HTTPException(status_code=404, detail=tr("Planification introuvable.", "Schedule not found."))
     _consume_llm_budget()
     _run_one_scheduled_audit(sid, sched, schedule)
     save_json_file(SCHEDULE_FILE(), schedule)
     return {"schedule": schedule}
 
 
+# Un seul passage à la fois par utilisateur : le frontend appelle cette route
+# à chaque ouverture du pilote, sans attendre la réponse. Deux onglets (ou un
+# rechargement) ouverts pendant qu'un audit planifié tournait relançaient le
+# même audit en parallèle, avec un double appel LLM.
+_monitoring_check_lock = threading.Lock()
+_monitoring_check_running: set[str] = set()
+
+
 @app.post("/api/monitoring/check")
 def check_due_schedules():
     """Vérifie les audits planifiés en retard et les exécute — équivalent de
     app.py::run_scheduled_audits(), appelé une fois par le frontend à l'ouverture."""
+    ns = _current_user_ns()
+    with _monitoring_check_lock:
+        if ns in _monitoring_check_running:
+            return {"ran": 0, "busy": True}
+        _monitoring_check_running.add(ns)
+    try:
+        return _run_due_schedules()
+    finally:
+        with _monitoring_check_lock:
+            _monitoring_check_running.discard(ns)
+
+
+def _run_due_schedules():
     schedule = load_json_file(SCHEDULE_FILE(), dict)
     if not schedule:
         return {"ran": 0}
@@ -1865,11 +1921,11 @@ def check_due_schedules():
             for s in schedule.values()
         ]
         danger_count = sum(1 for e in digest_entries if (e["score"] or 0) <= 9)
-        danger_note = f" — {danger_count} en danger (≤9/20)" if danger_count else ""
+        danger_note = tr(f" — {danger_count} en danger (≤9/20)", f" — {danger_count} at risk (≤9/20)") if danger_count else ""
         _add_notification(
             "digest",
-            f"{ran} audit(s) planifié(s) exécuté(s)",
-            f"{len(digest_entries)} page(s) suivie(s){danger_note}.",
+            tr(f"{ran} audit(s) planifié(s) exécuté(s)", f"{ran} scheduled audit(s) run"),
+            tr(f"{len(digest_entries)} page(s) suivie(s){danger_note}.", f"{len(digest_entries)} tracked page(s){danger_note}."),
         )
         _maybe_email_notification(lambda email: email_alerts.send_monitoring_digest(digest_entries, email))
     return {"ran": ran, "schedule": schedule}

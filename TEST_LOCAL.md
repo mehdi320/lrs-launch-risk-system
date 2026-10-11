@@ -1,116 +1,69 @@
-# 🧪 Tester LRS en local — Guide pas à pas
+# Tester LRS en local
 
-## Étape 1 — Remplacer tes fichiers
+Le pilote est une app FastAPI (`pilot_server.py`) servie par uvicorn. L'ancienne
+app Streamlit (`app.py`) n'existe plus.
 
-Dans ton dossier LRS, remplace les fichiers existants par les versions du dossier outputs :
-
-```
-app.py           ← nouveau fichier (V2.1 OpenAI)
-requirements.txt ← nouveau fichier (avec openai + python-dotenv)
-```
-
-Les fichiers `.txt` (methodology_ecom, methodology_digital, concepts_funnels, concepts_ads)
-**ne changent pas** — garde les tels quels.
-
----
-
-## Étape 2 — Installer les nouvelles dépendances
-
-Ouvre ton terminal dans le dossier LRS :
+## 1. Installer les dépendances
 
 ```bash
-# Si tu as un venv, active-le d'abord
-source venv/bin/activate        # macOS/Linux
-venv\Scripts\activate           # Windows
-
-# Installer les dépendances
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
----
+## 2. Configurer `.env`
 
-## Étape 3 — Configurer ta clé API OpenAI
+Copiez `.env.example` en `.env`, puis choisissez un moteur pour les audits :
 
-1. Ouvre le fichier `.env` (crée-le s'il n'existe pas)
-2. Ajoute ta clé :
+- **Claude (comme en prod)** : renseignez `ANTHROPIC_API_KEY=sk-ant-...`.
+- **Ollama (gratuit, local)** : installez [Ollama](https://ollama.com), lancez
+  `ollama pull qwen2.5:7b`, puis mettez `LLM_BACKEND=ollama` dans `.env`. Les
+  audits et les Angles rapides passent alors par Ollama. Comptez 1 à 3 min par
+  audit selon la machine. Le Studio avancé demande toujours une clé Claude.
 
-```
-OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
-```
+`APP_PASSWORD` protège l'accès. Laissez-le vide pour un accès libre en local,
+jamais en prod.
 
-> Obtenir une clé : https://platform.openai.com/api-keys
-> Coût estimé pour tester : < 0.10€ pour 10 audits avec gpt-4o-mini
-
----
-
-## Étape 4 — Lancer l'app
+## 3. Lancer le pilote
 
 ```bash
-streamlit run app.py
+venv\Scripts\python -m uvicorn pilot_server:app --port 8600
 ```
 
-L'app s'ouvre sur `http://localhost:8501`
+Ouvrez `http://localhost:8600`.
 
----
+## 4. Premier test
 
-## Étape 5 — Faire un premier test
+1. Onglet **Audit**, mode **Ads Only**, plateforme **Meta**.
+2. Collez ce texte de pub :
 
-### Test rapide (Ads Only)
+   ```
+   Tu bosses 40h/semaine mais tu stagnes à 3000€/mois ?
+   J'étais exactement là il y a 18 mois.
+   Aujourd'hui je génère 8000€/mois en 25h.
+   Voici le système exact, lien en bio.
+   ```
 
-1. Mode : **Ads Only**
-2. Plateforme : **Meta**
-3. Type d'offre : **Digital product**
-4. Modèle : **gpt-4o-mini** (rapide et pas cher)
-5. Colle ce script de test :
+3. Cliquez **Lancer l'audit**.
 
-```
-Tu bosses 40h/semaine mais tu stagnes à 3000€/mois ?
-J'étais exactement là il y a 18 mois.
-Aujourd'hui je génère 8000€/mois en 25h.
-Voici le système exact — lien en bio.
-```
+Si tout fonctionne, vous voyez :
 
-6. Clique **Run LRS Audit**
-7. Résultat en ~15 secondes
+- un score /20 et son détail (Hook / Offer / Trust / Friction) ;
+- un verdict : Do NOT launch / Test small budget / Ready to scale ;
+- les raisons du score, l'action prioritaire et les quick wins ;
+- un rewrite (headline, sous-titre, CTA, garantie).
 
----
-
-### Test complet (Full Risk)
-
-1. Mode : **Full Risk**
-2. Remplis : URL d'une vraie landing page + script pub
-3. Modèle : **gpt-4o** pour plus de précision
-4. Clique **Run LRS Audit**
-
----
-
-## Ce que tu dois voir si tout fonctionne ✅
-
-- Score /20 avec breakdown (Hook / Offer / Trust / Friction)
-- Verdict : Do NOT launch / Test small budget / Ready to scale
-- Analyse détaillée de chaque axe
-- Plan d'action avec priorités
-- Rewrite (headline, CTA, bullets, garantie)
-- Bouton "Exporter .txt"
-
----
+L'audit apparaît ensuite dans **Historique**, d'où on l'exporte en .txt ou PDF.
 
 ## Problèmes courants
 
-**"Clé API manquante"**
-→ Vérifie que `.env` existe et contient `OPENAI_API_KEY=sk-...`
+| Message | Cause |
+|---|---|
+| « Clé API Claude manquante » | `ANTHROPIC_API_KEY` vide et `LLM_BACKEND` pas sur `ollama` |
+| « Ollama injoignable » | l'app Ollama n'est pas lancée |
+| « Modèle Ollama absent » | lancez `ollama pull qwen2.5:7b` |
+| « Authentification requise » | `APP_PASSWORD` est défini : connectez-vous d'abord |
 
-**"ModuleNotFoundError: No module named 'openai'"**
-→ Relance `pip install -r requirements.txt`
+## Ensuite : mise en ligne
 
-**"Rate limit"**
-→ Attends 10 secondes et relance l'audit
-
-**"Quota OpenAI épuisé"**
-→ Va sur platform.openai.com → Billing → ajoute du crédit (5€ suffisent pour 500 audits)
-
----
-
-## Une fois satisfait du test → Déploiement en ligne
-
-Suis le guide `DEPLOYMENT.md` (Docker, pilote FastAPI) pour mettre LRS accessible en ligne.
+Suivez `DEPLOYMENT.md` (Docker + Caddy sur un VPS).

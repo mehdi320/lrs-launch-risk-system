@@ -532,7 +532,7 @@ Testez maintenant → [Lien]
 }
 
 CHANGELOG_VERSIONS = [
-    {"version": "V2.6 — Aujourd'hui", "items": [
+    {"version": "V2.6 — Août 2026", "items": [
         "🆕 Bulk Audit : auditez jusqu'à 20 URLs en 1 clic + import CSV + export résultats CSV",
         "🆕 Monitoring : alertes score (drop/progression ≥2 pts), score trend par page",
         "🆕 Audits planifiés automatiques : surveillance toutes les 7/14/30 jours, exécution au démarrage",

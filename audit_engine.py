@@ -21,6 +21,8 @@ from urllib.parse import urljoin, urlparse
 import requests
 import trafilatura
 
+from lrs_i18n import get_lang, tr
+
 try:
     import anthropic
 except ImportError:
@@ -46,6 +48,22 @@ MAX_PAGE_CHARS = 20000
 # Modele Claude par defaut pour l'audit — aligne sur
 # creative_studio/core/llm_client.py::DEFAULT_MODEL.
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-5"
+
+# Moteur local Ollama — dev uniquement (generations de test gratuites, ex.
+# demos pour les videos marketing). Active par LLM_BACKEND=ollama dans le
+# .env local ; ignore des que LRS_ENV=production pour que la prod reste
+# toujours sur Claude, meme si la variable fuit dans un deploiement.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+# Le contexte par defaut d'Ollama (4096 tokens) tronquerait le prompt
+# d'audit (methodologie + page jusqu'a MAX_PAGE_CHARS ~ 10-15k tokens).
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+
+
+def use_ollama():
+    if os.getenv("LRS_ENV", "").strip().lower() == "production":
+        return False
+    return os.getenv("LLM_BACKEND", "").strip().lower() == "ollama"
 
 
 def load_txt(filename):
@@ -229,7 +247,7 @@ def _dns_pinned_to(hostname, safe_ips):
 def extract_page(url):
     hostname, safe_ips = _validate_fetch_target(url)
     if hostname is None:
-        return "", "URL invalide ou pointant vers une adresse non autorisee.", False
+        return "", tr("URL invalide ou pointant vers une adresse non autorisée.", "Invalid URL or pointing to a disallowed address."), False
 
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -253,14 +271,14 @@ def extract_page(url):
                 next_url = urljoin(current_url, location)
                 hostname, safe_ips = _validate_fetch_target(next_url)
                 if hostname is None:
-                    return "", "Redirection vers une adresse non autorisee.", False
+                    return "", tr("Redirection vers une adresse non autorisée.", "Redirect to a disallowed address."), False
                 current_url = next_url
                 continue
             break
         r.raise_for_status()
         html = r.text
     except requests.exceptions.ConnectionError:
-        return "", "Impossible de se connecter.", False
+        return "", tr("Impossible de se connecter.", "Could not connect."), False
     except requests.exceptions.Timeout:
         return "", "Timeout.", False
     except Exception as e:
@@ -318,15 +336,17 @@ def extract_page(url):
     if trafilatura_text and len(trafilatura_text) > 200 and not use_fallback:
         full = trafilatura_text
         prioritized = _head_and_tail(full)
-        status = f"Contenu extrait ({min(len(full), MAX_PAGE_CHARS)}/{len(full)} caracteres)"
+        n_kept, n_total = min(len(full), MAX_PAGE_CHARS), len(full)
+        status = tr(f"Contenu extrait ({n_kept}/{n_total} caractères)", f"Content extracted ({n_kept}/{n_total} characters)")
         return clamp(prioritized, n=len(prioritized)), status, is_js
 
     if len(fallback) > 100:
         prioritized = _head_and_tail(fallback)
-        status = f"Extraction partielle ({min(len(fallback), MAX_PAGE_CHARS)}/{len(fallback)} caracteres)"
+        n_kept, n_total = min(len(fallback), MAX_PAGE_CHARS), len(fallback)
+        status = tr(f"Extraction partielle ({n_kept}/{n_total} caractères)", f"Partial extraction ({n_kept}/{n_total} characters)")
         return clamp(prioritized, n=len(prioritized)), status, is_js
 
-    return html[:2000], "Extraction faible.", True
+    return html[:2000], tr("Extraction faible.", "Weak extraction."), True
 
 
 def _strip_accents(s: str) -> str:
@@ -489,7 +509,7 @@ def get_decision(score):
 # ── PROMPT SYSTÈME ──────────────────────────────────────────────
 SYSTEM_PROMPT_BASE = (
     "Tu es LRS - Launch Risk System V2, un auditeur paid traffic senior.\n"
-    "LANGUE : Reponds TOUJOURS en francais. Tous les textes du JSON en francais.\n"
+    "OUTPUT_LANG_PLACEHOLDER\n"
     "\n"
     "CONTEXTE MARQUE :\n"
     "BRAND_CONTEXT_PLACEHOLDER\n"
@@ -623,12 +643,26 @@ def _page_type_instructions(page_type):
     return "Applique le scoring standard landing page de conversion paid traffic."
 
 
+def _output_lang_name():
+    return "francais" if get_lang() == "fr" else "anglais (English)"
+
+
+def _output_lang_rule():
+    """Langue de TOUS les textes du JSON renvoye — suit la langue choisie dans
+    l'interface (lrs_i18n), independamment de la langue de la page auditee."""
+    if get_lang() == "fr":
+        return "LANGUE : Reponds TOUJOURS en francais. Tous les textes du JSON en francais."
+    return ("LANGUAGE: ALWAYS answer in English. Every text value in the JSON must be "
+            "written in English, even though these instructions are in French.")
+
+
 def _lang_instruction(page_lang):
+    out = _output_lang_name()
     if page_lang == "en":
-        return "LANGUE : Anglais. Cite éléments en anglais, réponses JSON en français."
+        return "LANGUE DE LA PAGE : Anglais. Cite éléments en anglais, réponses JSON en " + out + "."
     if page_lang == "mixte":
-        return "LANGUE : Mixte FR+EN. Cite dans langue originale, JSON en français."
-    return "LANGUE DE LA PAGE : Français."
+        return "LANGUE DE LA PAGE : Mixte FR+EN. Cite dans langue originale, JSON en " + out + "."
+    return "LANGUE DE LA PAGE : Français. Cite éléments en français, réponses JSON en " + out + "."
 
 
 class _AuditJSONParseError(Exception):
@@ -665,17 +699,21 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     if result is None:
         if strict:
             raise _AuditJSONParseError("JSON illisible")
+        incomplete = tr("Analyse incomplete - relance l'audit", "Incomplete analysis - run the audit again")
         result = {
             "lrs": {"mode": mode, "platform": platform, "offer_type": offer_type,
                     "score_breakdown_5": {"hook": 0, "offer": 0, "trust": 0, "friction_message_match": 0}},
-            "message_match": {"status": "N/A", "score_explication": "Analyse incomplete - relance l'audit", "mismatches": [], "fix": []},
+            "message_match": {"status": "N/A", "score_explication": incomplete, "mismatches": [], "fix": []},
             "why_this_score": {
-                "hook_detail": "Analyse incomplete - relance l'audit",
-                "offer_detail": "Analyse incomplete - relance l'audit",
-                "trust_detail": "Analyse incomplete - relance l'audit",
-                "friction_detail": "Analyse incomplete - relance l'audit",
-                "top_3_reasons": ["Analyse incomplete", "Relance l'audit", "Si erreur persiste, reduis le contenu"],
-                "critical_gaps": ["Analyse incomplete"]
+                "hook_detail": incomplete,
+                "offer_detail": incomplete,
+                "trust_detail": incomplete,
+                "friction_detail": incomplete,
+                "top_3_reasons": [tr("Analyse incomplete", "Incomplete analysis"),
+                                  tr("Relance l'audit", "Run the audit again"),
+                                  tr("Si erreur persiste, reduis le contenu",
+                                     "If the error persists, shorten the content")],
+                "critical_gaps": [tr("Analyse incomplete", "Incomplete analysis")]
             },
             "fix_plan": {"priority_actions": [], "ab_tests": []},
             "rewrite": {"headline": "", "subheadline": "", "hero_bullets": [], "cta_primary": "",
@@ -694,6 +732,8 @@ def _parse_audit_json(raw_text, mode, platform, offer_type, strict=False):
     tier            = get_tier(score)
     bench           = CVR_BENCHMARKS.get(offer_type, CVR_BENCHMARKS["Digital product"])
     cvr_cur, cvr_fix, cvr_up = bench[tier]
+    if get_lang() != "fr":
+        cvr_up = cvr_up.replace(" a ", " to ")
 
     result["_c"] = {
         "score": score, "hook": hook, "offer": offer, "trust": trust, "friction": friction,
@@ -712,6 +752,7 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
 
     system = (
         SYSTEM_PROMPT_BASE
+        .replace("OUTPUT_LANG_PLACEHOLDER", _output_lang_rule())
         .replace("BRAND_CONTEXT_PLACEHOLDER", _brand_context(brand_type))
         .replace("MARKET_CONTEXT_PLACEHOLDER", market_context)
         .replace("PAGE_TYPE_PLACEHOLDER", page_type + "\n\n" + _page_type_instructions(page_type) + "\n\n" + _lang_instruction(page_lang))
@@ -738,7 +779,7 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
             user_parts += ["PUBLICITE :", ad_text, ""]
         user_parts += ["INSTRUCTIONS : Audit COMPLET. friction_message_match = coherence pub+landing. "
                        "message_match : cite texte EXACT. Pour chaque fix, donne exemple exact."]
-    user_parts += ["", "RAPPEL : JSON uniquement. Francais. Sois PRECIS."]
+    user_parts += ["", "RAPPEL : JSON uniquement. Langue de sortie : " + _output_lang_name() + ". Sois PRECIS."]
     return system, "\n".join(user_parts)
 
 
@@ -794,6 +835,50 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
     return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
 
 
+# ── APPEL OLLAMA (local, dev uniquement — meme contrat) ──────────
+def _ollama_chat_json(system, user_prompt, temperature, num_predict):
+    """Un appel /api/chat en mode JSON, renvoie le texte brut de la reponse.
+
+    API native plutot que l'endpoint compatible OpenAI : seule la native
+    accepte num_ctx par requete."""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt},
+        ],
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": temperature, "num_ctx": OLLAMA_NUM_CTX, "num_predict": num_predict},
+    }
+    try:
+        resp = requests.post(OLLAMA_HOST + "/api/chat", json=payload, timeout=600)
+    except requests.ConnectionError:
+        raise ValueError("Ollama injoignable sur " + OLLAMA_HOST + ". Lancez l'app Ollama (ou `ollama serve`).")
+    except requests.Timeout:
+        raise ValueError("Ollama n'a pas repondu en 10 min. Modele trop lourd pour la machine ?")
+    if resp.status_code == 404:
+        raise ValueError("Modele Ollama '" + OLLAMA_MODEL + "' absent. Lancez : ollama pull " + OLLAMA_MODEL)
+    if resp.status_code != 200:
+        raise ValueError("Erreur Ollama " + str(resp.status_code) + " : " + resp.text[:300])
+    return (resp.json().get("message") or {}).get("content", "")
+
+
+def _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
+                       brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
+    system, user_prompt = _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text,
+                                               market_context, brand_type, page_type, page_lang)
+    raw = ""
+    for attempt in range(3):
+        raw = _ollama_chat_json(system, user_prompt, temperature=0.15, num_predict=4500)
+        try:
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            continue
+
+    return _parse_audit_json(raw, mode, platform, offer_type, strict=False)
+
+
 # ── POINT D'ENTREE UNIQUE ─────────────────────────────────────────
 def run_audit(mode, platform, offer_type, landing_content, ad_text, market_context, model,
               brand_type="Nouveau lancement", page_type="Non determine", page_lang="fr"):
@@ -804,7 +889,13 @@ def run_audit(mode, platform, offer_type, landing_content, ad_text, market_conte
     compatibilite avec les appelants existants (pilot_server.py) mais
     n'est plus utilise : la branche Claude utilise toujours
     DEFAULT_ANTHROPIC_MODEL, indifferemment de sa valeur.
+
+    LLM_BACKEND=ollama (hors production) court-circuite Claude : audit
+    100 % local via OLLAMA_MODEL, sans cle ni cout.
     """
+    if use_ollama():
+        return _run_audit_ollama(mode, platform, offer_type, landing_content, ad_text, market_context,
+                                  brand_type=brand_type, page_type=page_type, page_lang=page_lang)
     return _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
                               brand_type=brand_type, page_type=page_type, page_lang=page_lang)
 
@@ -884,19 +975,12 @@ def run_funnel_audit(funnel_type, platform, offer_type, url_step1, url_step2, ma
 def generate_creative_angles(offer_description, platform, offer_type, model=None):
     """Anthropic (Claude) exclusivement depuis le 2026-09-23 — OpenAI retire.
     `model` accepte pour compatibilite avec pilot_server.py mais ignore
-    (toujours DEFAULT_ANTHROPIC_MODEL), meme convention que run_audit()."""
-    if anthropic is None:
-        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
-
-    api_key = get_anthropic_api_key()
-    if not api_key:
-        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
-
-    client = anthropic.Anthropic(api_key=api_key)
+    (toujours DEFAULT_ANTHROPIC_MODEL), meme convention que run_audit().
+    LLM_BACKEND=ollama (hors production) passe par Ollama, comme l'audit."""
     system = (
         "Tu es un copywriter senior specialise en paid traffic (Meta/TikTok/Google Ads). "
         "Tu generes des angles publicitaires, hooks et un script UGC a partir d'une offre. "
-        "Reponds UNIQUEMENT en JSON, en francais, sans texte hors du JSON."
+        "Reponds UNIQUEMENT en JSON, en " + _output_lang_name() + ", sans texte hors du JSON."
     )
     user_prompt = (
         "OFFRE : " + offer_description + "\n"
@@ -912,6 +996,18 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
         '"variants":[{"primary_text":"X","headline":"X","cta":"X"}],'
         '"script_ugc_20s":"X"}'
     )
+
+    if use_ollama():
+        return _angles_from_raw(_ollama_chat_json(system, user_prompt, temperature=0.7, num_predict=2000))
+
+    if anthropic is None:
+        raise ValueError("Librairie anthropic non installee. Relancez : pip install anthropic")
+
+    api_key = get_anthropic_api_key()
+    if not api_key:
+        raise ValueError("Cle API Claude manquante. Ajoutez ANTHROPIC_API_KEY dans votre fichier .env.")
+
+    client = anthropic.Anthropic(api_key=api_key)
 
     raw = ""
     last_err = None
@@ -941,6 +1037,10 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
                 raise ValueError("Rate limit Claude atteint apres 3 tentatives. Attendez et relancez.")
             raise ValueError("Erreur Claude apres 3 tentatives : " + last_err)
 
+    return _angles_from_raw(raw)
+
+
+def _angles_from_raw(raw):
     try:
         data = json.loads(raw)
     except Exception:
