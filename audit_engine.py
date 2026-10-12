@@ -34,13 +34,6 @@ try:
 except ImportError:
     pass
 
-# Sortie structuree + parsing partage avec creative_studio/core/reference_extraction.py
-# (voir _AUDIT_RESPONSE_SCHEMA et _run_audit_claude plus bas) — ces deux
-# symboles ne dependent pas directement du SDK anthropic (ils operent sur
-# l'objet `response` par duck-typing), donc importables meme si `anthropic`
-# est absent (audit_engine.py reste utilisable avec Ollama seul).
-from creative_studio.core.llm_client import GenerationRefused, parse_structured_json_response
-
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # 8000 (~2000 tokens) etait beaucoup trop bas pour du long-form copywriting —
 # un advertorial reel depasse facilement 15 000 mots (~80 000+ caracteres).
@@ -863,194 +856,6 @@ def _build_audit_prompt(mode, platform, offer_type, landing_content, ad_text, ma
     return system, "\n".join(user_parts)
 
 
-# ── SCHEMA DE SORTIE (Claude uniquement — sortie structuree native) ──
-# Meme principe que creative_studio/core/reference_extraction.py::_ANALYSIS_SCHEMA :
-# contraindre la forme ET le type de la reponse reduit la marge de
-# manoeuvre du modele (defense en profondeur supplementaire contre
-# l'injection de prompt, voir _build_audit_prompt ci-dessus) en plus de
-# garantir un JSON toujours valide (la gymnastique de _parse_audit_json —
-# nettoyage de fences markdown, re-equilibrage d'accolades — ne sert plus
-# qu'au chemin Ollama, qui n'a pas cette garantie). minimum/maximum sur
-# chaque sous-score empeche structurellement une valeur hors 0-5, en plus
-# du clamping applicatif deja fait par _finalize_audit_result.
-_ACTION_ITEM_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "what": {"type": "string"},
-        "how_exactly": {"type": "string"},
-        "time_estimate": {"type": "string"},
-        "expected_impact": {"type": "string"},
-    },
-    "required": ["what", "how_exactly", "time_estimate", "expected_impact"],
-    "additionalProperties": False,
-}
-
-_AUDIT_RESPONSE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "lrs": {
-            "type": "object",
-            "properties": {
-                "mode": {"type": "string"},
-                "platform": {"type": "string"},
-                "offer_type": {"type": "string"},
-                "brand_type": {"type": "string"},
-                "page_type": {"type": "string"},
-                "score_breakdown_5": {
-                    "type": "object",
-                    "properties": {
-                        # minimum/maximum non supportes par output_config.format.schema
-                        # sur ce modele (400 invalid_request_error, constate en prod) —
-                        # le bornage 0-5 reste applique cote code dans
-                        # _finalize_audit_result (max(0, min(5, ...))), protection
-                        # intacte malgre leur absence ici.
-                        "hook": {"type": "integer"},
-                        "offer": {"type": "integer"},
-                        "trust": {"type": "integer"},
-                        "friction_message_match": {"type": "integer"},
-                    },
-                    "required": ["hook", "offer", "trust", "friction_message_match"],
-                    "additionalProperties": False,
-                },
-            },
-            "required": ["mode", "platform", "offer_type", "score_breakdown_5"],
-            "additionalProperties": False,
-        },
-        "message_match": {
-            "type": "object",
-            "properties": {
-                "status": {"type": "string"},
-                "score_explication": {"type": "string"},
-                "mismatches": {"type": "array", "items": {"type": "string"}},
-                "fix": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["status", "score_explication", "mismatches", "fix"],
-            "additionalProperties": False,
-        },
-        "why_this_score": {
-            "type": "object",
-            "properties": {
-                "hook_detail": {"type": "string"},
-                "offer_detail": {"type": "string"},
-                "trust_detail": {"type": "string"},
-                "friction_detail": {"type": "string"},
-                "top_3_reasons": {"type": "array", "items": {"type": "string"}},
-                "critical_gaps": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["hook_detail", "offer_detail", "trust_detail", "friction_detail",
-                         "top_3_reasons", "critical_gaps"],
-            "additionalProperties": False,
-        },
-        "fix_plan": {
-            "type": "object",
-            "properties": {
-                "top_priority_action": _ACTION_ITEM_SCHEMA,
-                "quick_wins": {"type": "array", "items": _ACTION_ITEM_SCHEMA},
-                "long_term": {"type": "array", "items": _ACTION_ITEM_SCHEMA},
-                "priority_actions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "impact": {"type": "string"},
-                            "effort": {"type": "string"},
-                            "what": {"type": "string"},
-                            "how": {"type": "string"},
-                            "how_exactly": {"type": "string"},
-                            "why": {"type": "string"},
-                            "time_estimate": {"type": "string"},
-                            "category": {"type": "string"},
-                        },
-                        "required": ["impact", "effort", "what", "how", "how_exactly",
-                                     "why", "time_estimate", "category"],
-                        "additionalProperties": False,
-                    },
-                },
-                "ab_tests": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "hypothesis": {"type": "string"},
-                            "variant_a": {"type": "string"},
-                            "variant_b": {"type": "string"},
-                            "success_metric": {"type": "string"},
-                        },
-                        "required": ["hypothesis", "variant_a", "variant_b", "success_metric"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["priority_actions", "ab_tests"],
-            "additionalProperties": False,
-        },
-        "rewrite": {
-            "type": "object",
-            "properties": {
-                "headline": {"type": "string"},
-                "subheadline": {"type": "string"},
-                "hero_bullets": {"type": "array", "items": {"type": "string"}},
-                "cta_primary": {"type": "string"},
-                "cta_secondary": {"type": "string"},
-                "proof_block": {"type": "string"},
-                "offer_stack": {"type": "array", "items": {"type": "string"}},
-                "guarantee": {"type": "string"},
-                "faq_objections": {"type": "array", "items": {"type": "string"}},
-            },
-            "required": ["headline", "subheadline", "hero_bullets", "cta_primary",
-                         "cta_secondary", "proof_block", "offer_stack", "guarantee", "faq_objections"],
-            "additionalProperties": False,
-        },
-        "ads": {
-            "type": "object",
-            "properties": {
-                "angles": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {"angle": {"type": "string"}, "rationale": {"type": "string"}},
-                        "required": ["angle", "rationale"],
-                        "additionalProperties": False,
-                    },
-                },
-                "hooks": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "hook": {"type": "string"},
-                            "platform": {"type": "string"},
-                            "type": {"type": "string"},
-                        },
-                        "required": ["hook", "platform", "type"],
-                        "additionalProperties": False,
-                    },
-                },
-                "variants": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "platform": {"type": "string"},
-                            "primary_text": {"type": "string"},
-                            "headline": {"type": "string"},
-                            "cta": {"type": "string"},
-                        },
-                        "required": ["platform", "primary_text", "headline", "cta"],
-                        "additionalProperties": False,
-                    },
-                },
-                "script_ugc_20s": {"type": "string"},
-            },
-            "required": ["angles", "hooks", "variants", "script_ugc_20s"],
-            "additionalProperties": False,
-        },
-    },
-    "required": ["lrs", "message_match", "why_this_score", "fix_plan", "rewrite", "ads"],
-    "additionalProperties": False,
-}
-
-
 # ── APPEL CLAUDE ──────────────────────────────────────────────────
 def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, market_context,
                        model=DEFAULT_ANTHROPIC_MODEL,
@@ -1077,19 +882,31 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
                 # bug preexistant, pas introduit par ce correctif). thinking
                 # adaptive est le mecanisme de controle d'echantillonnage
                 # actuel, meme pattern que reference_extraction.py.
+                #
+                # Pas de output_config/json_schema ici (contrairement a
+                # reference_extraction.py) : _AUDIT_RESPONSE_SCHEMA a ete
+                # tente (voir historique git) puis abandonne -- l'API refuse
+                # avec "compiled grammar too large" des qu'un schema a
+                # plusieurs sections imbriquees + tableaux d'objets, constate
+                # en conditions reelles. Le schema de reference_extraction.py
+                # passe uniquement parce qu'il est plat (9 champs string/bool,
+                # aucun objet imbrique) -- pas comparable a la richesse
+                # necessaire ici (fix_plan, rewrite, ads...). Le JSON reste
+                # demande par instruction du prompt (voir _build_audit_prompt)
+                # et parse manuellement par _parse_audit_json, comme avant ce
+                # correctif -- la defense anti-injection (delimiteurs +
+                # neutralisation + rappel systeme) ne depend pas du schema,
+                # elle reste pleinement active.
                 thinking={"type": "adaptive"},
                 system=system,
                 messages=[{"role": "user", "content": user_prompt}],
-                output_config={
-                    "format": {"type": "json_schema", "schema": _AUDIT_RESPONSE_SCHEMA},
-                },
             )
-            result = parse_structured_json_response(response)
-            return _finalize_audit_result(result, mode, platform, offer_type)
-        except (GenerationRefused, RuntimeError) as e:
-            # Refus/troncature/JSON malforme malgre le schema contraint ->
-            # on retente plutot que de fabriquer un score 0/20 des le 1er coup.
-            last_err = str(e)
+            text_block = next((b for b in response.content if getattr(b, "type", None) == "text"), None)
+            raw = text_block.text if text_block is not None else ""
+            return _parse_audit_json(raw, mode, platform, offer_type, strict=True)
+        except _AuditJSONParseError:
+            # JSON illisible -> on retente plutot que de fabriquer un
+            # score 0/20 des le 1er coup.
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
