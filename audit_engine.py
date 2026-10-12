@@ -882,6 +882,7 @@ _ACTION_ITEM_SCHEMA = {
         "expected_impact": {"type": "string"},
     },
     "required": ["what", "how_exactly", "time_estimate", "expected_impact"],
+    "additionalProperties": False,
 }
 
 _AUDIT_RESPONSE_SCHEMA = {
@@ -904,9 +905,11 @@ _AUDIT_RESPONSE_SCHEMA = {
                         "friction_message_match": {"type": "integer", "minimum": 0, "maximum": 5},
                     },
                     "required": ["hook", "offer", "trust", "friction_message_match"],
+                    "additionalProperties": False,
                 },
             },
             "required": ["mode", "platform", "offer_type", "score_breakdown_5"],
+            "additionalProperties": False,
         },
         "message_match": {
             "type": "object",
@@ -917,6 +920,7 @@ _AUDIT_RESPONSE_SCHEMA = {
                 "fix": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["status", "score_explication", "mismatches", "fix"],
+            "additionalProperties": False,
         },
         "why_this_score": {
             "type": "object",
@@ -930,6 +934,7 @@ _AUDIT_RESPONSE_SCHEMA = {
             },
             "required": ["hook_detail", "offer_detail", "trust_detail", "friction_detail",
                          "top_3_reasons", "critical_gaps"],
+            "additionalProperties": False,
         },
         "fix_plan": {
             "type": "object",
@@ -953,6 +958,7 @@ _AUDIT_RESPONSE_SCHEMA = {
                         },
                         "required": ["impact", "effort", "what", "how", "how_exactly",
                                      "why", "time_estimate", "category"],
+                        "additionalProperties": False,
                     },
                 },
                 "ab_tests": {
@@ -966,10 +972,12 @@ _AUDIT_RESPONSE_SCHEMA = {
                             "success_metric": {"type": "string"},
                         },
                         "required": ["hypothesis", "variant_a", "variant_b", "success_metric"],
+                        "additionalProperties": False,
                     },
                 },
             },
             "required": ["priority_actions", "ab_tests"],
+            "additionalProperties": False,
         },
         "rewrite": {
             "type": "object",
@@ -986,6 +994,7 @@ _AUDIT_RESPONSE_SCHEMA = {
             },
             "required": ["headline", "subheadline", "hero_bullets", "cta_primary",
                          "cta_secondary", "proof_block", "offer_stack", "guarantee", "faq_objections"],
+            "additionalProperties": False,
         },
         "ads": {
             "type": "object",
@@ -996,6 +1005,7 @@ _AUDIT_RESPONSE_SCHEMA = {
                         "type": "object",
                         "properties": {"angle": {"type": "string"}, "rationale": {"type": "string"}},
                         "required": ["angle", "rationale"],
+                        "additionalProperties": False,
                     },
                 },
                 "hooks": {
@@ -1008,6 +1018,7 @@ _AUDIT_RESPONSE_SCHEMA = {
                             "type": {"type": "string"},
                         },
                         "required": ["hook", "platform", "type"],
+                        "additionalProperties": False,
                     },
                 },
                 "variants": {
@@ -1021,14 +1032,17 @@ _AUDIT_RESPONSE_SCHEMA = {
                             "cta": {"type": "string"},
                         },
                         "required": ["platform", "primary_text", "headline", "cta"],
+                        "additionalProperties": False,
                     },
                 },
                 "script_ugc_20s": {"type": "string"},
             },
             "required": ["angles", "hooks", "variants", "script_ugc_20s"],
+            "additionalProperties": False,
         },
     },
     "required": ["lrs", "message_match", "why_this_score", "fix_plan", "rewrite", "ads"],
+    "additionalProperties": False,
 }
 
 
