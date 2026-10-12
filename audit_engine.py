@@ -1052,7 +1052,13 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
             response = client.messages.create(
                 model=model,
                 max_tokens=4500,
-                temperature=0.15,
+                # temperature retire : le SDK anthropic >=1.8.0 ne l'accepte
+                # plus sur ce modele (TypeError: unexpected keyword argument
+                # 'temperature', constate en prod sur le VPS le 2026-10-12 —
+                # bug preexistant, pas introduit par ce correctif). thinking
+                # adaptive est le mecanisme de controle d'echantillonnage
+                # actuel, meme pattern que reference_extraction.py.
+                thinking={"type": "adaptive"},
                 system=system,
                 messages=[{"role": "user", "content": user_prompt}],
                 output_config={
@@ -1267,7 +1273,9 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
             response = client.messages.create(
                 model=DEFAULT_ANTHROPIC_MODEL,
                 max_tokens=2000,
-                temperature=0.7,
+                # temperature retire, meme raison qu'dans _run_audit_claude
+                # ci-dessus (SDK anthropic >=1.8.0).
+                thinking={"type": "adaptive"},
                 system=system,
                 messages=[{"role": "user", "content": user_prompt}],
             )
