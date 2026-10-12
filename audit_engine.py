@@ -875,7 +875,14 @@ def _run_audit_claude(mode, platform, offer_type, landing_content, ad_text, mark
         try:
             response = client.messages.create(
                 model=model,
-                max_tokens=4500,
+                # 4500 -> 9000 : avec thinking actif, les tokens de
+                # raisonnement partagent le meme budget max_tokens que la
+                # reponse finale -- 4500 (calibre a l'epoque sans thinking)
+                # coupait la reponse avant la fin du JSON, constate en
+                # conditions reelles (sortie tronquee, _parse_audit_json
+                # ne trouvait aucun JSON valide -> fallback 0/20 "analyse
+                # incomplete" systematique).
+                max_tokens=9000,
                 # temperature retire : le SDK anthropic >=1.8.0 ne l'accepte
                 # plus sur ce modele (TypeError: unexpected keyword argument
                 # 'temperature', constate en prod sur le VPS le 2026-10-12 —
@@ -1108,7 +1115,9 @@ def generate_creative_angles(offer_description, platform, offer_type, model=None
         try:
             response = client.messages.create(
                 model=DEFAULT_ANTHROPIC_MODEL,
-                max_tokens=2000,
+                # 2000 -> 4000, meme raison que max_tokens dans
+                # _run_audit_claude ci-dessus (thinking partage le budget).
+                max_tokens=4000,
                 # temperature retire, meme raison qu'dans _run_audit_claude
                 # ci-dessus (SDK anthropic >=1.8.0).
                 thinking={"type": "adaptive"},
