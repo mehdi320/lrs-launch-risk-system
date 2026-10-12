@@ -899,10 +899,15 @@ _AUDIT_RESPONSE_SCHEMA = {
                 "score_breakdown_5": {
                     "type": "object",
                     "properties": {
-                        "hook": {"type": "integer", "minimum": 0, "maximum": 5},
-                        "offer": {"type": "integer", "minimum": 0, "maximum": 5},
-                        "trust": {"type": "integer", "minimum": 0, "maximum": 5},
-                        "friction_message_match": {"type": "integer", "minimum": 0, "maximum": 5},
+                        # minimum/maximum non supportes par output_config.format.schema
+                        # sur ce modele (400 invalid_request_error, constate en prod) —
+                        # le bornage 0-5 reste applique cote code dans
+                        # _finalize_audit_result (max(0, min(5, ...))), protection
+                        # intacte malgre leur absence ici.
+                        "hook": {"type": "integer"},
+                        "offer": {"type": "integer"},
+                        "trust": {"type": "integer"},
+                        "friction_message_match": {"type": "integer"},
                     },
                     "required": ["hook", "offer", "trust", "friction_message_match"],
                     "additionalProperties": False,
