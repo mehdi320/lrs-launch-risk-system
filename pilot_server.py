@@ -1420,8 +1420,9 @@ def get_plans(request: Request):
 
 # ══════════════════════════════════════════════════════════════
 # ── Creative Studio réel (Claude + variantes structurées) ──────
-# Nécessite ANTHROPIC_API_KEY — échoue proprement sinon (même
-# pattern que OPENAI_API_KEY pour l'Audit).
+# Nécessite ANTHROPIC_API_KEY — échoue proprement sinon, même pattern
+# que l'Audit (les deux sur Claude exclusivement depuis le retrait
+# d'OpenAI).
 # ══════════════════════════════════════════════════════════════
 
 class StudioGenerateRequest(BaseModel):

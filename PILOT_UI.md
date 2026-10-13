@@ -78,12 +78,13 @@ uvicorn pilot_server:app --port 8600 --reload
 Ouvrir http://localhost:8600 — indépendant de l'app Streamlit (`streamlit
 run app.py`), les deux peuvent tourner en parallèle sur des ports différents.
 
-Nécessite `OPENAI_API_KEY` dans `.env` pour l'Audit/Multi-Audit/Creative
-Studio (angles rapides). Le Studio avancé (Claude) nécessite en plus
-`ANTHROPIC_API_KEY`. Les intégrations (Slack/Sheets/Notion) et la
-Connexion API Pub (Meta/TikTok) nécessitent leurs propres identifiants —
-tout échoue proprement avec un message clair tant que ces clés ne sont
-pas configurées (même pattern que pour `OPENAI_API_KEY`).
+Nécessite `ANTHROPIC_API_KEY` dans `.env` pour tout ce qui touche à l'IA
+(Audit, Multi-Audit, Creative Studio — angles rapides et Studio avancé,
+même moteur Claude depuis le retrait d'OpenAI le 2026-09-23). Les
+intégrations (Slack/Sheets/Notion) et la Connexion API Pub (Meta/TikTok)
+nécessitent leurs propres identifiants — tout échoue proprement avec un
+message clair tant que ces clés ne sont pas configurées (même pattern
+que pour `ANTHROPIC_API_KEY`).
 
 Variables optionnelles : `APP_PASSWORD` (active le mot de passe d'accès),
 `APP_SECRET_KEY` (clé de session fixe — recommandé en prod pour survivre
