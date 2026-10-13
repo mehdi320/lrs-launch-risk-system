@@ -114,3 +114,37 @@ export function LangSwitch({ href, label }: { href: string; label: string }) {
     </a>
   );
 }
+
+// Pied de page des deux versions de la page de vente — seul endroit du
+// site qui lie vers les pages légales (privacy/terms). Avant son ajout,
+// aucun lien vers ces pages n'existait nulle part sur le sales-site.
+const FOOTER_COPY = {
+  en: {
+    privacy: "Privacy Policy",
+    terms: "Terms of Service",
+    rights: "All rights reserved.",
+  },
+  fr: {
+    privacy: "Politique de confidentialité",
+    terms: "Conditions générales",
+    rights: "Tous droits réservés.",
+  },
+};
+
+export function Footer({ lang }: { lang: "en" | "fr" }) {
+  const t = FOOTER_COPY[lang];
+  const base = lang === "fr" ? "/fr" : "";
+  return (
+    <footer className="border-t border-black/5 bg-[#f5f5f7] px-6 py-10 text-center text-xs text-[#86868b]">
+      <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+        <a href={`/privacy${base}`} className="hover:text-[#1d1d1f]">
+          {t.privacy}
+        </a>
+        <a href={`/terms${base}`} className="hover:text-[#1d1d1f]">
+          {t.terms}
+        </a>
+      </nav>
+      <p className="mt-4">LRS™ — {new Date().getFullYear()}. {t.rights}</p>
+    </footer>
+  );
+}

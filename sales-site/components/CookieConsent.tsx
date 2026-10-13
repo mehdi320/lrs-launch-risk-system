@@ -33,6 +33,7 @@ const COPY = {
     details: "What we use",
     detailsBody:
       "Meta Pixel and Google Ads/Analytics, only if you accept. No cookie is set until you choose.",
+    privacyLink: "Privacy Policy",
     accept: "Accept",
     reject: "Decline",
   },
@@ -42,6 +43,7 @@ const COPY = {
     details: "Ce qu'on utilise",
     detailsBody:
       "Meta Pixel et Google Ads/Analytics, uniquement si vous acceptez. Aucun cookie n'est déposé tant que vous n'avez pas choisi.",
+    privacyLink: "Politique de confidentialité",
     accept: "Accepter",
     reject: "Refuser",
   },
@@ -148,7 +150,13 @@ export default function CookieConsent({
                   {t.details}
                 </summary>
                 <p className="mt-1 text-xs leading-relaxed text-[#86868b]">
-                  {t.detailsBody}
+                  {t.detailsBody}{" "}
+                  <a
+                    href={lang === "fr" ? "/privacy/fr" : "/privacy"}
+                    className="underline hover:text-[#1d1d1f]"
+                  >
+                    {t.privacyLink}
+                  </a>
                 </p>
               </details>
             </div>

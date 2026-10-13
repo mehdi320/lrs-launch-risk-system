@@ -10,6 +10,7 @@ import {
   Prose,
   CheckList,
   LangSwitch,
+  Footer,
 } from "@/components/vente-shared";
 
 export const metadata: Metadata = {
@@ -506,6 +507,8 @@ export default function VentePageFr() {
           </p>
         </div>
       </section>
+
+      <Footer lang="fr" />
     </main>
   );
 }
