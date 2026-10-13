@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { headers } from "next/headers";
 import "./globals.css";
 import CookieConsent from "@/components/CookieConsent";
 
@@ -28,18 +29,28 @@ const GTAG_ID = process.env.NEXT_PUBLIC_GTAG_ID || "";
 // même philosophie que les pixels ci-dessus : rien ne charge par défaut.
 const STRIPE_BUY_BUTTON_ID = process.env.NEXT_PUBLIC_STRIPE_BUY_BUTTON_ID || "";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Nonce posé par middleware.ts (CSP) sur chaque requête — relayé ici aux
+  // <Script> que nous contrôlons directement. Les scripts internes générés
+  // par Next.js (hydratation RSC) sont, eux, noncés automatiquement par le
+  // framework dès qu'il détecte ce nonce dans l'en-tête CSP sortant.
+  const nonce = (await headers()).get("x-nonce") || undefined;
+
   return (
     <html lang="en">
       <body className="font-sans antialiased">
         {children}
-        <CookieConsent metaPixelId={META_PIXEL_ID} gtagId={GTAG_ID} />
+        <CookieConsent metaPixelId={META_PIXEL_ID} gtagId={GTAG_ID} nonce={nonce} />
         {STRIPE_BUY_BUTTON_ID && (
-          <Script src="https://js.stripe.com/v3/buy-button.js" strategy="afterInteractive" />
+          <Script
+            src="https://js.stripe.com/v3/buy-button.js"
+            strategy="afterInteractive"
+            nonce={nonce}
+          />
         )}
       </body>
     </html>

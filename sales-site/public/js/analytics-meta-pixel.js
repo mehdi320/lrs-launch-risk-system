@@ -1,0 +1,27 @@
+// Chargé uniquement après acceptation du bandeau cookies (voir
+// components/CookieConsent.tsx) et uniquement si NEXT_PUBLIC_META_PIXEL_ID
+// est renseigné (voir app/layout.tsx). Externalisé plutôt qu'inline, même
+// motif que analytics-gtag.js — évite tout besoin de 'unsafe-inline' en
+// script-src pour la CSP de ce site.
+(function () {
+  var pixelId = document.currentScript.getAttribute("data-pixel-id");
+  if (!pixelId) return;
+  !(function (f, b, e, v, n, t, s) {
+    if (f.fbq) return;
+    n = f.fbq = function () {
+      n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+    };
+    if (!f._fbq) f._fbq = n;
+    n.push = n;
+    n.loaded = true;
+    n.version = "2.0";
+    n.queue = [];
+    t = b.createElement(e);
+    t.async = true;
+    t.src = v;
+    s = b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t, s);
+  })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+  window.fbq("init", pixelId);
+  window.fbq("track", "PageView");
+})();

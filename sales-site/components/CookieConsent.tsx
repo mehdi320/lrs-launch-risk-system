@@ -52,9 +52,11 @@ const COPY = {
 export default function CookieConsent({
   metaPixelId,
   gtagId,
+  nonce,
 }: {
   metaPixelId: string;
   gtagId: string;
+  nonce?: string;
 }) {
   const pathname = usePathname();
   const lang = pathname?.startsWith("/vente/fr") ? "fr" : "en";
@@ -98,33 +100,24 @@ export default function CookieConsent({
               <Script
                 src={`https://www.googletagmanager.com/gtag/js?id=${gtagId}`}
                 strategy="afterInteractive"
+                nonce={nonce}
               />
-              <Script id="gtag-init" strategy="afterInteractive">
-                {`
-                  window.dataLayer = window.dataLayer || [];
-                  function gtag(){dataLayer.push(arguments);}
-                  gtag('js', new Date());
-                  gtag('config', '${gtagId}');
-                `}
-              </Script>
+              <Script
+                src="/js/analytics-gtag.js"
+                data-gtag-id={gtagId}
+                strategy="afterInteractive"
+                nonce={nonce}
+              />
             </>
           )}
           {metaPixelId && (
             <>
-              <Script id="meta-pixel-init" strategy="afterInteractive">
-                {`
-                  !function(f,b,e,v,n,t,s)
-                  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-                  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-                  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-                  n.queue=[];t=b.createElement(e);t.async=!0;
-                  t.src=v;s=b.getElementsByTagName(e)[0];
-                  s.parentNode.insertBefore(t,s)}(window, document,'script',
-                  'https://connect.facebook.net/en_US/fbevents.js');
-                  fbq('init', '${metaPixelId}');
-                  fbq('track', 'PageView');
-                `}
-              </Script>
+              <Script
+                src="/js/analytics-meta-pixel.js"
+                data-pixel-id={metaPixelId}
+                strategy="afterInteractive"
+                nonce={nonce}
+              />
               <noscript>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
